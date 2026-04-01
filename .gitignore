@@ -1,0 +1,21 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large / generated files
+*.pdf
+run_output.txt
+baseline_output.txt
+knowledge_graph.json
+pipeline_walkthrough.txt
+metrics_report.json
