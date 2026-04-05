@@ -1,22 +1,14 @@
 from __future__ import annotations
 import sys
 # ================================================================
-# TruthfulRAG v5 — ENHANCED (14 Novel Improvements over v4)
+# TruthfulRAG v5 — ENHANCED (6 Novel Improvements over v4)
 # Builds on: TruthfulRAG v4 (arXiv:2511.10375)
 # Novel additions:
-#   [N1]  Cross-Document Corroboration Scoring
-#   [N2]  Temporal Decay on Edge Weights
-#   [N3]  Hybrid BM25 + Semantic Retrieval (RRF fusion)
-#   [N4]  Temporal Graph Snapshots (year-anchored filtering)
-#   [N5]  Adversarial / Same-Year Noise Detection
-#   [N6]  Explanation-Chain Answer Generation
-#   [N7]  Multi-Hop Query Decomposition
-#   [N8]  Graph Topology Anomaly Detection
-#   [N9]  Query Reformulation on Retrieval Failure
-#   [N10] Negation-Aware Triple Filtering
-#   [N11] Entity Salience Weighted Ref(p)
-#   [N12] Progressive Entropy Sampling (early exit)
-#   [N13] Temporal Coherence Validation post-build
+#   [N1] Cross-Document Corroboration Scoring
+#   [N2] Temporal Decay on Edge Weights
+#   [N3] Hybrid BM25 + Semantic Retrieval (RRF fusion)
+#   [N4] Temporal Graph Snapshots (year-anchored filtering)
+#   [N6] Explanation-Chain Answer Generation
 #   [N14] Calibrated Answer Confidence Score
 # Run: python enhanced_main.py
 # ================================================================
@@ -85,17 +77,7 @@ CFG: Dict[str, Any] = {
     "rrf_k":                  60,     # [N3] RRF constant
     "use_hybrid_retrieval":   _ST,    # [N3] needs sentence-transformers
     "snapshot_year":          None,   # [N4] None=auto-detect from query
-    "adversarial_threshold":  2,      # [N5] flag if same-year conflicts >= this
     "explanation_chain":      True,   # [N6] include reasoning in final prompt
-    "enable_query_decomp":    True,   # [N7] decompose multi-hop queries
-    "anomaly_degree_thresh":  5,      # [N8] min degree for anomaly check
-    "anomaly_isolation_thresh": 0.9,  # [N8] betweenness percentile flag
-    "max_reformulations":     2,      # [N9] max query reformulation attempts
-    "negation_markers":       {"not","never","no","isn't","wasn't","hasn't",
-                               "didn't","none","neither","nor","no longer"},  # [N10]
-    "salience_floor":         0.10,   # [N11] minimum entity salience weight
-    "progressive_threshold":  0.80,   # [N12] early-exit delta_H threshold
-    "coherence_check":        True,   # [N13] post-build temporal coherence
     "confidence_weights":     {"h":0.40,"sup":0.30,"rec":0.30},  # [N14]
 }
 SEP = "─"*64
@@ -143,15 +125,6 @@ EXPLAIN_PROMPT = ("You resolved a knowledge conflict. Provide a clear answer wit
                   "Question: {query}\n\n"
                   "Answer (include WHAT the answer is and WHY this source was chosen):")
 
-# [N7] Query decomposition prompt
-DECOMP_PROMPT = ("Break this complex question into 1-3 simpler sub-questions "
-                 "that can be answered independently. Return JSON list of strings.\n"
-                 "Question: \"{query}\"\nJSON:")
-
-# [N9] Query reformulation prompt
-REFORM_PROMPT = ("Rephrase the following question using synonyms or alternative wording. "
-                 "Return a JSON list of 2 alternative phrasings.\n"
-                 "Question: \"{query}\"\nJSON:")
 
 class HybridRetriever:
     """[N3] BM25 + Semantic embedding retrieval fused with RRF."""
@@ -199,7 +172,7 @@ class TripleRecord:
     support_count: int = 1   # [N1] how many docs support this triple
 
 class EnhancedGraphConstructor:
-    """Module A + N1 corroboration counting + N2 year-on-edge."""
+    """Module A + [N1] corroboration counting + [A1] year-on-edge."""
     def __init__(self, llm, graph, cfg):
         self.llm=llm; self.graph=graph; self.cfg=cfg
         self.transformer = LLMGraphTransformer(llm=llm)
@@ -290,59 +263,20 @@ class EnhancedGraphConstructor:
             if self.cfg["verbose"]: print(f"  [A3] Normalised {len(mapping)} relation types")
         except Exception: pass
 
-    def _is_negated(self, head: str, source_text: str) -> bool:
-        """[N10] Return True if the sentence containing head is negated."""
-        neg = self.cfg.get("negation_markers",
-              {"not","never","no","isn't","wasn't","hasn't","didn't"})
-        for sent in re.split(r'[.!?]', source_text.lower()):
-            if head.lower()[:8] in sent:
-                if any(n in sent.split() for n in neg):
-                    return True
-        return False
-
-    def _check_temporal_coherence(self):
-        """[N13] Remove overlapping temporal claims — same relation+tail, multiple heads, same year."""
-        if not self.cfg.get("coherence_check", True): return 0
-        rows = self.graph.query(
-            "MATCH (a)-[r]->(b) RETURN a.id AS src, type(r) AS rel, "
-            "b.id AS tgt, r.year AS year WHERE r.year IS NOT NULL")
-        groups: Dict = defaultdict(list)
-        for row in rows:
-            if row.get("year"):
-                key = (row["rel"], row["tgt"], row["year"])
-                groups[key].append(row["src"])
-        removed = 0
-        for (rel, tgt, yr), srcs in groups.items():
-            if len(srcs) > 1:
-                # Keep the one with higher support; remove others (flag via property)
-                for src in srcs[1:]:
-                    try:
-                        self.graph.query(
-                            f"MATCH (a:Entity {{id:'{src}'}})-[r:{rel}]->(b:Entity {{id:'{tgt}'}}) "
-                            f"WHERE r.year={yr} SET r.coherence_flag='overlapping'")
-                        removed += 1
-                    except Exception: pass
-        if self.cfg["verbose"] and removed:
-            print(f"  [N13] Temporal coherence: flagged {removed} overlapping assertions")
-        return removed
-
     def build(self, docs: List[str]):
         if self.cfg["clear_graph_on_start"]: self._clear()
         self.graph.add_graph_documents(
             self.transformer.convert_to_graph_documents([Document(page_content=d) for d in docs]))
-        # [N1][N10] accumulate corroboration counts, skip negated triples
+        # [N1] accumulate corroboration counts across all docs
         for doc in docs:
             triples = self._extract(doc)
-            clean = [t for t in triples
-                     if not self._is_negated(t.get("head",""), doc)]  # [N10] negation filter
-            self._accumulate(clean)
+            self._accumulate(triples)
         total = self._store_all()
         if self.cfg["verbose"]: print(f"  [N1][A1][A4] Triples stored with corroboration: {total}")
         n_n = self.graph.query("MATCH (n) RETURN count(n) AS c")[0]["c"]
         n_e = self.graph.query("MATCH ()-[r]->() RETURN count(r) AS c")[0]["c"]
         if self.cfg["verbose"]: print(f"  [A]  KG: {n_n} nodes, {n_e} edges")
         self._disambiguate(); self._normalize()
-        self._check_temporal_coherence()   # [N13]
         return n_n, n_e
 
 # ── MODULE B ENHANCED ─────────────────────────────────────────────
@@ -355,7 +289,7 @@ class KnowledgePath:
     conflict_reason: str = ""   # [N6]
 
 class EnhancedGraphRetriever:
-    """Module B + N2 temporal decay + N4 snapshot + N5 adversarial detection."""
+    """Module B + [N2] temporal decay + [N3] hybrid retrieval + [N4] snapshot."""
     def __init__(self, llm, graph, embedder, cfg):
         self.llm=llm; self.graph=graph
         self.embedder=embedder; self.cfg=cfg
@@ -450,119 +384,19 @@ class EnhancedGraphRetriever:
         lam = self.cfg["temporal_decay_lambda"]
         return math.exp(-lam * max(0, CURRENT_YEAR - year))
 
-    def _detect_adversarial(self, paths: List[KnowledgePath]) -> bool:
-        """[N5] Flag same-year, same-relation contradictions as adversarial noise."""
-        pat = re.compile(r'([A-Za-z][^-]+?)--\[(\w+)\]-->\s*([^\[\n]+?)(?:\s*\[year:? ?(\d+)\])?')
-        buckets: Dict[Tuple, List] = defaultdict(list)
-        for p in paths:
-            for m in pat.finditer(p.context):
-                rel, tgt, yr = m.group(2).upper(), m.group(3).strip(), m.group(4)
-                if yr: buckets[(rel, tgt, yr)].append(p)
-        for key, ps in buckets.items():
-            if len(ps) >= self.cfg["adversarial_threshold"]:
-                if self.cfg["verbose"]:
-                    print(f"  [N5] ⚠ Adversarial signal: {len(ps)} conflicting heads "
-                          f"for ({key[0]},{key[2]})")
-                return True
-        return False
-
-    def _salience(self, entities: List[str], query: str) -> Dict[str, float]:
-        """[N11] TF-IDF-style salience weights for entities in the query."""
-        q_words = set(query.lower().split())
-        floor = self.cfg.get("salience_floor", 0.10)
-        raw = {}
-        for e in entities:
-            e_words = set(e.lower().split())
-            overlap = len(e_words & q_words) / max(len(e_words), 1)
-            raw[e] = max(overlap, floor)
-        total = sum(raw.values())
-        return {k: v/total for k, v in raw.items()} if total else {e: 1/len(entities) for e in entities}
-
-    def _reformulate(self, q: str) -> List[str]:
-        """[N9] Generate alternative query phrasings for retry on retrieval failure."""
-        try:
-            resp = cached_invoke(self.llm, REFORM_PROMPT.format(query=q))
-            m = re.search(r'\[.*\]', resp, re.DOTALL)
-            alts = json.loads(m.group(0)) if m else []
-            if self.cfg["verbose"] and alts: print(f"  [N9] Reformulations: {alts}")
-            return [a for a in alts if isinstance(a, str)][:self.cfg.get("max_reformulations",2)]
-        except Exception: return []
-
-    def _ref_p_salience(self, path_text: str, E: List[str],
-                        Rkw: List[str], salience: Dict[str, float]) -> float:
-        """[N11] Salience-weighted Ref(p) = alpha*E_sal_cov + beta*R_cov."""
-        pt = path_text.lower()
-        e_score = sum(salience.get(e, 1/max(len(E),1)) for e in E if e.lower() in pt)
-        r_hit   = sum(1 for r in Rkw if r in pt)
-        e_cov   = min(e_score, 1.0)
-        r_cov   = r_hit / max(len(Rkw), 1)
-        return self.cfg["alpha"] * e_cov + self.cfg["beta"] * r_cov
-
-    def _decompose_query(self, q: str) -> List[str]:
-        """[N7] Break complex multi-hop query into sub-questions."""
-        if not self.cfg.get("enable_query_decomp", True): return [q]
-        # Only decompose if query seems multi-hop
-        triggers = ["who founded","what company","which organization","before he","after she","that acquired"]
-        if not any(t in q.lower() for t in triggers): return [q]
-        try:
-            resp = cached_invoke(self.llm, DECOMP_PROMPT.format(query=q))
-            m = re.search(r'\[.*\]', resp, re.DOTALL)
-            subs = json.loads(m.group(0)) if m else [q]
-            if self.cfg["verbose"] and len(subs) > 1:
-                print(f"  [N7] Decomposed into {len(subs)} sub-queries: {subs}")
-            return subs if subs else [q]
-        except Exception: return [q]
-
-    def _anomaly_score(self, edges) -> Dict[str, float]:
-        """[N8] Graph topology anomaly: high out-degree isolated nodes = suspicious."""
-        out_deg: Dict[str, int] = defaultdict(int)
-        in_deg:  Dict[str, int] = defaultdict(int)
-        for e in edges:
-            out_deg[e["src"]] += 1
-            in_deg[e["tgt"]]  += 1
-        scores = {}
-        thresh = self.cfg.get("anomaly_degree_thresh", 5)
-        for node in set(out_deg) | set(in_deg):
-            od, id_ = out_deg.get(node, 0), in_deg.get(node, 0)
-            total = od + id_
-            if total >= thresh:
-                # Isolation ratio: node with high out-degree but no incoming = suspicious
-                isolation = od / (total + 1e-9)
-                scores[node] = isolation
-        if self.cfg["verbose"] and scores:
-            flagged = {k: v for k, v in scores.items() if v > self.cfg.get("anomaly_isolation_thresh", 0.9)}
-            if flagged: print(f"  [N8] Anomalous nodes detected: {list(flagged.keys())}")
-        return scores
 
     def retrieve(self, query: str):
         E, Rkw = self._keys(query); intent = self.detect_intent(query)
-        salience = self._salience(E, query)   # [N11]
         qr = " ".join(E+Rkw) or query
         if self.cfg["verbose"]: print(f"  [B]  E={E}  Rkw={Rkw}\n  [C7] Intent={intent}")
 
-        # [N7] decompose multi-hop queries
-        sub_queries = self._decompose_query(query)
-
-        # [N4] temporal snapshot
+        # [N4] temporal snapshot — filter edges to year <= query year
         snapshot_year = self.cfg.get("snapshot_year") or self._extract_query_year(query)
 
         node_ids = self._node_ids()
         edges    = self._edges(snapshot_year=snapshot_year)
-        anomaly_scores = self._anomaly_score(edges)  # [N8]
-        fedges   = self._filter_edges(edges, qr)        # [B5]
-
-        # [N9] retry with reformulated query if no paths after filtering
-        if not fedges:
-            for alt in self._reformulate(query):
-                E_alt, Rkw_alt = self._keys(alt)
-                fedges = self._filter_edges(edges, " ".join(E_alt+Rkw_alt))
-                if fedges:
-                    E, Rkw = E_alt, Rkw_alt
-                    salience = self._salience(E, alt)
-                    if self.cfg["verbose"]: print(f"  [N9] Reformulated query found paths.")
-                    break
-
-        ppr = self._ppr(node_ids, fedges, E)       # [B4]
+        fedges   = self._filter_edges(edges, qr)   # [B5]
+        ppr      = self._ppr(node_ids, fedges, E)  # [B4]
 
         paths: List[KnowledgePath] = []
         for e in fedges:
@@ -570,22 +404,19 @@ class EnhancedGraphRetriever:
             if not src or not tgt: continue
             yr = e.get("year"); sc = e.get("support") or 1
 
-            # hop check [B2]
-            hop = 2 if any(k in qr.lower() for k in ["how","why","cause"]) else 1
             context = f"{src} --[{rel}]--> {tgt}"
             if yr: context += f" [year: {yr}]"
             if sc > 1: context += f" [sources: {sc}]"
 
-            deg_max      = max(self._deg_of(src), self._deg_of(tgt))
-            hub_pen      = (1-self.cfg["hub_penalty_weight"]) if deg_max>10 else 1.0  # [B3]
-            anomaly_pen  = (1 - anomaly_scores.get(src, 0) * 0.5)  # [N8]
-            ref_p        = self._ref_p_salience(context, E, Rkw, salience)  # [N11]
-            ppr_avg      = (ppr.get(src,0)+ppr.get(tgt,0))/2  # [B4]
-            decay        = self._temporal_decay(yr)  # [N2]
-            corroborate  = math.log(1+sc)*self.cfg["corroboration_weight"]  # [N1]
+            deg_max     = max(self._deg_of(src), self._deg_of(tgt))
+            hub_pen     = (1-self.cfg["hub_penalty_weight"]) if deg_max>10 else 1.0  # [B3]
+            ref_p       = self._ref_p(context, E, Rkw)                               # [B1]
+            ppr_avg     = (ppr.get(src,0)+ppr.get(tgt,0))/2                          # [B4]
+            decay       = self._temporal_decay(yr)                                    # [N2]
+            corroborate = math.log(1+sc)*self.cfg["corroboration_weight"]             # [N1]
 
-            # Enhanced combined score
-            combined = (ref_p * hub_pen * anomaly_pen) * (1 + ppr_avg) * decay * (1 + corroborate)
+            # v5 combined score: adds decay [N2] and corroboration [N1] to v4 base
+            combined = (ref_p * hub_pen) * (1 + ppr_avg) * decay * (1 + corroborate)
 
             paths.append(KnowledgePath(
                 context=context, score=ref_p*hub_pen,
@@ -593,11 +424,10 @@ class EnhancedGraphRetriever:
                 combined_score=combined))
 
         paths.sort(key=lambda p: p.combined_score, reverse=True)
-        adversarial = self._detect_adversarial(paths)  # [N5]
         top = paths[:self.cfg["top_k_paths"]]
         if self.cfg["verbose"]:
-            print(f"  [B]  {len(top)} paths (adversarial={adversarial})")
-        return top, intent, adversarial
+            print(f"  [B]  {len(top)} paths selected")
+        return top, intent
 
 # ── MODULE C ENHANCED ─────────────────────────────────────────────
 def _H_str(answers):
@@ -658,31 +488,21 @@ def _detect_contradictions(paths):
     return paths, sum(1 for p in paths if p.contradicted)
 
 class EnhancedConflictResolver:
-    """Module C + N5 adversarial handling + N6 explanation chain."""
+    """Module C + [N6] explanation chain + [N14] confidence score."""
     def __init__(self, llm, llm_s, embedder, cfg):
         self.llm=llm; self.llm_s=llm_s; self.emb=embedder; self.cfg=cfg
         self._n=cfg["n_entropy_samples"]; self._mh=math.log(self._n)
         self._st=cfg["semantic_cluster_thresh"]
 
     def _entropy(self, query, context=None):
-        """[N12] Progressive sampling: start n=1, expand only if ambiguous."""
-        thresh = self.cfg.get("progressive_threshold", 0.80)
-        prompt_fn = (lambda: PARAM_PROMPT.format(query=query) if context is None
-                     else RAG_PROMPT.format(query=query, context=context))
-        # First sample
-        ans = [cached_invoke(self.llm_s, prompt_fn())]
-        hs1 = _H_str(ans); hse1 = _H_sem(ans, self.emb, self._st)
-        # [N12] Early exit if clear conflict OR clear agreement
-        if hse1 > thresh or hse1 < 0.05:
-            if self.cfg["verbose"]: print("  [N12] Early exit (n=1)", end=" ")
-            hlp = (_H_lp(query, context, self.cfg["llm_model"], self.cfg["ollama_base_url"])
-                   if self.cfg["use_logprob_entropy"] else None)
-            return hs1, hse1, hlp
-        # Full n=3 if still ambiguous
-        ans += [cached_invoke(self.llm_s, prompt_fn()) for _ in range(self._n - 1)]
-        hs = _H_str(ans); hse = _H_sem(ans, self.emb, self._st)
-        hlp = (_H_lp(query, context, self.cfg["llm_model"], self.cfg["ollama_base_url"])
-               if self.cfg["use_logprob_entropy"] else None)
+        """[C2][C4][C6] fixed n samples, semantic + logprob entropy."""
+        ans=[cached_invoke(self.llm_s,
+             PARAM_PROMPT.format(query=query) if context is None
+             else RAG_PROMPT.format(query=query,context=context))
+             for _ in range(self._n)]
+        hs=_H_str(ans); hse=_H_sem(ans,self.emb,self._st)
+        hlp=(_H_lp(query,context,self.cfg["llm_model"],self.cfg["ollama_base_url"])
+             if self.cfg["use_logprob_entropy"] else None)
         return hs, hse, hlp
 
     def _confidence(self, delta_h: float, tau: float,
@@ -709,7 +529,7 @@ class EnhancedConflictResolver:
         return "\n".join(lines)
 
     def resolve(self, query: str, paths: List[KnowledgePath],
-                intent="unknown", adversarial=False):
+                intent="unknown"):
         removed_paths: List[KnowledgePath] = []
         n_c = 0
         if self.cfg["enable_contradiction_filter"]:
@@ -719,11 +539,6 @@ class EnhancedConflictResolver:
             if self.cfg["verbose"]:
                 print(f"  [C5] Contradictions removed: {n_c}, remaining: {len(paths)}")
         if not paths: return [], "No valid paths after contradiction filtering.", {}
-
-        # [N5] adversarial fallback — use corroboration as tiebreaker
-        if adversarial:
-            if self.cfg["verbose"]: print("  [N5] Adversarial mode: ranking by support count")
-            paths.sort(key=lambda p: (p.support, p.combined_score), reverse=True)
 
         hs_p, hse_p, hlp_p = self._entropy(query)
         hd_p = hlp_p if hlp_p is not None else hse_p
@@ -812,10 +627,10 @@ class EnhancedPipeline:
     def query(self, q: str) -> Dict:
         t0 = time.time()
         print(f"\n{SEP}\n  Query: {q}\n{SEP}")
-        paths, intent, adversarial = self.retriever.retrieve(q)
+        paths, intent = self.retriever.retrieve(q)
         if not paths:
             return {"answer":"No relevant paths found.","meta":{},"elapsed":time.time()-t0}
-        sel, answer, meta = self.resolver.resolve(q, paths, intent, adversarial)
+        sel, answer, meta = self.resolver.resolve(q, paths, intent)
         elapsed = time.time()-t0
         print(f"\n  ✓ Answer: {answer}")
         conf = meta.get("confidence", "N/A")
@@ -846,21 +661,13 @@ def run_comparison(docs: List[str], queries: List[str]):
     print("═"*64)
     headers = ["Metric","TruthfulRAG v4","Enhanced v5","Improvement","Feature"]
     rows = [
-        ("Corroboration signal",    "No",    "Yes (N1)",   "+evidence weight",  "[N1]"),
-        ("Temporal decay in score", "No",    "Yes (N2)",   "+year sensitivity",  "[N2]"),
-        ("Retrieval method",        "BM25",  "BM25+Sem",   "+semantic recall",   "[N3]"),
-        ("Time-anchored queries",   "No",    "Yes (N4)",   "+historical acc.",   "[N4]"),
-        ("Adversarial detection",   "No",    "Yes (N5)",   "+robustness",         "[N5]"),
-        ("Explainable answer",      "No",    "Yes (N6)",   "+transparency",       "[N6]"),
-        ("Multi-hop decomposition", "No",    "Yes (N7)",   "+complex queries",   "[N7]"),
-        ("Anomaly detection",       "No",    "Yes (N8)",   "+fake fact guard",   "[N8]"),
-        ("Query reformulation",     "No",    "Yes (N9)",   "+zero-recall fix",   "[N9]"),
-        ("Negation filtering",      "No",    "Yes (N10)",  "+false triple guard","[N10]"),
-        ("Entity salience Ref(p)",  "Flat",  "Salience-weighted","+query focus",   "[N11]"),
-        ("Entropy sampling",        "Fixed n=3","Progressive","+40% LLM savings","[N12]"),
-        ("Temporal coherence",      "No",    "Yes (N13)",  "+overlap removal",   "[N13]"),
-        ("Answer confidence",       "No",    "0-100% score","+calibration",       "[N14]"),
-        ("Score formula",           "Ref×PPR","Ref×PPR×decay×corr×anomaly×sal","richer","N1+N2+N8+N11"),
+        ("Corroboration signal",    "No",    "Yes (N1)",    "+evidence weight",  "[N1]"),
+        ("Temporal decay in score", "No",    "Yes (N2)",    "+year sensitivity", "[N2]"),
+        ("Retrieval method",        "BM25",  "BM25+Semantic","+semantic recall", "[N3]"),
+        ("Time-anchored queries",   "No",    "Yes (N4)",    "+historical acc.",  "[N4]"),
+        ("Explainable answer",      "No",    "Yes (N6)",    "+transparency",     "[N6]"),
+        ("Answer confidence",       "No",    "0-100% score","+calibration",      "[N14]"),
+        ("Score formula", "Ref×PPR", "Ref×PPR×decay×corroborate", "richer", "N1+N2"),
     ]
     fmt = "{:<28} {:<18} {:<15} {:<20} {}"
     print(fmt.format(*headers))
