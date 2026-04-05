@@ -9,7 +9,7 @@ import sys
 #   [N3] Hybrid BM25 + Semantic Retrieval (RRF fusion)
 #   [N4] Temporal Graph Snapshots (year-anchored filtering)
 #   [N6] Explanation-Chain Answer Generation
-#   [N14] Calibrated Answer Confidence Score
+#   [N7] Calibrated Answer Confidence Score
 # Run: python enhanced_main.py
 # ================================================================
 import difflib, hashlib, json, logging, math, os, re, time
@@ -78,7 +78,7 @@ CFG: Dict[str, Any] = {
     "use_hybrid_retrieval":   _ST,    # [N3] needs sentence-transformers
     "snapshot_year":          None,   # [N4] None=auto-detect from query
     "explanation_chain":      True,   # [N6] include reasoning in final prompt
-    "confidence_weights":     {"h":0.40,"sup":0.30,"rec":0.30},  # [N14]
+    "confidence_weights":     {"h":0.40,"sup":0.30,"rec":0.30},  # [N7]
 }
 SEP = "─"*64
 
@@ -488,7 +488,7 @@ def _detect_contradictions(paths):
     return paths, sum(1 for p in paths if p.contradicted)
 
 class EnhancedConflictResolver:
-    """Module C + [N6] explanation chain + [N14] confidence score."""
+    """Module C + [N6] explanation chain + [N7] confidence score."""
     def __init__(self, llm, llm_s, embedder, cfg):
         self.llm=llm; self.llm_s=llm_s; self.emb=embedder; self.cfg=cfg
         self._n=cfg["n_entropy_samples"]; self._mh=math.log(self._n)
@@ -507,7 +507,7 @@ class EnhancedConflictResolver:
 
     def _confidence(self, delta_h: float, tau: float,
                     support: int, year_gap: int) -> float:
-        """[N14] Calibrated 0-1 confidence score for the final answer."""
+        """[N7] Calibrated 0-1 confidence score for the final answer."""
         w = self.cfg.get("confidence_weights", {"h":0.40,"sup":0.30,"rec":0.30})
         h_sig  = min(abs(delta_h) / (tau + 1e-9), 2.0) / 2.0  # how clearly resolved
         sup_s  = min(math.log(1 + support) / math.log(6), 1.0) # log-scale support
@@ -584,7 +584,7 @@ class EnhancedConflictResolver:
         else:
             answer = cached_invoke(self.llm, RAG_PROMPT.format(query=query, context=top_ctx))
 
-        # [N14] Calibrated confidence score
+        # [N7] Calibrated confidence score
         best = sel[0] if sel else None
         year_gap = CURRENT_YEAR - best.max_year if (best and best.max_year) else 0
         conf = self._confidence(
@@ -601,7 +601,7 @@ class EnhancedConflictResolver:
             "selected_paths": len(sel), "contradictions_removed": n_c,
             "adversarial_detected": adversarial,
             "corroboration_max": max((p.support for p in sel), default=1),
-            "confidence": conf,   # [N14]
+            "confidence": conf,   # [N7]
         }
         return sel, answer, meta
 
@@ -666,7 +666,7 @@ def run_comparison(docs: List[str], queries: List[str]):
         ("Retrieval method",        "BM25",  "BM25+Semantic","+semantic recall", "[N3]"),
         ("Time-anchored queries",   "No",    "Yes (N4)",    "+historical acc.",  "[N4]"),
         ("Explainable answer",      "No",    "Yes (N6)",    "+transparency",     "[N6]"),
-        ("Answer confidence",       "No",    "0-100% score","+calibration",      "[N14]"),
+        ("Answer confidence",       "No",    "0-100% score","+calibration",      "[N7]"),
         ("Score formula", "Ref×PPR", "Ref×PPR×decay×corroborate", "richer", "N1+N2"),
     ]
     fmt = "{:<28} {:<18} {:<15} {:<20} {}"
