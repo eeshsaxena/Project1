@@ -147,7 +147,7 @@ SCHEMA_INFER_PROMPT = (
     "Read the following text samples and infer the most useful entity types and relation types "
     "for building a knowledge graph over this domain.\n"
     "Return ONLY valid JSON in exactly this format:\n"
-    '{"entity_types": ["TYPE1", "TYPE2", ...], "relation_types": ["REL_ONE", "REL_TWO", ...]}\n\n'
+    '{{"entity_types": ["TYPE1", "TYPE2", ...], "relation_types": ["REL_ONE", "REL_TWO", ...]}}\n\n'
     "Rules:\n"
     "- entity_types: 3-8 UPPERCASE labels (e.g. PERSON, DRUG, STATUTE, TEAM)\n"
     "- relation_types: 3-12 UPPER_SNAKE_CASE verbs (e.g. CEO_OF, TREATS, PLAYED_FOR)\n"
@@ -230,8 +230,10 @@ class EnhancedGraphConstructor:
 
         raw = cached_invoke(self.llm, SCHEMA_INFER_PROMPT.format(samples=samples_text))
         try:
-            m      = re.search(r'\{.*\}', raw, re.DOTALL)
-            data   = json.loads(m.group(0) if m else raw)
+            # Strip markdown code fences if LLM wraps output in ```json ... ```
+            clean = re.sub(r'```(?:json)?\s*', '', raw).strip()
+            m     = re.search(r'\{.*\}', clean, re.DOTALL)
+            data  = json.loads(m.group(0) if m else clean)
             etypes = [str(e).upper() for e in data.get("entity_types", []) if e]
             rtypes = [re.sub(r'\W+', '_', str(r).upper()).strip('_')
                       for r in data.get("relation_types", []) if r]
@@ -241,9 +243,13 @@ class EnhancedGraphConstructor:
                 if self.cfg["verbose"]:
                     print(f"  [A4+] Entity types  : {etypes}")
                     print(f"  [A4+] Relation types: {rtypes}")
+            else:
+                if self.cfg["verbose"]:
+                    print("  [A4+] LLM returned empty types — check prompt output.")
         except Exception as exc:
             if self.cfg["verbose"]:
-                print(f"  [A4+] Inference failed ({exc}) — using defaults.")
+                print(f"  [A4+] Inference failed ({exc}) — proceeding with empty schema.")
+
 
     def _clear(self):
         self.graph.query("MATCH (n) DETACH DELETE n")
@@ -255,8 +261,9 @@ class EnhancedGraphConstructor:
             text,
             self.cfg["schema_entity_types"], self.cfg["schema_relation_types"]))
         try:
-            m = re.search(r'\[.*\]', raw, re.DOTALL)
-            data = json.loads(m.group(0) if m else raw)
+            clean = re.sub(r'```(?:json)?\s*', '', raw).strip()
+            m = re.search(r'\[.*\]', clean, re.DOTALL)
+            data = json.loads(m.group(0) if m else clean)
             return [d for d in data if isinstance(d, dict)
                     and d.get("head") and d.get("relation") and d.get("tail")]
         except Exception: return []
@@ -316,8 +323,9 @@ class EnhancedGraphConstructor:
         prompt = ("Canonicalize to UPPER_SNAKE_CASE. Return JSON {\"ORIG\":\"CANON\",...}\n"
                   f"Relations: {raw}\nJSON:")
         try:
-            resp = cached_invoke(self.llm, prompt)
-            m    = re.search(r'\{.*\}', resp, re.DOTALL)
+            resp  = cached_invoke(self.llm, prompt)
+            clean = re.sub(r'```(?:json)?\s*', '', resp).strip()
+            m     = re.search(r'\{.*\}', clean, re.DOTALL)
             mapping = json.loads(m.group(0)) if m else {}
             for orig, canon in mapping.items():
                 if orig != canon and canon:
