@@ -320,17 +320,34 @@ class EnhancedGraphRetriever:
         return int(m.group(0)) if m else None
 
     def _node_ids(self):
-        return [r["id"] for r in self.graph.query("MATCH (n) RETURN n.id AS id LIMIT 200") if r.get("id")]
+        """Return flat list of string node IDs (guards against APOC returning lists)."""
+        ids = []
+        for r in self.graph.query("MATCH (n) RETURN n.id AS id LIMIT 200"):
+            v = r.get("id")
+            if v is None: continue
+            if isinstance(v, list):   # APOC merge can return list of IDs
+                ids.extend(str(x) for x in v if x)
+            else:
+                ids.append(str(v))
+        return list(dict.fromkeys(ids))  # deduplicate, preserve order
 
     def _edges(self, snapshot_year: Optional[int] = None):
         rows = self.graph.query(
             "MATCH (a)-[r]->(b) RETURN type(r) AS rel_type, a.id AS src, "
             "b.id AS tgt, r.year AS year, r.support AS support LIMIT 200")
+        clean = []
+        for r in rows:
+            src = r.get("src"); tgt = r.get("tgt")
+            if isinstance(src, list): src = src[0] if src else None
+            if isinstance(tgt, list): tgt = tgt[0] if tgt else None
+            if not src or not tgt: continue
+            r = dict(r); r["src"] = str(src); r["tgt"] = str(tgt)
+            clean.append(r)
         if snapshot_year:
             # [N4] temporal snapshot — only facts up to target year
-            rows = [r for r in rows if r.get("year") is None or r["year"] <= snapshot_year]
-            if self.cfg["verbose"]: print(f"  [N4] Snapshot year={snapshot_year}: {len(rows)} edges")
-        return rows
+            clean = [r for r in clean if r.get("year") is None or r["year"] <= snapshot_year]
+            if self.cfg["verbose"]: print(f"  [N4] Snapshot year={snapshot_year}: {len(clean)} edges")
+        return clean
 
     def _deg_of(self, nid: str) -> int:
         if nid not in self._deg:
