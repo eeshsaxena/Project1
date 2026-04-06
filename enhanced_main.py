@@ -336,9 +336,8 @@ class EnhancedGraphConstructor:
         except Exception: pass
 
     def build(self, docs: List[str]):
-        # [A4+] Auto-infer schema unless explicitly provided by caller
-        if self.cfg.get("schema_source", "auto") == "auto":
-            self._infer_schema(docs)
+        # [A4+] Always auto-infer schema from corpus before building graph
+        self._infer_schema(docs)
 
         if self.cfg["clear_graph_on_start"]: self._clear()
         self.graph.add_graph_documents(
@@ -755,9 +754,9 @@ def run_comparison(docs: List[str], queries: List[str]):
         ("[N4] Temporal snapshot",  f"auto-detect from query"),
         ("[N6] Explanation chain",  "ON" if CFG["explanation_chain"] else "OFF"),
         ("[N7] Confidence score",   f"weights={CFG['confidence_weights']}"),
-        ("Schema source",           CFG.get("schema_source", "auto")),
-        ("Entity types",            str(CFG["schema_entity_types"])),
-        ("Relation types",          str(CFG["schema_relation_types"])),
+        ("[A4+] Schema (auto)",      f"inferred from {CFG.get('schema_infer_sample',5)} docs"),
+        ("Entity types",            str(CFG["schema_entity_types"]) or "pending inference"),
+        ("Relation types",          str(CFG["schema_relation_types"]) or "pending inference"),
     ]
     for label, val in features:
         print(f"  {label:<28} {val}")
@@ -839,15 +838,13 @@ Examples:
                     help="override LLM model (e.g. llama3:8b)")
     ap.add_argument("--no-verbose",         action="store_true",
                     help="suppress verbose logging")
-    ap.add_argument("--schema-sample",  "-s",  type=int, default=5, metavar="N",
-                    help="number of docs sampled for auto schema inference (default: 5)")
+    ap.add_argument("--schema-sample", "-s", type=int, default=5, metavar="N",
+                    help="docs sampled for schema auto-inference (default: 5)")
     args = ap.parse_args()
 
-    # ── Apply runtime overrides to CFG ──────────────────────────
-    if args.model:        CFG["llm_model"]           = args.model
-    if args.no_verbose:   CFG["verbose"]             = False
+    if args.model:      CFG["llm_model"] = args.model
+    if args.no_verbose: CFG["verbose"]   = False
     CFG["schema_infer_sample"] = args.schema_sample
-    CFG["schema_source"]       = "auto"   # default: auto-infer from docs
 
     # ── Resolve corpus source (priority: --corpus > --docs > --interactive) ──
     DOCS: List[str]    = []
@@ -857,26 +854,13 @@ Examples:
         data    = _load_corpus(args.corpus)
         DOCS    = data.get("docs",    [])
         QUERIES = data.get("queries", [])
-        schema  = data.get("schema",  {})
-        if schema.get("entity_types") and schema.get("relation_types"):
-            # User supplied explicit schema — use it, skip inference
-            CFG["schema_entity_types"]  = schema["entity_types"]
-            CFG["schema_relation_types"] = schema["relation_types"]
-            CFG["schema_source"] = "explicit"
-            print(f"  Schema: explicit ({len(schema['entity_types'])} entity types, "
-                  f"{len(schema['relation_types'])} relation types)")
-        else:
-            CFG["schema_source"] = "auto"   # no schema in file — auto-infer
-            print(f"  Schema: will be auto-inferred from corpus")
         print(f"  Loaded {len(DOCS)} docs, {len(QUERIES)} queries from {args.corpus}")
+        print(f"  Schema: will be auto-inferred from corpus")
     elif args.docs:
         DOCS    = args.docs
         QUERIES = args.queries or []
-        # No schema provided via CLI — always auto-infer
-        CFG["schema_source"] = "auto"
     elif args.interactive:
         DOCS, QUERIES = _interactive_input()
-        CFG["schema_source"] = "auto"
     else:
         # ── Demo mode: built-in sample corpus loaded from bundled file ──
         _demo = os.path.join(os.path.dirname(__file__), "corpus.json")
