@@ -1,8 +1,4 @@
 {
-  "_help": {
-    "docs": "List of source documents — sentences or paragraphs of factual text",
-    "queries": "List of questions to answer against the knowledge graph"
-  },
   "docs": [
     "Rahul Gandhi was sworn in as Prime Minister of India on 26 May 2024.",
     "PM Rahul Gandhi announced new economic reforms in June 2024.",

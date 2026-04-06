@@ -45,10 +45,6 @@ CURRENT_YEAR: int = datetime.date.today().year
 # ── CONFIG ───────────────────────────────────────────────────────
 # All sensitive / environment-specific values read from .env or environment.
 # Override any value by setting the corresponding env var before running.
-_DEFAULT_ENTITY_TYPES    = ["PERSON","ORGANIZATION","LOCATION","DATE","PRODUCT"]
-_DEFAULT_RELATION_TYPES  = ["CEO_OF","FOUNDED_BY","LOCATED_IN","WORKED_AT",
-                             "ACQUIRED_BY","PART_OF","STUDIED_AT","RELEASED",
-                             "PM_OF","LEADS","GOVERNS"]
 
 CFG: Dict[str, Any] = {
     # ── LLM (override via env) ───────────────────────────────────
@@ -70,8 +66,8 @@ CFG: Dict[str, Any] = {
     "rel_filter_threshold":   0.30,
     # ── Schema (loaded from corpus file or env) ──────────────────
     "use_schema":             True,
-    "schema_entity_types":    _DEFAULT_ENTITY_TYPES,
-    "schema_relation_types":  _DEFAULT_RELATION_TYPES,
+    "schema_entity_types":    [],   # populated by _infer_schema() or corpus.json
+    "schema_relation_types":  [],   # populated by _infer_schema() or corpus.json
     # ── Entropy / conflict ────────────────────────────────────────
     "n_entropy_samples":      3,
     "entropy_tau":            None,
@@ -893,28 +889,18 @@ Examples:
             print("  No corpus supplied. Run with --help to see options.")
             print("  Generating corpus.json demo template...")
             _template = {
-                "_help": {
-                    "docs":    "List of source documents (sentences or paragraphs)",
-                    "queries": "List of questions to answer",
-                    "schema":  "Optional. If omitted, entity/relation types are AUTO-INFERRED from your docs."
-                },
                 "docs": [
                     "Add your source documents here, one per list item.",
                     "Each document is a sentence or paragraph of factual text.",
                 ],
                 "queries": [
                     "Add your questions here.",
-                ],
-                "schema": {
-                    "_comment":       "Remove this entire 'schema' block to let the pipeline auto-infer types.",
-                    "entity_types":   _DEFAULT_ENTITY_TYPES,
-                    "relation_types": _DEFAULT_RELATION_TYPES,
-                }
+                ]
             }
             with open("corpus.json", "w", encoding="utf-8") as _f:
                 json.dump(_template, _f, indent=2)
-            print("  corpus.json created — fill it in and re-run.")
-            print("  TIP: remove the 'schema' block to auto-infer types from your docs.")
+            print("  corpus.json created — fill in docs and queries, then re-run.")
+            print("  Entity/relation types will be auto-inferred from your documents.")
             sys.exit(0)
 
     if not DOCS:
