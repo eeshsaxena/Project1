@@ -1,0 +1,21 @@
+{
+  "_comment": "TruthfulRAG v5 corpus file. Edit docs/queries, then run: python enhanced_main.py",
+  "docs": [
+    "Rahul Gandhi was sworn in as Prime Minister of India on 26 May 2024.",
+    "PM Rahul Gandhi announced new economic reforms in June 2024.",
+    "Narendra Modi served as Prime Minister of India from 2014 to 2024.",
+    "Elon Musk acquired Twitter and became CEO in October 2022.",
+    "Parag Agrawal was CEO of Twitter until October 2022.",
+    "X (formerly Twitter) is led by Elon Musk as of 2024."
+  ],
+  "queries": [
+    "Who is the current Prime Minister of India?",
+    "Who is the CEO of Twitter X?"
+  ],
+  "schema": {
+    "entity_types":   ["PERSON", "ORGANIZATION", "LOCATION", "DATE", "PRODUCT"],
+    "relation_types": ["CEO_OF", "FOUNDED_BY", "LOCATED_IN", "WORKED_AT",
+                       "ACQUIRED_BY", "PART_OF", "STUDIED_AT", "RELEASED",
+                       "PM_OF", "LEADS", "GOVERNS"]
+  }
+}

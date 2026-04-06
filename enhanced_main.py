@@ -12,7 +12,8 @@ import sys
 #   [N7] Calibrated Answer Confidence Score
 # Run: python enhanced_main.py
 # ================================================================
-import difflib, hashlib, json, logging, math, os, re, time
+import argparse, difflib, hashlib, json, logging, math, os, re, time
+import datetime
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -38,49 +39,71 @@ logging.getLogger("neo4j").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
 load_dotenv()
 
-CURRENT_YEAR = 2026   # used for [N2] temporal decay
+# [N2] Current year — dynamic, never needs manual update
+CURRENT_YEAR: int = datetime.date.today().year
 
 # ── CONFIG ───────────────────────────────────────────────────────
+# All sensitive / environment-specific values read from .env or environment.
+# Override any value by setting the corresponding env var before running.
+_DEFAULT_ENTITY_TYPES    = ["PERSON","ORGANIZATION","LOCATION","DATE","PRODUCT"]
+_DEFAULT_RELATION_TYPES  = ["CEO_OF","FOUNDED_BY","LOCATED_IN","WORKED_AT",
+                             "ACQUIRED_BY","PART_OF","STUDIED_AT","RELEASED",
+                             "PM_OF","LEADS","GOVERNS"]
+
 CFG: Dict[str, Any] = {
-    "llm_model":              "qwen2.5:7b-instruct",
-    "llm_temperature":        0.0,
-    "llm_temp_sampler":       0.7,
+    # ── LLM (override via env) ───────────────────────────────────
+    "llm_model":              os.getenv("PIPELINE_LLM_MODEL",         "qwen2.5:7b-instruct"),
+    "llm_temperature":        float(os.getenv("PIPELINE_LLM_TEMP",    "0.0")),
+    "llm_temp_sampler":       float(os.getenv("PIPELINE_LLM_TEMP_S",  "0.7")),
+    "ollama_base_url":        os.getenv("OLLAMA_BASE_URL",            "http://localhost:11434"),
+    # ── Neo4j (override via env) ─────────────────────────────────
     "neo4j_uri":              os.getenv("NEO4J_URI",      "bolt://localhost:7687"),
     "neo4j_user":             os.getenv("NEO4J_USERNAME", "neo4j"),
     "neo4j_pass":             os.getenv("NEO4J_PASSWORD", ""),
+    # ── Embeddings (override via env) ────────────────────────────
+    "embedding_model":        os.getenv("PIPELINE_EMBED_MODEL",       "all-MiniLM-L6-v2"),
+    # ── Retrieval ────────────────────────────────────────────────
     "top_k_entities": 5,  "top_k_relations": 5,  "top_k_paths": 5,
     "alpha": 0.5,  "beta": 0.5,
     "hub_penalty_weight":     0.3,
     "ppr_damping":            0.85,  "ppr_iterations": 20,
     "rel_filter_threshold":   0.30,
+    # ── Schema (loaded from corpus file or env) ──────────────────
     "use_schema":             True,
-    "schema_entity_types":    ["PERSON","ORGANIZATION","LOCATION","DATE","PRODUCT"],
-    "schema_relation_types":  ["CEO_OF","FOUNDED_BY","LOCATED_IN","WORKED_AT",
-                               "ACQUIRED_BY","PART_OF","STUDIED_AT","RELEASED",
-                               "PM_OF","LEADS","GOVERNS"],
+    "schema_entity_types":    _DEFAULT_ENTITY_TYPES,
+    "schema_relation_types":  _DEFAULT_RELATION_TYPES,
+    # ── Entropy / conflict ────────────────────────────────────────
     "n_entropy_samples":      3,
     "entropy_tau":            None,
     "semantic_cluster_thresh":0.85,
     "enable_contradiction_filter": _ST,
     "use_logprob_entropy":    True,
-    "ollama_base_url":        "http://localhost:11434",
     "tau_by_intent":          {"factual_lookup":0.25,"temporal":0.35,
                                "comparison":0.50,"causal":0.45,"unknown":None},
-    "embedding_model":        "all-MiniLM-L6-v2",
+    # ── Runtime ──────────────────────────────────────────────────
     "clear_graph_on_start":   True,
     "verbose":                True,
-    # ── Novel improvement settings ──────────────────────────────
-    "corroboration_weight":   0.4,    # [N1] log(1+support) weight
-    "temporal_decay_lambda":  0.08,   # [N2] decay rate per year
-    "use_temporal_decay":     True,   # [N2]
-    "hybrid_semantic_k":      10,     # [N3] top-k for semantic retrieval
-    "rrf_k":                  60,     # [N3] RRF constant
-    "use_hybrid_retrieval":   _ST,    # [N3] needs sentence-transformers
-    "snapshot_year":          None,   # [N4] None=auto-detect from query
-    "explanation_chain":      True,   # [N6] include reasoning in final prompt
-    "confidence_weights":     {"h":0.40,"sup":0.30,"rec":0.30},  # [N7]
+    # ── [N1] Corroboration ────────────────────────────────────────
+    "corroboration_weight":   0.4,
+    # ── [N2] Temporal Decay ───────────────────────────────────────
+    "temporal_decay_lambda":  0.08,
+    "use_temporal_decay":     True,
+    # ── [N3] Hybrid Retrieval ─────────────────────────────────────
+    "hybrid_semantic_k":      10,
+    "rrf_k":                  60,
+    "use_hybrid_retrieval":   _ST,
+    # ── [N4] Snapshot ─────────────────────────────────────────────
+    "snapshot_year":          None,   # None = auto-detect from query text
+    # ── [N6] Explanation Chain ────────────────────────────────────
+    "explanation_chain":      True,
+    # ── [N7] Confidence Score ─────────────────────────────────────
+    "confidence_weights":     {"h":0.40,"sup":0.30,"rec":0.30},
 }
-SEP = "─"*64
+
+# Terminal-width separator — adapts to console, never magic-number
+try:    _TW = min(os.get_terminal_size().columns, 80)
+except: _TW = 72
+SEP = "─" * _TW
 
 # ── [C1] LLM CACHE ───────────────────────────────────────────────
 class LLMCache:
@@ -694,18 +717,136 @@ def run_comparison(docs: List[str], queries: List[str]):
     print("═"*64)
     return results
 
+# ── CORPUS / QUERY LOADER ─────────────────────────────────────────
+def _load_corpus(path: str) -> Dict:
+    """Load docs + queries from a JSON file.
+
+    Expected format (all keys optional):
+    {
+      "docs":    ["sentence 1", ...],
+      "queries": ["question 1", ...],
+      "schema": {
+          "entity_types":   [...],
+          "relation_types": [...]
+      }
+    }
+    """
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"corpus file must be a JSON object, got {type(data)}")
+    return data
+
+
+def _interactive_input() -> tuple:
+    """Prompt the user to type docs and queries directly in the terminal."""
+    print(f"\n{SEP}\n  TruthfulRAG v5 — Interactive Input Mode\n{SEP}")
+    print("Enter DOCUMENTS one per line. Type an empty line when done.")
+    docs = []
+    while True:
+        line = input("  doc> ").strip()
+        if not line:
+            break
+        docs.append(line)
+
+    print("\nEnter QUERIES one per line. Type an empty line when done.")
+    queries = []
+    while True:
+        line = input("  q> ").strip()
+        if not line:
+            break
+        queries.append(line)
+
+    return docs, queries
+
+
 # ── MAIN ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    DOCS = [
-        "Rahul Gandhi was sworn in as Prime Minister of India on 26 May 2024.",
-        "PM Rahul Gandhi announced new economic reforms in June 2024.",
-        "Narendra Modi served as Prime Minister of India from 2014 to 2024.",
-        "Elon Musk acquired Twitter and became CEO in October 2022.",
-        "Parag Agrawal was CEO of Twitter until October 2022.",
-        "X (formerly Twitter) is led by Elon Musk as of 2024.",
-    ]
-    QUERIES = [
-        "Who is the current Prime Minister of India?",
-        "Who is the CEO of Twitter X?",
-    ]
+    # ── CLI argument parser ─────────────────────────────────────
+    ap = argparse.ArgumentParser(
+        description="TruthfulRAG v5 — Enhanced KG-RAG pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use a corpus JSON file:
+  python enhanced_main.py --corpus corpus.json
+
+  # Pass docs/queries directly:
+  python enhanced_main.py --docs "Doc 1." "Doc 2." --queries "Question?"
+
+  # Interactive (prompts for input):
+  python enhanced_main.py --interactive
+
+  # Override LLM model at runtime:
+  python enhanced_main.py --corpus corpus.json --model llama3:8b
+        """)
+    ap.add_argument("--corpus",      "-c",  metavar="FILE",
+                    help="path to corpus JSON file (see _load_corpus docstring for format)")
+    ap.add_argument("--docs",        "-d",  nargs="+", metavar="DOC",
+                    help="one or more document strings (wrap in quotes)")
+    ap.add_argument("--queries",     "-q",  nargs="+", metavar="QUERY",
+                    help="one or more query strings")
+    ap.add_argument("--interactive", "-i",  action="store_true",
+                    help="prompt for docs and queries interactively")
+    ap.add_argument("--model",       "-m",  metavar="NAME",
+                    help="override LLM model (e.g. llama3:8b)")
+    ap.add_argument("--no-verbose",         action="store_true",
+                    help="suppress verbose logging")
+    args = ap.parse_args()
+
+    # ── Apply runtime overrides to CFG ──────────────────────────
+    if args.model:      CFG["llm_model"] = args.model
+    if args.no_verbose: CFG["verbose"]   = False
+
+    # ── Resolve corpus source (priority: --corpus > --docs > --interactive) ──
+    DOCS: List[str]    = []
+    QUERIES: List[str] = []
+
+    if args.corpus:
+        data    = _load_corpus(args.corpus)
+        DOCS    = data.get("docs",    [])
+        QUERIES = data.get("queries", [])
+        schema  = data.get("schema",  {})
+        if schema.get("entity_types"):   CFG["schema_entity_types"]   = schema["entity_types"]
+        if schema.get("relation_types"): CFG["schema_relation_types"] = schema["relation_types"]
+        print(f"  Loaded {len(DOCS)} docs, {len(QUERIES)} queries from {args.corpus}")
+    elif args.docs:
+        DOCS    = args.docs
+        QUERIES = args.queries or []
+    elif args.interactive:
+        DOCS, QUERIES = _interactive_input()
+    else:
+        # ── Demo mode: built-in sample corpus loaded from bundled file ──
+        _demo = os.path.join(os.path.dirname(__file__), "corpus.json")
+        if os.path.exists(_demo):
+            data    = _load_corpus(_demo)
+            DOCS    = data.get("docs",    [])
+            QUERIES = data.get("queries", [])
+            print(f"  Using corpus.json ({len(DOCS)} docs, {len(QUERIES)} queries)")
+        else:
+            print("  No corpus supplied. Run with --help to see options.")
+            print("  Generating corpus.json demo template...")
+            _template = {
+                "docs": [
+                    "Add your source documents here, one per list item.",
+                    "Each document is a sentence or paragraph of factual text.",
+                ],
+                "queries": [
+                    "Add your questions here.",
+                ],
+                "schema": {
+                    "entity_types":   _DEFAULT_ENTITY_TYPES,
+                    "relation_types": _DEFAULT_RELATION_TYPES,
+                }
+            }
+            with open("corpus.json", "w", encoding="utf-8") as _f:
+                json.dump(_template, _f, indent=2)
+            print("  corpus.json created — fill it in and re-run.")
+            sys.exit(0)
+
+    if not DOCS:
+        print("  [ERROR] No documents provided. Exiting."); sys.exit(1)
+    if not QUERIES:
+        print("  [WARN] No queries provided — running ingest only.")
+
     run_comparison(DOCS, QUERIES)
