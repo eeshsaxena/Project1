@@ -1,5 +1,9 @@
 {
-  "_comment": "TruthfulRAG v5 corpus file. Edit docs/queries, then run: python enhanced_main.py",
+  "_help": {
+    "docs":    "List of source documents — sentences or paragraphs of factual text",
+    "queries": "List of questions to answer against the knowledge graph",
+    "schema":  "OPTIONAL — remove this block entirely to AUTO-INFER entity/relation types from your docs"
+  },
   "docs": [
     "Rahul Gandhi was sworn in as Prime Minister of India on 26 May 2024.",
     "PM Rahul Gandhi announced new economic reforms in June 2024.",
@@ -13,6 +17,7 @@
     "Who is the CEO of Twitter X?"
   ],
   "schema": {
+    "_comment": "Remove this entire 'schema' block to let the pipeline AUTO-INFER types from your corpus.",
     "entity_types":   ["PERSON", "ORGANIZATION", "LOCATION", "DATE", "PRODUCT"],
     "relation_types": ["CEO_OF", "FOUNDED_BY", "LOCATED_IN", "WORKED_AT",
                        "ACQUIRED_BY", "PART_OF", "STUDIED_AT", "RELEASED",

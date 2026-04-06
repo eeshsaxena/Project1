@@ -148,6 +148,18 @@ EXPLAIN_PROMPT = ("You resolved a knowledge conflict. Provide a clear answer wit
                   "Question: {query}\n\n"
                   "Answer (include WHAT the answer is and WHY this source was chosen):")
 
+# [A4+] Dynamic schema inference prompt — used to auto-discover entity/relation types
+SCHEMA_INFER_PROMPT = (
+    "Read the following text samples and infer the most useful entity types and relation types "
+    "for building a knowledge graph over this domain.\n"
+    "Return ONLY valid JSON in exactly this format:\n"
+    '{"entity_types": ["TYPE1", "TYPE2", ...], "relation_types": ["REL_ONE", "REL_TWO", ...]}\n\n'
+    "Rules:\n"
+    "- entity_types: 3-8 UPPERCASE labels (e.g. PERSON, DRUG, STATUTE, TEAM)\n"
+    "- relation_types: 3-12 UPPER_SNAKE_CASE verbs (e.g. CEO_OF, TREATS, PLAYED_FOR)\n"
+    "- Do NOT include generic types like THING or ENTITY\n\n"
+    "Text samples:\n{samples}\n\nJSON:"
+)
 
 class HybridRetriever:
     """[N3] BM25 + Semantic embedding retrieval fused with RRF."""
@@ -195,11 +207,42 @@ class TripleRecord:
     support_count: int = 1   # [N1] how many docs support this triple
 
 class EnhancedGraphConstructor:
-    """Module A + [N1] corroboration counting + [A1] year-on-edge."""
+    """Module A + [N1] corroboration counting + [A1] year-on-edge + [A4+] dynamic schema."""
     def __init__(self, llm, graph, cfg):
         self.llm=llm; self.graph=graph; self.cfg=cfg
         self.transformer = LLMGraphTransformer(llm=llm)
         self._triple_bank: Dict[Tuple, TripleRecord] = {}  # [N1]
+
+    def _infer_schema(self, docs: List[str]) -> None:
+        """[A4+] Auto-discover entity & relation types from corpus.
+
+        Samples up to cfg['schema_infer_sample'] docs, asks the LLM to identify
+        domain-specific entity and relation types, then updates CFG in place.
+        Skipped when corpus.json (or env) already provides explicit schema.
+        """
+        sample_n = self.cfg.get("schema_infer_sample", 5)
+        sample   = docs[:sample_n]
+        samples_text = "\n---\n".join(f"[{i+1}] {d}" for i, d in enumerate(sample))
+
+        if self.cfg["verbose"]:
+            print(f"  [A4+] Inferring schema from {len(sample)} sample docs...")
+
+        raw = cached_invoke(self.llm, SCHEMA_INFER_PROMPT.format(samples=samples_text))
+        try:
+            m    = re.search(r'\{.*\}', raw, re.DOTALL)
+            data = json.loads(m.group(0) if m else raw)
+            etypes = [str(e).upper() for e in data.get("entity_types", []) if e]
+            rtypes = [re.sub(r'\W+', '_', str(r).upper()).strip('_')
+                      for r in data.get("relation_types", []) if r]
+            if etypes:
+                self.cfg["schema_entity_types"]  = etypes
+                self.cfg["schema_relation_types"] = rtypes
+                if self.cfg["verbose"]:
+                    print(f"  [A4+] Inferred entity types  : {etypes}")
+                    print(f"  [A4+] Inferred relation types: {rtypes}")
+        except Exception as exc:
+            if self.cfg["verbose"]:
+                print(f"  [A4+] Schema inference failed ({exc}) — using defaults.")
 
     def _clear(self):
         self.graph.query("MATCH (n) DETACH DELETE n")
@@ -287,6 +330,10 @@ class EnhancedGraphConstructor:
         except Exception: pass
 
     def build(self, docs: List[str]):
+        # [A4+] Auto-infer schema unless explicitly provided by caller
+        if self.cfg.get("schema_source", "auto") == "auto":
+            self._infer_schema(docs)
+
         if self.cfg["clear_graph_on_start"]: self._clear()
         self.graph.add_graph_documents(
             self.transformer.convert_to_graph_documents([Document(page_content=d) for d in docs]))
@@ -792,11 +839,15 @@ Examples:
                     help="override LLM model (e.g. llama3:8b)")
     ap.add_argument("--no-verbose",         action="store_true",
                     help="suppress verbose logging")
+    ap.add_argument("--schema-sample",  "-s",  type=int, default=5, metavar="N",
+                    help="number of docs sampled for auto schema inference (default: 5)")
     args = ap.parse_args()
 
     # ── Apply runtime overrides to CFG ──────────────────────────
-    if args.model:      CFG["llm_model"] = args.model
-    if args.no_verbose: CFG["verbose"]   = False
+    if args.model:        CFG["llm_model"]           = args.model
+    if args.no_verbose:   CFG["verbose"]             = False
+    CFG["schema_infer_sample"] = args.schema_sample
+    CFG["schema_source"]       = "auto"   # default: auto-infer from docs
 
     # ── Resolve corpus source (priority: --corpus > --docs > --interactive) ──
     DOCS: List[str]    = []
@@ -807,14 +858,25 @@ Examples:
         DOCS    = data.get("docs",    [])
         QUERIES = data.get("queries", [])
         schema  = data.get("schema",  {})
-        if schema.get("entity_types"):   CFG["schema_entity_types"]   = schema["entity_types"]
-        if schema.get("relation_types"): CFG["schema_relation_types"] = schema["relation_types"]
+        if schema.get("entity_types") and schema.get("relation_types"):
+            # User supplied explicit schema — use it, skip inference
+            CFG["schema_entity_types"]  = schema["entity_types"]
+            CFG["schema_relation_types"] = schema["relation_types"]
+            CFG["schema_source"] = "explicit"
+            print(f"  Schema: explicit ({len(schema['entity_types'])} entity types, "
+                  f"{len(schema['relation_types'])} relation types)")
+        else:
+            CFG["schema_source"] = "auto"   # no schema in file — auto-infer
+            print(f"  Schema: will be auto-inferred from corpus")
         print(f"  Loaded {len(DOCS)} docs, {len(QUERIES)} queries from {args.corpus}")
     elif args.docs:
         DOCS    = args.docs
         QUERIES = args.queries or []
+        # No schema provided via CLI — always auto-infer
+        CFG["schema_source"] = "auto"
     elif args.interactive:
         DOCS, QUERIES = _interactive_input()
+        CFG["schema_source"] = "auto"
     else:
         # ── Demo mode: built-in sample corpus loaded from bundled file ──
         _demo = os.path.join(os.path.dirname(__file__), "corpus.json")
@@ -827,6 +889,11 @@ Examples:
             print("  No corpus supplied. Run with --help to see options.")
             print("  Generating corpus.json demo template...")
             _template = {
+                "_help": {
+                    "docs":    "List of source documents (sentences or paragraphs)",
+                    "queries": "List of questions to answer",
+                    "schema":  "Optional. If omitted, entity/relation types are AUTO-INFERRED from your docs."
+                },
                 "docs": [
                     "Add your source documents here, one per list item.",
                     "Each document is a sentence or paragraph of factual text.",
@@ -835,6 +902,7 @@ Examples:
                     "Add your questions here.",
                 ],
                 "schema": {
+                    "_comment":       "Remove this entire 'schema' block to let the pipeline auto-infer types.",
                     "entity_types":   _DEFAULT_ENTITY_TYPES,
                     "relation_types": _DEFAULT_RELATION_TYPES,
                 }
@@ -842,6 +910,7 @@ Examples:
             with open("corpus.json", "w", encoding="utf-8") as _f:
                 json.dump(_template, _f, indent=2)
             print("  corpus.json created — fill it in and re-run.")
+            print("  TIP: remove the 'schema' block to auto-infer types from your docs.")
             sys.exit(0)
 
     if not DOCS:
