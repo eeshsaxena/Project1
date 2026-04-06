@@ -17,7 +17,7 @@ import datetime
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-import numpy as np, requests
+import numpy as np
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_neo4j import Neo4jGraph
@@ -51,7 +51,7 @@ CFG: Dict[str, Any] = {
     "llm_model":              os.getenv("PIPELINE_LLM_MODEL",         "qwen2.5:7b-instruct"),
     "llm_temperature":        float(os.getenv("PIPELINE_LLM_TEMP",    "0.0")),
     "llm_temp_sampler":       float(os.getenv("PIPELINE_LLM_TEMP_S",  "0.7")),
-    "ollama_base_url":        os.getenv("OLLAMA_BASE_URL",            "http://localhost:11434"),
+    "ollama_base_url":        os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     # ── Neo4j (override via env) ─────────────────────────────────
     "neo4j_uri":              os.getenv("NEO4J_URI",      "bolt://localhost:7687"),
     "neo4j_user":             os.getenv("NEO4J_USERNAME", "neo4j"),
@@ -64,8 +64,7 @@ CFG: Dict[str, Any] = {
     "hub_penalty_weight":     0.3,
     "ppr_damping":            0.85,  "ppr_iterations": 20,
     "rel_filter_threshold":   0.30,
-    # ── Schema (loaded from corpus file or env) ──────────────────
-    "use_schema":             True,
+    # ── Schema (always auto-inferred, entity/relation lists filled at runtime) ──
     "schema_entity_types":    [],   # populated by _infer_schema() or corpus.json
     "schema_relation_types":  [],   # populated by _infer_schema() or corpus.json
     # ── Entropy / conflict ────────────────────────────────────────
@@ -73,7 +72,6 @@ CFG: Dict[str, Any] = {
     "entropy_tau":            None,
     "semantic_cluster_thresh":0.85,
     "enable_contradiction_filter": _ST,
-    "use_logprob_entropy":    True,
     "tau_by_intent":          {"factual_lookup":0.25,"temporal":0.35,
                                "comparison":0.50,"causal":0.45,"unknown":None},
     # ── Runtime ──────────────────────────────────────────────────
@@ -123,8 +121,8 @@ def cached_invoke(llm, prompt):
     _CACHE.set(prompt,t,r); return r
 
 # ── PROMPTS ───────────────────────────────────────────────────────
-def _triple_prompt(text, use_schema, etypes, rtypes):
-    schema = (f"Entities: {etypes}\nRelations: {rtypes}\n" if use_schema else "")
+def _triple_prompt(text, etypes, rtypes):
+    schema = f"Entities: {etypes}\nRelations: {rtypes}\n"
     return (f"{schema}Extract ALL facts as JSON list. "
             "Each item: {\"head\":str,\"relation\":str,\"tail\":str,\"year\":int|null}\n"
             f"Text:\n\"\"\"{text}\"\"\"\nJSON:")
@@ -159,15 +157,13 @@ SCHEMA_INFER_PROMPT = (
 
 class HybridRetriever:
     """[N3] BM25 + Semantic embedding retrieval fused with RRF."""
-    def __init__(self, docs: List[str], cfg: Dict):
+    def __init__(self, docs: List[str], cfg: Dict, embedder=None):
+        """Accepts a shared embedder to avoid loading the model twice."""
         self.docs = docs; self.cfg = cfg
         tokens = [d.lower().split() for d in docs]
         self.bm25 = BM25Okapi(tokens) if _BM25 else None
-        if _ST and cfg.get("use_hybrid_retrieval"):
-            self.embedder = SentenceTransformer(cfg["embedding_model"])
-            self.doc_vecs  = self.embedder.encode(docs)
-        else:
-            self.embedder = None; self.doc_vecs = None
+        self.embedder  = embedder if (embedder and cfg.get("use_hybrid_retrieval")) else None
+        self.doc_vecs  = self.embedder.encode(docs) if self.embedder else None
 
     def retrieve(self, query: str, k: int = 10) -> List[str]:
         k = min(k, len(self.docs))
@@ -224,7 +220,6 @@ class EnhancedGraphConstructor:
                   └─▶ [Module B] EnhancedGraphRetriever.retrieve()
                       └─▶ [Module C] EnhancedConflictResolver.resolve()
 
-        Skipped when corpus.json already provides explicit schema.
         """
         sample_n     = self.cfg.get("schema_infer_sample", 5)
         sample       = docs[:sample_n]
@@ -257,7 +252,7 @@ class EnhancedGraphConstructor:
     def _extract(self, text: str) -> List[dict]:
         """[A1][A4] Temporal + schema-guided extraction."""
         raw = cached_invoke(self.llm, _triple_prompt(
-            text, self.cfg["use_schema"],
+            text,
             self.cfg["schema_entity_types"], self.cfg["schema_relation_types"]))
         try:
             m = re.search(r'\[.*\]', raw, re.DOTALL)
@@ -380,7 +375,6 @@ class EnhancedGraphRetriever:
         if not E:
             stop={"who","what","when","where","is","are","was","the","a","an","of"}
             E=[t for t in q.lower().split() if t not in stop]
-        if not R: R=["ceo","became","founded","located"]
         kw=list({w for r in R for w in re.split(r'[\s_]+',r.lower()) if w})
         return E, kw
 
@@ -543,21 +537,6 @@ def _H_sem(answers, embedder, thresh):
         p=c/total; h -= p*math.log(p+1e-9)
     return h
 
-def _H_lp(query, context, model, base_url):
-    """[C6] Token logprob entropy."""
-    prompt = PARAM_PROMPT.format(query=query) if context is None else RAG_PROMPT.format(query=query,context=context)
-    try:
-        resp = requests.post(f"{base_url}/api/generate",
-            json={"model":model,"prompt":prompt,"stream":False,
-                  "options":{"temperature":0.0},"logprobs":True}, timeout=30)
-        if resp.status_code==200:
-            lp=resp.json().get("logprobs",[])
-            if lp:
-                p=np.exp(np.clip([x["logprob"] for x in lp],-50,0))
-                p/=(p.sum()+1e-9)
-                return float(-np.sum(p*np.log(p+1e-9)))
-    except Exception: pass
-    return None
 
 def _detect_contradictions(paths):
     pat=re.compile(r'([A-Za-z][^-]+?)--\[(\w+)\]-->\s*([A-Za-z][^\n\[]+?)(?:\s*\[year:? ?(\d+)\])?')
@@ -583,19 +562,19 @@ class EnhancedConflictResolver:
     """Module C + [N6] explanation chain + [N7] confidence score."""
     def __init__(self, llm, llm_s, embedder, cfg):
         self.llm=llm; self.llm_s=llm_s; self.emb=embedder; self.cfg=cfg
-        self._n=cfg["n_entropy_samples"]; self._mh=math.log(self._n)
-        self._st=cfg["semantic_cluster_thresh"]
+        self._n=cfg["n_entropy_samples"]
 
     def _entropy(self, query, context=None):
-        """[C2][C4][C6] fixed n samples, semantic + logprob entropy."""
+        """[C2][C4] Fixed-n semantic entropy over sampled answers."""
         ans=[cached_invoke(self.llm_s,
              PARAM_PROMPT.format(query=query) if context is None
              else RAG_PROMPT.format(query=query,context=context))
              for _ in range(self._n)]
-        hs=_H_str(ans); hse=_H_sem(ans,self.emb,self._st)
-        hlp=(_H_lp(query,context,self.cfg["llm_model"],self.cfg["ollama_base_url"])
-             if self.cfg["use_logprob_entropy"] else None)
-        return hs, hse, hlp
+        thresh = self.cfg["semantic_cluster_thresh"]
+        max_h  = math.log(self._n)
+        hs  = _H_str(ans)
+        hse = _H_sem(ans, self.emb, thresh) if self.emb else hs
+        return hs, hse, None    # logprob removed (duplicate of cached_invoke)
 
     def _confidence(self, delta_h: float, tau: float,
                     support: int, year_gap: int) -> float:
@@ -635,10 +614,10 @@ class EnhancedConflictResolver:
         hs_p, hse_p, hlp_p = self._entropy(query)
         hd_p = hlp_p if hlp_p is not None else hse_p
         if self.cfg["verbose"]:
-            print(f"  [C4] H_param str={hs_p:.4f} sem={hse_p:.4f}" +
-                  (f" logprob={hlp_p:.4f}" if hlp_p else " logprob=N/A"))
+            print(f"  [C4] H_param str={hs_p:.4f} sem={hse_p:.4f}")
 
         # tau [C7] domain-adaptive
+        max_h = math.log(self._n)
         it = self.cfg["tau_by_intent"].get(intent)
         if it is not None:
             tau = it
@@ -649,7 +628,7 @@ class EnhancedConflictResolver:
             tau = max(0.15, 0.5*hd_p)
             if self.cfg["verbose"]: print(f"  [C3] Adaptive tau={tau:.4f}")
 
-        strategy = "grounding" if hd_p >= self._mh*0.85 else "conflict"
+        strategy = "grounding" if hd_p >= max_h*0.85 else "conflict"
 
         for i, kp in enumerate(paths):
             if self.cfg["verbose"]: print(f"  [C]  Path {i+1}...", end=" ", flush=True)
@@ -689,11 +668,10 @@ class EnhancedConflictResolver:
         meta = {
             "intent": intent, "strategy": strategy,
             "tau": tau, "h_param_str": hs_p, "h_param_sem": hse_p,
-            "h_param_lp": hlp_p, "total_paths": len(paths),
+            "total_paths": len(paths),
             "selected_paths": len(sel), "contradictions_removed": n_c,
-            "adversarial_detected": adversarial,
             "corroboration_max": max((p.support for p in sel), default=1),
-            "confidence": conf,   # [N7]
+            "confidence": conf,
         }
         return sel, answer, meta
 
@@ -708,10 +686,8 @@ class EnhancedPipeline:
         self.constructor = EnhancedGraphConstructor(llm, graph, cfg)
         self.retriever   = EnhancedGraphRetriever(llm, graph, embedder, cfg)
         self.resolver    = EnhancedConflictResolver(llm, llm_s, embedder, cfg)
-        self._docs: List[str] = []
 
     def ingest(self, docs: List[str]):
-        self._docs = docs
         print(f"\n{SEP}\n  [v5] Building enhanced knowledge graph...\n{SEP}")
         n_n, n_e = self.constructor.build(docs)
         print(f"  --> Graph: {n_n} nodes, {n_e} edges")
@@ -732,7 +708,8 @@ class EnhancedPipeline:
 # ── COMPARISON RUNNER ─────────────────────────────────────────────
 def run_comparison(docs: List[str], queries: List[str]):
     """Ingest docs into v5 pipeline and answer all queries."""
-    W = min(getattr(os, 'get_terminal_size', lambda: type('', (), {'columns': 72})()).columns, 80)
+    try:    W = min(os.get_terminal_size().columns, 80)
+    except: W = 72
     BAR = "═" * W
     print(f"\n{BAR}\n  TruthfulRAG v5 Enhanced — Run\n{BAR}")
 
