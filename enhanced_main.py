@@ -15,7 +15,7 @@ import sys
 import argparse, difflib, hashlib, json, logging, math, os, re, time
 import datetime
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np, requests
 from dotenv import load_dotenv
@@ -63,7 +63,7 @@ CFG: Dict[str, Any] = {
     # ── Embeddings (override via env) ────────────────────────────
     "embedding_model":        os.getenv("PIPELINE_EMBED_MODEL",       "all-MiniLM-L6-v2"),
     # ── Retrieval ────────────────────────────────────────────────
-    "top_k_entities": 5,  "top_k_relations": 5,  "top_k_paths": 5,
+    "top_k_paths": 5,
     "alpha": 0.5,  "beta": 0.5,
     "hub_penalty_weight":     0.3,
     "ppr_damping":            0.85,  "ppr_iterations": 20,
@@ -214,23 +214,33 @@ class EnhancedGraphConstructor:
         self._triple_bank: Dict[Tuple, TripleRecord] = {}  # [N1]
 
     def _infer_schema(self, docs: List[str]) -> None:
-        """[A4+] Auto-discover entity & relation types from corpus.
+        """[A4+] PRE-PIPELINE schema discovery — NOT part of v4 Module A/B/C.
 
-        Samples up to cfg['schema_infer_sample'] docs, asks the LLM to identify
-        domain-specific entity and relation types, then updates CFG in place.
-        Skipped when corpus.json (or env) already provides explicit schema.
+        The TruthfulRAG v4 pipeline (Modules A→B→C) requires a schema
+        BEFORE it can extract triples. This method solves the chicken-and-egg
+        problem by running a single, lightweight LLM call on a sample of docs
+        to discover domain-specific entity and relation types.
+
+        Flow:
+          _infer_schema(docs)          ← this method (pre-pipeline, LLM only)
+          └─▶ updates CFG schema
+              └─▶ [Module A] EnhancedGraphConstructor.build()
+                  └─▶ [Module B] EnhancedGraphRetriever.retrieve()
+                      └─▶ [Module C] EnhancedConflictResolver.resolve()
+
+        Skipped when corpus.json already provides explicit schema.
         """
-        sample_n = self.cfg.get("schema_infer_sample", 5)
-        sample   = docs[:sample_n]
+        sample_n     = self.cfg.get("schema_infer_sample", 5)
+        sample       = docs[:sample_n]
         samples_text = "\n---\n".join(f"[{i+1}] {d}" for i, d in enumerate(sample))
 
         if self.cfg["verbose"]:
-            print(f"  [A4+] Inferring schema from {len(sample)} sample docs...")
+            print(f"  [A4+] Inferring schema from {len(sample)} doc(s) (pre-pipeline)...")
 
         raw = cached_invoke(self.llm, SCHEMA_INFER_PROMPT.format(samples=samples_text))
         try:
-            m    = re.search(r'\{.*\}', raw, re.DOTALL)
-            data = json.loads(m.group(0) if m else raw)
+            m      = re.search(r'\{.*\}', raw, re.DOTALL)
+            data   = json.loads(m.group(0) if m else raw)
             etypes = [str(e).upper() for e in data.get("entity_types", []) if e]
             rtypes = [re.sub(r'\W+', '_', str(r).upper()).strip('_')
                       for r in data.get("relation_types", []) if r]
@@ -238,11 +248,11 @@ class EnhancedGraphConstructor:
                 self.cfg["schema_entity_types"]  = etypes
                 self.cfg["schema_relation_types"] = rtypes
                 if self.cfg["verbose"]:
-                    print(f"  [A4+] Inferred entity types  : {etypes}")
-                    print(f"  [A4+] Inferred relation types: {rtypes}")
+                    print(f"  [A4+] Entity types  : {etypes}")
+                    print(f"  [A4+] Relation types: {rtypes}")
         except Exception as exc:
             if self.cfg["verbose"]:
-                print(f"  [A4+] Schema inference failed ({exc}) — using defaults.")
+                print(f"  [A4+] Inference failed ({exc}) — using defaults.")
 
     def _clear(self):
         self.graph.query("MATCH (n) DETACH DELETE n")
@@ -726,42 +736,36 @@ class EnhancedPipeline:
 
 # ── COMPARISON RUNNER ─────────────────────────────────────────────
 def run_comparison(docs: List[str], queries: List[str]):
-    """Run both TruthfulRAG v4 (main.py) and v5 Enhanced on same queries."""
-    import importlib.util, pathlib
-    print("\n" + "═"*64)
-    print("  TruthfulRAG v4 vs v5 Enhanced — Comparison Run")
-    print("═"*64)
+    """Ingest docs into v5 pipeline and answer all queries."""
+    W = min(getattr(os, 'get_terminal_size', lambda: type('', (), {'columns': 72})()).columns, 80)
+    BAR = "═" * W
+    print(f"\n{BAR}\n  TruthfulRAG v5 Enhanced — Run\n{BAR}")
 
     results = []
     v5 = EnhancedPipeline()
     v5.ingest(docs)
 
     for q in queries:
-        print(f"\n{'─'*64}\nQuery: {q}")
+        print(f"\n{SEP}\nQuery: {q}")
         r5 = v5.query(q)
         results.append({"query": q, "v5": r5})
-        print(f"  [v5] {r5['answer']}")
 
-    # Print comparison table
-    print("\n" + "═"*64)
-    print("  METRIC COMPARISON (v4 Baseline vs v5 Enhanced)")
-    print("═"*64)
-    headers = ["Metric","TruthfulRAG v4","Enhanced v5","Improvement","Feature"]
-    rows = [
-        ("Corroboration signal",    "No",    "Yes (N1)",    "+evidence weight",  "[N1]"),
-        ("Temporal decay in score", "No",    "Yes (N2)",    "+year sensitivity", "[N2]"),
-        ("Retrieval method",        "BM25",  "BM25+Semantic","+semantic recall", "[N3]"),
-        ("Time-anchored queries",   "No",    "Yes (N4)",    "+historical acc.",  "[N4]"),
-        ("Explainable answer",      "No",    "Yes (N6)",    "+transparency",     "[N6]"),
-        ("Answer confidence",       "No",    "0-100% score","+calibration",      "[N7]"),
-        ("Score formula", "Ref×PPR", "Ref×PPR×decay×corroborate", "richer", "N1+N2"),
+    # Feature summary derived from active CFG — no hardcoded rows
+    print(f"\n{BAR}\n  v5 Active Features\n{BAR}")
+    features = [
+        ("[N1] Corroboration",      f"weight={CFG['corroboration_weight']}"),
+        ("[N2] Temporal decay",     f"lambda={CFG['temporal_decay_lambda']}  year={CURRENT_YEAR}"),
+        ("[N3] Hybrid retrieval",   "BM25+Semantic RRF" if CFG["use_hybrid_retrieval"] else "BM25 only"),
+        ("[N4] Temporal snapshot",  f"auto-detect from query"),
+        ("[N6] Explanation chain",  "ON" if CFG["explanation_chain"] else "OFF"),
+        ("[N7] Confidence score",   f"weights={CFG['confidence_weights']}"),
+        ("Schema source",           CFG.get("schema_source", "auto")),
+        ("Entity types",            str(CFG["schema_entity_types"])),
+        ("Relation types",          str(CFG["schema_relation_types"])),
     ]
-    fmt = "{:<28} {:<18} {:<15} {:<20} {}"
-    print(fmt.format(*headers))
-    print("-"*90)
-    for r in rows:
-        print(fmt.format(*r))
-    print("═"*64)
+    for label, val in features:
+        print(f"  {label:<28} {val}")
+    print(BAR)
     return results
 
 # ── CORPUS / QUERY LOADER ─────────────────────────────────────────
