@@ -1,0 +1,232 @@
+================================================================================
+          TRUTHFULRAG v5 : COMPLETE ARCHITECTURE, FLOW, AND CODE GUIDE
+================================================================================
+
+This document is dual-purpose:
+1. It maps the overall SYSTEM FLOW and how the Modules (A, B, C) interact.
+2. It provides a STRICT LINE-BY-LINE breakdown of the `enhanced_main.py` code.
+
+================================================================================
+PART 1: THE HIGH-LEVEL ARCHITECTURE FLOW
+================================================================================
+
+How data travels from a raw text document to a final trustworthy answer.
+
+[RAW DOCUMENTS] (from corpus.json)
+      │
+      ▼
+┌────────────────────────────────────────────────────────┐
+│ PRE-PIPELINE: SCHEMA INFERENCE [A4+]                   │
+│ Function: _infer_schema()                              │
+│ - Reads first 5 documents.                             │
+│ - Uses LLM to figure out domain automatically.         │
+│   (e.g., PERSON, COMPANY, CEO_OF)                      │
+└────────────────────────────────────────────────────────┘
+      │
+      ▼
+┌────────────────────────────────────────────────────────┐
+│ MODULE A: GRAPH CONSTRUCTION (Ingestion)               │
+│ Function: EnhancedGraphConstructor.build()             │
+│                                                        │
+│ 1. Extract plain nodes/edges (LangChain Default)       │
+│ 2. Extract [YEAR] on edges (TruthfulRAG)               │
+│ 3. Count documents, add [SUPPORT_COUNT] [N1]           │
+│ 4. Disambiguate names ("X" -> "Twitter") [A2]          │
+│ 5. Normalize relations ("leads" -> "CEO_OF") [A3]      │
+│                                                        │
+│ RESULT: A massive, structured Knowledge Graph in Neo4j │
+└────────────────────────────────────────────────────────┘
+      │
+      ▼
+[USER ASKS A QUESTION: "Who was CEO of Twitter in 2020?"]
+      │
+      ▼
+┌─────────────────────────────────────────────────────────┐
+│ MODULE B: GRAPH RETRIEVAL (Search)                      │
+│ Function: EnhancedGraphRetriever.retrieve()             │
+│                                                         │
+│ 1. Scan query for Years [N4] -> (2020 detected)         │
+│ 2. Filter Graph -> Hide all facts after 2020            │
+│ 3. Find relation verbs -> ("CEO")                       │
+│ 4. Run Personalized PageRank [B4] -> (Follows graph)    │
+│ 5. Calculate Score + Temporal Decay [N2]                │
+│                                                         │
+│ RESULT: Top 5 most likely Knowledge Paths are returned  │
+└─────────────────────────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────────────────────┐
+│ MODULE C: CONFLICT RESOLUTION (Verification)            │
+│ Function: EnhancedConflictResolver.resolve()            │
+│                                                         │
+│ 1. Find Contradictions -> (Jack Dorsey vs Dick Costolo) │
+│ 2. Delete older facts automatically                     │
+│ 3. Check LLM Memory (Entropy) -> Is the LLM confused?   │
+│ 4. Give the LLM the correct graph facts.                │
+│ 5. Does the fact REDUCE the LLM's confusion? (ΔH)       │
+│                                                         │
+│ RESULT: Winning facts are selected.                     │
+└─────────────────────────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────────────────────┐
+│ FINAL GENERATION: THE AUDIT TRAIL                       │
+│ Function: _build_chain() & _confidence()                │
+│                                                         │
+│ 1. Build Chain [N6] -> "I chose X because Y was old."   │
+│ 2. Calculate Confidence [N7] -> "I am 87% sure."        │
+│ 3. Answer User.                                         │
+└─────────────────────────────────────────────────────────┘
+
+================================================================================
+PART 2: LINE-BY-LINE EXPLANATION OF `enhanced_main.py`
+================================================================================
+
+Here is exactly what every single line/block is doing in the source code.
+
+--------------------------------------------------------------------------------
+SECTION 1: IMPORTS & CONFIGURATION (Lines 1 - 156)
+--------------------------------------------------------------------------------
+Lines 1-25: Core Imports
+- Loads `typing` (for clean code), `json` (for reading data), `numpy` (for math).
+- Loads LangChain dependencies (`Neo4jGraph` for the DB, `ChatOllama` for the LLM).
+
+Lines 29-36: Try/Except blocks for optional libraries
+- Loads `sentence-transformers` for semantic math and `rank-bm25` for keyword search.
+- Wraps them in `try` so the script won't crash if they aren't installed.
+
+Lines 42-43: CURRENT_YEAR
+- Automatically grabs the true calendar year. Used later for [N2] Temporal decay so facts automatically get older without manual updates.
+
+Lines 49-95: THE MASTER CONFIG (`CFG`) Dictionary
+- `llm_temp_sampler: 0.7`: Important! We need this high for Module C so the LLM tells us different things when it's confused.
+- `schema_...`: Left blank intentionally so [A4+] can auto-fill it.
+- Toggle switches for the 6 Novel [N] features are set here.
+
+Lines 103-121: LLMCache Class & `cached_invoke()`
+- Custom local memory. If we ask the LLM "Who is Elon?" twice in a row, the second time takes 0.0 seconds because it reads from this memory instead of calling Ollama again. 
+
+Lines 124-156: AI Prompt Templates
+- `_triple_prompt`: "Extract JSON facts from this text." (Module A)
+- `INTENT_PROMPT`: "Is this a factual or temporal query?" (Module B)
+- `PARAM_PROMPT`: "Answer this from memory alone." (Module C)
+- `EXPLAIN_PROMPT`: "Give your answer, but explain why you ignored conflicting facts." [N6 Feature]
+- `SCHEMA_INFER_PROMPT`: "Look at these documents and tell me what data types belong here." [A4+ Feature]
+
+--------------------------------------------------------------------------------
+SECTION 2: HYBRID RETRIEVER MODULE [N3] (Lines 158 - 193)
+--------------------------------------------------------------------------------
+Lines 158-166: `HybridRetriever.__init__`
+- Sets up two search engines: `bm25` (keyword) and `embedder` (semantic).
+Lines 168-193: `retrieve()`
+- Asks both engines to rank the documents (1st, 2nd, 3rd...).
+- Reciprocal Rank Fusion (RRF) math is done here: `Score = 1/(60 + rank1) + 1/(60 + rank2)`.
+- It combines them so the most consistently good document wins.
+
+--------------------------------------------------------------------------------
+SECTION 3: MODULE A - GRAPH CONSTRUCTION (Lines 195 - 359)
+--------------------------------------------------------------------------------
+Lines 196-199: `TripleRecord`
+- Holds a fact: Head (Modi), Relation (PM_OF), Tail (India).
+- Includes the `support_count = 1` tracker for feature [N1].
+
+Lines 208-252: `_infer_schema()` -> [A4+ Feature]
+- The PRE-PIPELINE step. Grabs a sample of the documents and asks the LLM to deduce the `schema_entity_types`. Strips weird markdown tags and sets `self.cfg`.
+
+Lines 254-256: `_clear()`
+- Wipes the Neo4j database using Cypher `MATCH (n) DETACH DELETE n`.
+
+Lines 258-269: `_extract()` -> [A1 Feature]
+- Uses the LLM to pull out JSON facts that MUST include a `year` field.
+
+Lines 271-281: `_accumulate()` -> [N1 Feature]
+- Loops over facts. If it sees the exact same fact in multiple documents, it does NOT create a duplicate node. Instead, it adds `+1` to `support_count`.
+
+Lines 283-299: `_store_all()`
+- Actually pushes everything to the Neo4j Graph Database using the Cypher `MERGE` command. Writes the `year` and `support` counts into the arrows (edges) connecting the nodes.
+
+Lines 301-316: `_disambiguate()` -> [A2 Feature]
+- Grabs all entity names. Runs `difflib` (fuzzy match). If "X Corp" and "X" are 85% similar, it tells Neo4j's APOC plugin to melt them into one single node.
+
+Lines 318-339: `_normalize()` -> [A3 Feature]
+- Grabs all relation arrows. Asks the LLM to fix their spelling/format. Converts things like "is_the_ceo_of" into simply "CEO_OF" for clean searchability.
+
+Line 341-359: `build()`
+- The master function that runs Module A sequentially: infer -> extract -> accumulate -> store -> disambiguate -> normalize.
+
+--------------------------------------------------------------------------------
+SECTION 4: MODULE B - GRAPH RETRIEVAL (Lines 360 - 524)
+--------------------------------------------------------------------------------
+Lines 361-367: `KnowledgePath`
+- A data container representing a trail through the graph. Tracks things like `delta_h` (entropy shift), `score`, and `contradicted`.
+
+Lines 376-387: `_keys()`
+- Takes the user query and asks the LLM to pull out nouns (Entities) and verbs (Relations). E.g., "Elon" and "leads".
+
+Lines 394-397: `_extract_query_year()` -> [N4 Feature]
+- Looks at the user query. If it says "1994", it extracts 1994 to use as a temporal snapshot filter.
+
+Lines 411-427: `_edges()`
+- Grabs all facts from Neo4j. If [N4] is active, the strict line `if r["year"] <= snapshot_year` completely masks out facts from the future. 
+
+Lines 435-454: `_ppr()` -> [B4 Feature]
+- Personalized PageRank algorithm. Starts at the entities mentioned in the query and "bleeds" probability points across the graph's connections to find highly relevant surrounding nodes.
+
+Lines 456-465: `_filter_edges()` -> [B5 Feature]
+- Uses vector math (`np.dot` cosine similarity) to match the meaning of the query's verb with the graph's relationships.
+
+Lines 475-479: `_temporal_decay()` -> [N2 Feature]
+- Uses exponential decay mathematics (`math.exp(-lam * age)`) to slowly lower the score of aging facts. 
+
+Lines 481-524: `retrieve()`
+- The master search function. Executes all the Module B pieces.
+- Calculates the master `combined_score` which includes the `decay` multiplier [N2] and the `corroborate` multiplier [N1]. Returns the top 5 paths.
+
+--------------------------------------------------------------------------------
+SECTION 5: MODULE C - CONFLICT RESOLUTION (Lines 526 - 684)
+--------------------------------------------------------------------------------
+Lines 527-546: `_H_str()` and `_H_sem()` -> [C2 & C4 Features]
+- Calculates Entropy (the mathematical measurement of LLM confusion/variance).
+- `_H_sem` acts as the semantic clustering filter so the LLM isn't penalized for answering "Mr Musk" one time and "Elon Musk" the next time.
+
+Lines 548-567: `_detect_contradictions()` -> [C5 Feature]
+- Deeply inspects the top paths. If path 1 says "Elon->CEO->Twitter [2022]" and path 2 says "Jack->CEO->Twitter [2015]", it compares the dates.
+- Marks the older one as `contradicted=True` and records the reason.
+
+Lines 575-585: `_entropy()`
+- Performs the "sampling". Asks the LLM the question 3 times and runs the above math to return an entropy score.
+
+Lines 587-595: `_confidence()` -> [N7 Feature]
+- A 0.0 to 1.0 (100%) grading scale. 
+- Takes 40% value from how much the entropy dropped, 30% from how many documents supported the fact, and 30% from how recent the fact is. 
+
+Lines 597-608: `_build_chain()` -> [N6 Feature]
+- Gathers the "winning" facts and the "contradicted" facts and writes a human-readable prompt outlining exactly what was accepted vs rejected.
+
+Lines 610-684: `resolve()`
+- The master verification function for Module C.
+- Automatically throws away contradicted facts.
+- Computes how confused the LLM is regarding this specific topic natively (H_param).
+- Tests each remaining fact against the LLM to see if the fact "fixes" the confusion (`delta_h`).
+- Formulates the final output string and calculates the `meta["confidence"]` percentage.
+
+--------------------------------------------------------------------------------
+SECTION 6: PIPELINE AND CLI LOGIC (Lines 686 - 881)
+--------------------------------------------------------------------------------
+Lines 687-714: `EnhancedPipeline` Class
+- Simplifies all of the above code into two easy commands: `.ingest()` to build the graph, and `.query()` to ask it a question.
+
+Lines 716-749: `run_comparison()`
+- The execution orchestrator that formats the final outputs in the terminal.
+- Dynamically prints the massive "v5 Active Features" table showing precisely what the parameters for N1-N7 were configured to.
+
+Lines 751-791: `_load_corpus()` & `_interactive_input()`
+- Reads from `corpus.json` or lets the user type documents raw into the terminal window.
+
+Lines 794+: `if __name__ == "__main__":`
+- System entry point. Parses command flags (like `--model`). 
+- **Auto-Generation Fail-safe**: If the user doesn't provide a `corpus.json` file, it automatically writes a blank json template to the drive with instructions on how to use it, preventing a hard crash.
+
+================================================================================
+END OF CODE AND FLOW EXPLANATION
+================================================================================
