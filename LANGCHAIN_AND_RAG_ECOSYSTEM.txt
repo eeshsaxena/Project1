@@ -1,0 +1,924 @@
+================================================================================
+     OPEN SOURCE RAG ECOSYSTEM & LANGCHAIN — COMPLETE DEEP DIVE
+     How the Community Built RAG, What LangChain Is, and How We Use It
+================================================================================
+
+Written for: Anyone who wants to understand the full open-source AI/RAG landscape
+Covers: History of open-source RAG, major frameworks, LangChain architecture,
+        how LangChain specifically powers TruthfulRAG v5
+
+================================================================================
+SECTION 1 — THE BIRTH OF RAG: WHY OPEN SOURCE BUILT IT FIRST
+================================================================================
+
+THE PROBLEM THAT STARTED EVERYTHING (2022-2023):
+--------------------------------------------------------------------------
+
+When ChatGPT launched in November 2022, the world went crazy about Large
+Language Models (LLMs). But developers quickly ran into a wall:
+
+"The model does not know about MY company's documents."
+"The model does not know about events after its training date."
+"The model makes things up when asked about my private data."
+
+Companies could not send their private documents to OpenAI's servers (privacy).
+They could not afford to "fine-tune" (retrain) a model on their data (expensive).
+They needed a way to give the LLM their knowledge at "query time" — right when
+a user asks a question.
+
+The solution was invented/popularized by a 2020 paper:
+  "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+  by Meta AI Research (Lewis et al., 2020)
+  https://arxiv.org/abs/2005.11401
+
+THE META PAPER'S CORE IDEA:
+  Don't retrain the model. Instead:
+  1. Store your documents in a searchable index.
+  2. When user asks a question, search the index for relevant text.
+  3. Pass that text to the LLM alongside the question.
+  4. The LLM reads the text and answers.
+
+This is RAG — Retrieval Augmented Generation.
+It was immediately obvious this was practical and useful.
+The open-source community exploded with implementations.
+
+================================================================================
+SECTION 2 — THE OPEN SOURCE RAG PROGRESS TIMELINE
+================================================================================
+
+2020 — Meta RAG Paper:
+  First formal academic definition of RAG.
+  Used Dense Passage Retriever (DPR) + BART language model.
+  Research prototype only. Not a product.
+
+2022 (mid) — LlamaIndex (originally GPT-Index):
+  Jerry Liu founded LlamaIndex as an open-source Python library.
+  Goal: Make it easy to connect your documents to OpenAI's GPT models.
+  Introduced: "index" abstractions, tree index, list index, keyword index.
+  Focus: Document ingestion and indexing.
+
+2022 (Oct) — LangChain first release:
+  Harrison Chase released LangChain on GitHub.
+  Goal: A framework for building CHAINS of LLM calls and tools.
+  Introduced: Document loaders, text splitters, vector stores, chains.
+  Focus: Building complete AI applications, not just retrieval.
+
+  GitHub stars: 0 → 50,000 in 6 months (fastest open-source growth ever at time)
+
+2023 (Jan-Jun) — Vector Database Boom:
+  The market realized you need specialized databases to store embeddings.
+  Major open-source vector databases launched/grew:
+    - ChromaDB: lightweight, runs locally, MIT license
+    - Weaviate: self-hostable, GraphQL API
+    - Milvus: highly scalable, Apache license
+    - Qdrant: Rust-based, very fast
+    - FAISS (Meta): pure library, no server needed (Facebook AI Similarity Search)
+  LangChain integrated with ALL of them.
+
+2023 (Mar) — GPT-4 released:
+  Better reasoning → RAG accuracy jumped significantly.
+  LangChain's user base exploded (30M+ downloads).
+
+2023 (Jun) — LlamaIndex vs LangChain specialization:
+  LlamaIndex: Focused on complex document indexing, knowledge graphs
+  LangChain: Focused on multi-step agent workflows, tool use
+  They took different paths but both grew massively.
+
+2023 (Sep) — RAG papers proliferate:
+  Hundreds of research papers about improving RAG:
+    - HyDE (Hypothetical Document Embeddings) — better query expansion
+    - Self-RAG — LLM decides when to retrieve (adaptive RAG)
+    - RAPTOR — hierarchical document indexing with summarization
+    - Graph RAG — Microsoft's version using knowledge graphs (later open-sourced)
+    - Corrective RAG (CRAG) — evaluates retrieved docs before using them
+
+2023 (Dec) — LangChain Expression Language (LCEL):
+  LangChain introduced a new way to build pipelines using the | operator.
+  Example: retriever | prompt | llm | output_parser
+  Made code more readable and functional.
+
+2024 (Jan) — Microsoft GraphRAG:
+  Microsoft research published GraphRAG — using knowledge graphs for RAG.
+  Open-sourced mid-2024: https://github.com/microsoft/graphrag
+  Very similar in concept to TruthfulRAG v4 (both use KG + community detection).
+  Validated that knowledge graph RAG is the right direction.
+
+2024 (Mar) — LangGraph:
+  LangChain released LangGraph — for building stateful, multi-agent workflows.
+  Nodes are computation steps. Edges are transitions.
+  Used for: autonomous agents that loop, retry, and make decisions.
+
+2024 (Jun) — RAG Fusion and Advanced Techniques:
+  RAG Fusion: generate multiple query variations, retrieve for each, merge.
+  Hybrid Search: BM25 + dense retrieval became standard practice.
+  Re-ranking: use a separate model (cross-encoder) to re-rank retrieved docs.
+
+2024 (Nov) — TruthfulRAG v4 Paper (arXiv:2511.10375):
+  Focused specifically on CONFLICT RESOLUTION in RAG.
+  Uses entropy to measure LLM uncertainty before/after providing context.
+  Uses knowledge graphs to store structured facts with temporal information.
+  Our project: implements and extends this paper with 6 novel improvements.
+
+2025 (ongoing) — Agentic RAG:
+  RAG is being integrated into "agent" workflows.
+  The agent decides: Should I retrieve? From which source? How many times?
+  LangGraph, AutoGen, CrewAI are leading frameworks.
+
+================================================================================
+SECTION 3 — THE MAJOR OPEN-SOURCE RAG FRAMEWORKS COMPARED
+================================================================================
+
+3.1 LangChain (our choice)
+--------------------------------------------------------------------------
+  Founded: October 2022
+  Python package: pip install langchain
+  GitHub: https://github.com/langchain-ai/langchain
+  License: MIT
+  Stars: 90,000+ (as of 2025)
+  
+  PHILOSOPHY:
+    Build LLM applications as composable chains and agents.
+    Everything is a modular component that fits together.
+    
+  STRENGTH:
+    - Widest integration ecosystem (100+ LLMs, 50+ vector DBs, 100+ tools)
+    - LangGraph for complex agent workflows
+    - LangSmith for observability/debugging
+    - Most documentation, tutorials, community
+    - langchain_experimental for cutting-edge experimental features
+      (like LLMGraphTransformer — which we use)
+
+  WEAKNESS:
+    - Can be over-engineered for simple use cases
+    - API changed frequently between versions (breaking changes)
+    - Pydantic v1/v2 compatibility warnings (we see these in our runs)
+
+3.2 LlamaIndex
+--------------------------------------------------------------------------
+  Founded: November 2022
+  Python package: pip install llama-index
+  GitHub: https://github.com/run-llama/llama_index
+  License: MIT
+
+  PHILOSOPHY:
+    Specialized in document indexing, structured data, and knowledge graphs.
+    
+  STRENGTH:
+    - Best-in-class document ingestion (150+ document types)
+    - Property Graph Index (knowledge graph built-in)
+    - SubQuestion Query Engine (breaks complex questions into sub-questions)
+    - Better at multi-document reasoning out of the box
+
+  WEAKNESS:
+    - Less powerful for agent/tool workflows
+    - Smaller community than LangChain
+
+  COMPARISON TO OUR PROJECT:
+    LlamaIndex's Property Graph Index does something similar to our
+    EnhancedGraphConstructor, but without our conflict resolution (Module C).
+    We chose LangChain because langchain_experimental's LLMGraphTransformer
+    gave us more low-level control over the graph construction process.
+
+3.3 Haystack (by deepset)
+--------------------------------------------------------------------------
+  Founded: 2019 (predates the modern RAG era)
+  Python package: pip install haystack-ai
+  License: Apache 2.0
+
+  PHILOSOPHY:
+    Production-ready, enterprise-focused NLP pipelines.
+  
+  STRENGTH:
+    - Very mature (oldest framework)
+    - Pipeline abstraction clearly shows data flow
+    - Good for production deployments
+    - Built-in evaluation framework
+
+  WEAKNESS:
+    - Less flexible than LangChain for custom implementations
+    - Smaller LLM support ecosystem
+
+3.4 DSPy (Stanford)
+--------------------------------------------------------------------------
+  Python package: pip install dspy-ai
+  License: MIT
+
+  PHILOSOPHY:
+    Instead of writing prompts manually, PROGRAM the LLM's behavior.
+    DSPy optimizes your prompts automatically.
+
+  STRENGTH:
+    - Automatic prompt optimization (no manual prompt engineering)
+    - Systematic, compiler-like approach to LLM programming
+    - Great for research
+
+  WEAKNESS:
+    - Steep learning curve
+    - Not ideal for knowledge graph applications
+    - Less mature ecosystem
+
+3.5 Microsoft GraphRAG
+--------------------------------------------------------------------------
+  Python package: pip install graphrag
+  License: MIT
+
+  PHILOSOPHY:
+    Use a knowledge graph with community detection (Leiden algorithm)
+    to answer complex, global questions about large corpora.
+
+  STRENGTH:
+    - Handles very large document collections
+    - "Global" queries (what are the main themes in all my documents?)
+    - Strong research backing from Microsoft
+
+  WEAKNESS:
+    - Expensive to build (many LLM calls to create communities)
+    - No real-time conflict resolution like TruthfulRAG
+    - No temporal awareness
+
+  COMPARISON TO OUR PROJECT:
+    Microsoft GraphRAG uses Leiden community detection → topic clusters.
+    TruthfulRAG uses PPR (Personalized PageRank) → query-specific traversal.
+    TruthfulRAG adds entropy-based conflict resolution → more truthful.
+    TruthfulRAG v5 adds temporal decay + corroboration → more precise.
+
+================================================================================
+SECTION 4 — LANGCHAIN: THE COMPLETE DEEP DIVE
+================================================================================
+
+4.1 What LangChain Actually Is
+--------------------------------------------------------------------------
+
+LangChain is NOT just a "library". It is an ECOSYSTEM of packages.
+
+OFFICIAL PACKAGES (as of 2025):
+  langchain-core             ← The foundation. No LLM logic, just interfaces.
+  langchain                  ← Main package. Chains, agents, retrievers.
+  langchain-community        ← Community integrations (hundreds of tools).
+  langchain-openai           ← OpenAI/Azure OpenAI integration.
+  langchain-anthropic        ← Claude integration.
+  langchain-ollama           ← Ollama (local LLMs) integration. ← WE USE THIS
+  langchain-neo4j            ← Neo4j graph database integration. ← WE USE THIS
+  langchain-experimental     ← Experimental/research features.   ← WE USE THIS
+  langraph                   ← Multi-agent workflow framework.
+  langsmith                  ← Observability, tracing, evaluation.
+
+WE USE: langchain-core, langchain-ollama, langchain-neo4j, langchain-experimental
+
+4.2 LangChain's Architecture — The Building Blocks
+--------------------------------------------------------------------------
+
+BLOCK 1: MODELS (LLM wrappers)
+  LangChain wraps ANY LLM with a common interface.
+  All LLM wrappers implement: .invoke(prompt) → response
+  
+  Examples:
+    from langchain_openai    import ChatOpenAI     → GPT-4
+    from langchain_anthropic import ChatAnthropic  → Claude
+    from langchain_ollama   import ChatOllama      → Local LLMs via Ollama
+    from langchain_google   import ChatGoogleGenerativeAI → Gemini
+
+  KEY POINT: Our code uses ChatOllama.
+  ChatOllama connects to Ollama running on localhost:11434.
+  Ollama is an open-source runtime that runs LLMs locally on your GPU/CPU.
+  This means: NO API CALLS TO THE INTERNET. ALL PRIVATE. ALL FREE.
+
+  How we use it in TruthfulRAG v5:
+  ─────────────────────────────────
+  # Two instances: one deterministic (temp=0.0), one for sampling (temp=0.7)
+  llm   = ChatOllama(model="qwen2.5:7b-instruct", temperature=0.0)
+  llm_s = ChatOllama(model="qwen2.5:7b-instruct", temperature=0.7)
+
+  # Invoke:
+  response = llm.invoke("Who is the CEO of Twitter?")
+  answer   = response.content.strip()
+
+  WHERE temperature matters:
+  - temperature=0.0 → always the same answer (deterministic) → used for
+    final answers, schema inference, triple extraction (consistency is key)
+  - temperature=0.7 → varies each call (stochastic) → used for
+    entropy sampling (we WANT different answers to measure uncertainty)
+
+BLOCK 2: PROMPTS (Prompt Templates)
+  Templates help structure your prompts dynamically.
+  
+  Standard LangChain approach:
+    from langchain_core.prompts import ChatPromptTemplate
+    template = ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant."),
+        ("human", "{question}")
+    ])
+    chain = template | llm
+    result = chain.invoke({"question": "Who is Elon Musk?"})
+  
+  OUR APPROACH (simpler, more flexible):
+    We use plain Python string formatting (no PromptTemplate class)
+    because we need fine-grained control over prompt construction.
+    For example, _triple_prompt() builds prompts differently based on
+    whether schema types are empty or populated.
+
+BLOCK 3: DOCUMENT LOADERS
+  LangChain can load documents from 100+ sources:
+    TextLoader, PDFLoader, WebBaseLoader, CSVLoader, 
+    WikipediaLoader, YouTubeLoader, GitHubLoader...
+  
+  All produce Document objects:
+    Document(page_content="The actual text...", metadata={"source": "file.pdf"})
+  
+  HOW WE USE Document IN TruthfulRAG v5:
+  ─────────────────────────────────────
+  We do NOT use document loaders (our corpus comes from corpus.json).
+  But we DO wrap each document string in a Document object because
+  LLMGraphTransformer REQUIRES Document input:
+  
+  docs_as_documents = [Document(page_content=d) for d in docs]
+  graph_documents = transformer.convert_to_graph_documents(docs_as_documents)
+
+BLOCK 4: TEXT SPLITTERS
+  Large documents must be split into chunks before processing.
+  LangChain provides: RecursiveCharacterTextSplitter, TokenTextSplitter,
+                      MarkdownTextSplitter, etc.
+  
+  OUR APPROACH:
+  We do NOT split documents. Our corpus.json contains pre-defined sentences.
+  Each sentence IS the chunk. No splitting needed.
+  (If a user provides a large PDF, they would need splitting first.)
+
+BLOCK 5: EMBEDDINGS
+  Convert text into vectors (lists of numbers representing meaning).
+  
+  LangChain wrappers:
+    OpenAIEmbeddings → uses text-embedding-ada-002 API
+    HuggingFaceEmbeddings → local models
+    CohereEmbeddings → Cohere API
+  
+  OUR APPROACH:
+  We use sentence_transformers DIRECTLY (not via LangChain's embedding wrapper).
+  Reason: We need the raw numpy array for cosine similarity calculations
+  in _filter_edges() and _H_sem(). LangChain's wrapper would add overhead.
+  
+  embedder = SentenceTransformer("all-MiniLM-L6-v2")  # direct
+  vec = embedder.encode(["Who is Elon Musk?"])[0]     # numpy array
+
+BLOCK 6: VECTOR STORES
+  Store embedding vectors for fast similarity search.
+  LangChain integrates with: FAISS, ChromaDB, Pinecone, Weaviate, Qdrant...
+  
+  OUR APPROACH:
+  We do NOT use vector stores for retrieval.
+  We use NEO4J (graph database) for GRAPH traversal.
+  The retrieval is done via Personalized PageRank + Ref(p), not vector similarity.
+  This is what makes TruthfulRAG fundamentally different from standard RAG.
+
+BLOCK 7: RETRIEVERS
+  Standard LangChain retriever pattern:
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    docs = retriever.get_relevant_documents("What is Elon Musk's company?")
+  
+  OUR APPROACH:
+  We have EnhancedGraphRetriever — our CUSTOM retriever.
+  It does NOT use vector similarity. Instead:
+    → Extract entities/keywords from query (_keys)
+    → Detect query intent (detect_intent)
+    → Extract snapshot year if present (_extract_query_year)
+    → Get all nodes and edges from Neo4j
+    → Filter edges by relation type cosine similarity (_filter_edges)
+    → Run Personalized PageRank (_ppr)
+    → Score each path with combined formula including N1, N2 scores
+    → Return top-k KnowledgePath objects
+
+BLOCK 8: CHAINS
+  The original LangChain concept: chain LLM calls together.
+  
+  Simple chain example:
+    from langchain.chains import RetrievalQA
+    chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+    result = chain.invoke({"query": "Who is Elon Musk?"})
+  
+  OUR APPROACH:
+  We do NOT use LangChain's chain abstractions.
+  Our pipeline is too custom — entropy calculations, contradiction detection,
+  confidence scoring all require code that can't fit into chain templates.
+  We control each step explicitly in EnhancedPipeline.ingest() and .query().
+
+4.3 LangChain Component We Use #1: ChatOllama
+--------------------------------------------------------------------------
+
+WHAT OLLAMA IS:
+  Ollama is a runtime that lets you download and run open-source LLMs
+  (Mistral, LLaMA, Qwen, Gemma, etc.) locally on your own machine.
+  
+  It runs as a background server on port 11434.
+  ChatOllama sends HTTP requests to this server.
+  
+  Available models (examples):
+    ollama pull llama3:8b          → Meta's LLaMA 3, 8 billion parameters
+    ollama pull qwen2.5:7b-instruct → Alibaba's Qwen, 7B params ← WE USE THIS
+    ollama pull mistral:7b          → Mistral AI's 7B model
+    ollama pull gemma2:9b           → Google's Gemma 2, 9B params
+    ollama pull phi3:mini           → Microsoft's Phi-3, 3.8B params (smallest)
+
+WHAT ChatOllama DOES IN OUR CODE:
+  
+  File: enhanced_main.py, line ~704:
+    llm   = ChatOllama(model=cfg["llm_model"], temperature=cfg["llm_temperature"])
+    llm_s = ChatOllama(model=cfg["llm_model"], temperature=cfg["llm_temp_sampler"])
+
+  llm is used for:
+    - Schema inference (SCHEMA_INFER_PROMPT) → temp=0.0 for consistency
+    - Triple extraction (_triple_prompt) → temp=0.0 for consistency
+    - Relation extraction (KEY_PROMPT) → temp=0.0
+    - Intent classification (INTENT_PROMPT) → temp=0.0
+    - Relation canonicalization → temp=0.0
+    - Final answer generation (RAG_PROMPT or EXPLAIN_PROMPT) → temp=0.0
+
+  llm_s (sampler) is used for:
+    - Entropy sampling (_entropy method) → temp=0.7 to get varied answers
+    - This is the ONLY place where we WANT randomness
+
+  THE cached_invoke WRAPPER:
+    def cached_invoke(llm, prompt):
+        t = llm.temperature
+        c = _CACHE.get(prompt, t)  # check cache first
+        if c is not None: return c  # instant if cached
+        r = llm.invoke(prompt).content.strip()  # call LLM
+        _CACHE.set(prompt, t, r)  # store result
+        return r
+    
+    WHY .content.strip()?
+    LangChain's ChatOllama returns an AIMessage object, not a plain string.
+    AIMessage has a .content attribute that contains the text.
+    .strip() removes leading/trailing whitespace and newlines.
+
+4.4 LangChain Component We Use #2: LLMGraphTransformer
+--------------------------------------------------------------------------
+
+WHAT IT DOES:
+  LLMGraphTransformer is in langchain_experimental (research/experimental).
+  It takes a list of Document objects and extracts a "graph" from them.
+  
+  Under the hood, it:
+  1. Creates a carefully engineered prompt asking the LLM to extract entities
+     and relationships in a specific JSON format
+  2. Calls the LLM for each document
+  3. Parses the JSON output
+  4. Returns structured GraphDocument objects with nodes and relationships
+
+WHAT IS GraphDocument?
+  A container with:
+    .nodes     → list of Node(id="Elon Musk", type="Person")
+    .relationships → list of Relationship(source, target, type, properties)
+    .source    → the original Document it came from
+
+HOW WE USE IT:
+  File: enhanced_main.py, inside EnhancedGraphConstructor.__init__:
+    self.transformer = LLMGraphTransformer(llm=llm)
+  
+  File: enhanced_main.py, inside build():
+    graph_documents = self.transformer.convert_to_graph_documents(
+        [Document(page_content=d) for d in docs])
+    self.graph.add_graph_documents(graph_documents)
+
+  This does TWO passes of information extraction:
+  PASS 1 (LLMGraphTransformer): LangChain's built-in extraction
+    → Extracts generic entity-relation triples
+    → Stores in Neo4j using the LangChain schema
+  
+  PASS 2 (our _extract → _accumulate → _store_all):
+    → Extracts schema-guided triples with YEAR information
+    → Stores in Neo4j with support_count (corroboration) [N1]
+    → Our custom Cypher: MERGE (a)-[rel:CEO_OF {year:2022, support:1}]->(b)
+  
+  WHY BOTH PASSES?
+  LangChain's LLMGraphTransformer is good at finding nodes and broad structure.
+  Our custom extraction is good at finding YEARS and accumulating support counts.
+  Together they produce a richer, more complete knowledge graph.
+
+4.5 LangChain Component We Use #3: Neo4jGraph
+--------------------------------------------------------------------------
+
+WHAT NEO4J IS:
+  Neo4j is the world's most popular graph database.
+  Data is stored as NODES (circles) connected by EDGES (arrows).
+  Example representation in Neo4j:
+  
+    (Elon Musk:Person) -[:CEO_OF {year: 2022, support: 2}]-> (Twitter:Organization)
+    (Jack Dorsey:Person) -[:FOUNDED {year: 2006}]-> (Twitter:Organization)
+    (Twitter:Organization) -[:RENAMED_TO {year: 2023}]-> (X:Organization)
+  
+  Neo4j uses CYPHER as its query language (like SQL but for graphs):
+    MATCH (p:Person)-[:CEO_OF]->(c:Organization)
+    WHERE p.id = 'Elon Musk'
+    RETURN p, c
+  
+  Neo4j runs as a background server on port 7687 (Bolt protocol).
+
+WHAT Neo4jGraph (LangChain) DOES:
+  It is a Python wrapper that connects to Neo4j and lets you:
+  1. Run Cypher queries: graph.query("MATCH (n) RETURN n")
+  2. Store graph documents: graph.add_graph_documents(graph_docs)
+  
+  WITHOUT Neo4jGraph, you would use the neo4j Python driver directly:
+    from neo4j import GraphDatabase
+    driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "pass"))
+    with driver.session() as session:
+        result = session.run("MATCH (n) RETURN n")
+  
+  Neo4jGraph wraps this with simpler methods AND integrates with LangChain's
+  LLMGraphTransformer (add_graph_documents directly stores GraphDocument output).
+
+HOW WE USE IT:
+  File: enhanced_main.py, line ~706:
+    graph = Neo4jGraph(url=cfg["neo4j_uri"],
+                       username=cfg["neo4j_user"],
+                       password=cfg["neo4j_pass"])
+
+  QUERIES WE RUN (Cypher):
+  
+  a) Clear the graph before each run:
+     graph.query("MATCH (n) DETACH DELETE n")
+     (DETACH = delete all relationships first, then nodes)
+
+  b) Store a triple:
+     graph.query("MERGE (a:Entity {id:'Elon Musk'})
+                  MERGE (b:Entity {id:'Twitter'})
+                  MERGE (a)-[rel:CEO_OF {year:2022, support:2}]->(b)")
+     (MERGE = "insert if not exists, update if already there")
+
+  c) Get all entity IDs:
+     graph.query("MATCH (n) RETURN n.id AS id LIMIT 200")
+
+  d) Get all edges with metadata:
+     graph.query("MATCH (a)-[r]->(b) RETURN type(r) AS rel_type,
+                  a.id AS src, b.id AS tgt, r.year AS year,
+                  r.support AS support LIMIT 200")
+
+  e) Count nodes and edges:
+     graph.query("MATCH (n) RETURN count(n) AS c")  → [{"c": 16}]
+     graph.query("MATCH ()-[r]->() RETURN count(r) AS c")  → [{"c": 15}]
+
+  f) Disambiguate entities (using APOC plugin):
+     graph.query("MATCH (old:Entity {id:'E. Musk'})
+                  MATCH (keep:Entity {id:'Elon Musk'})
+                  CALL apoc.refactor.mergeNodes([keep, old],
+                  {properties:'combine', mergeRels:true})
+                  YIELD node RETURN node")
+     (APOC = A Package Of Components — Neo4j's standard plugin library)
+
+  g) Canonicalize relation type (using APOC):
+     graph.query("MATCH ()-[r:leads]->()
+                  CALL apoc.refactor.setType(r, 'LEADS')
+                  YIELD input RETURN count(input)")
+
+4.6 LangChain Pydantic Warning We See in Our Run
+--------------------------------------------------------------------------
+
+WHAT IS PYDANTIC?
+  Pydantic is a Python library for data validation using type annotations.
+  LangChain uses Pydantic to validate all parameters and configurations.
+
+THE WARNING:
+  "langchain_core/_api/deprecation.py:25: LangChainDeprecationWarning:
+   The class `ChatOllama` was deprecated in LangChain 0.3.x"
+
+WHY IT APPEARS:
+  LangChain is migrating from Pydantic v1 to Pydantic v2.
+  Some internal classes still use v1 style.
+  It is a WARNING only — it does not break anything.
+
+WHY WE IGNORE IT:
+  The functionality still works perfectly.
+  Fixing it would require upgrading all langchain packages simultaneously.
+  We suppress the noise using:
+    logging.getLogger("langchain").setLevel(logging.ERROR)
+
+================================================================================
+SECTION 5 — HOW STANDARD LangChain RAG WORKS (Step by Step)
+================================================================================
+
+Here is what a developer typically builds with LangChain RAG out of the box.
+Compare this to our TruthfulRAG v5 to understand the difference.
+
+STANDARD LANGCHAIN RAG PIPELINE:
+--------------------------------------------------------------------------
+
+Step 1: Install packages
+  pip install langchain langchain-community langchain-openai chromadb
+
+Step 2: Load documents
+  from langchain_community.document_loaders import TextLoader
+  loader = TextLoader("my_documents.txt")
+  raw_docs = loader.load()
+  # raw_docs = [Document(page_content="...", metadata={"source":"my_documents.txt"})]
+
+Step 3: Split into chunks
+  from langchain.text_splitter import RecursiveCharacterTextSplitter
+  splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+  chunks = splitter.split_documents(raw_docs)
+  # chunks = [Document("...first 500 chars..."), Document("...next 500 chars..."), ...]
+  # chunk_overlap=50 means consecutive chunks share 50 characters (context continuity)
+
+Step 4: Create embeddings and store in vector database
+  from langchain_openai import OpenAIEmbeddings
+  from langchain_community.vectorstores import Chroma
+
+  embeddings = OpenAIEmbeddings()
+  vectorstore = Chroma.from_documents(chunks, embeddings)
+  # Internally: for each chunk, call OpenAI API → get 1536-dim vector → store in ChromaDB
+
+Step 5: Create a retriever
+  retriever = vectorstore.as_retriever(
+      search_type="similarity",
+      search_kwargs={"k": 5}  # return top 5 most similar chunks
+  )
+
+Step 6: Create the LLM
+  from langchain_openai import ChatOpenAI
+  llm = ChatOpenAI(model="gpt-4", temperature=0)
+
+Step 7: Create a RAG chain
+  from langchain.chains import RetrievalQA
+
+  chain = RetrievalQA.from_chain_type(
+      llm=llm,
+      retriever=retriever,
+      return_source_documents=True
+  )
+
+Step 8: Ask a question
+  result = chain.invoke({"query": "Who is the CEO of Twitter?"})
+  print(result["result"])
+  # Output: "Based on the provided documents, Elon Musk is the CEO of Twitter."
+
+WHAT JUST HAPPENED INTERNALLY:
+  1. "Who is the CEO of Twitter?" → convert to embedding vector (1536 dims)
+  2. Cosine similarity search in ChromaDB → find top 5 closest text chunks
+  3. Build prompt: "Context:\n[chunk1]\n[chunk2]\n...\n\nQuestion: Who is CEO?"
+  4. Send to GPT-4 → get answer text
+  5. Return answer
+
+THE FUNDAMENTAL LIMITATION:
+  There is NO understanding of relationships between facts.
+  There is NO conflict detection ("Jack Dorsey is CEO" vs "Elon Musk is CEO").
+  There is NO confidence score.
+  There is NO temporal reasoning ("who was CEO IN 2020?")
+  It just does: find similar text → paste into prompt → ask LLM.
+
+================================================================================
+SECTION 6 — LANGCHAIN RAG vs TRUTHFULRAG v5: DETAILED COMPARISON
+================================================================================
+
+SCENARIO: Documents contain these facts:
+  Doc 1: "Jack Dorsey was CEO of Twitter from 2006 to 2008."
+  Doc 2: "Dick Costolo became CEO of Twitter in 2010."
+  Doc 3: "Jack Dorsey returned as CEO of Twitter in 2015."
+  Doc 4: "Parag Agrawal became CEO of Twitter in November 2021."
+  Doc 5: "Elon Musk acquired Twitter and became CEO in October 2022."
+  Doc 6: "X Corp (formerly Twitter) is led by Elon Musk."
+
+QUESTION: "Who is the current CEO of Twitter?"
+
+─────────────────────────────────────────────────────────────────────────────
+STANDARD LANGCHAIN RAG:
+─────────────────────────────────────────────────────────────────────────────
+
+1. Vector search: finds chunks most similar to "current CEO Twitter"
+   → Returns Doc 3, Doc 4, Doc 5, Doc 6 (most similar by keyword overlap)
+
+2. Passes all 4 to GPT-4 as context:
+   "Jack Dorsey returned as CEO (2015)... Parag Agrawal (2021)...
+    Elon Musk (2022)... X Corp led by Elon Musk..."
+
+3. GPT-4 probably gets it right this time because Doc 5 and 6 clearly say Elon.
+   BUT: It has no way to VERIFY this. It just pattern-matched text.
+   If Doc 5 and 6 were not retrieved (maybe they had different wording),
+   it might say "Parag Agrawal" (Doc 4 is the latest CEO-related doc retrieved).
+
+4. Output: "Elon Musk is the current CEO of Twitter."
+   CONFIDENCE: [not provided]
+   EXPLANATION: [not provided]
+   CONTRADICTIONS DETECTED: None (it doesn't check)
+
+─────────────────────────────────────────────────────────────────────────────
+TRUTHFULRAG v5:
+─────────────────────────────────────────────────────────────────────────────
+
+1. Schema inference:
+   Reads docs → infers: entity_types=[PERSON, COMPANY, ROLE]
+                         relation_types=[CEO_OF, ACQUIRED, FOUNDED, BECAME_CEO]
+
+2. Graph construction:
+   Extracts triples:
+   (Jack Dorsey)   --[CEO_OF]--> (Twitter) [year: 2006, support: 1]
+   (Jack Dorsey)   --[CEO_OF]--> (Twitter) [year: 2015, support: 1]
+   (Dick Costolo)  --[CEO_OF]--> (Twitter) [year: 2010, support: 1]
+   (Parag Agrawal) --[CEO_OF]--> (Twitter) [year: 2021, support: 1]
+   (Elon Musk)     --[CEO_OF]--> (Twitter) [year: 2022, support: 2]  ← 2 docs!
+   
+   Note: Elon Musk's CEO triple has support=2 because BOTH Doc 5 and Doc 6
+   independently mention it (cross-document corroboration [N1]).
+
+3. Entity disambiguation:
+   "Twitter" and "X Corp" → merged into one node
+
+4. Module B Retrieval:
+   Query entities: ["CEO", "Twitter"]
+   PPR from "Twitter" node → finds all CEO_OF paths
+   Temporal decay applied:
+     Jack Dorsey 2006: decay = exp(-0.08×20) = 0.20 (only 20% trusted)
+     Jack Dorsey 2015: decay = exp(-0.08×11) = 0.41 (41% trusted)
+     Parag Agrawal 2021: decay = exp(-0.08×5) = 0.67 (67% trusted)
+     Elon Musk 2022: decay = exp(-0.08×4) = 0.73 (73% trusted)
+   
+   Corroboration scores:
+     All except Elon Musk: log(1+1)×0.4 = 0.28
+     Elon Musk: log(1+2)×0.4 = 0.44 (higher because 2 sources)
+   
+   Combined scores ensure Elon Musk's path ranks HIGHEST.
+
+5. Module C Contradiction detection:
+   All 5 paths have same relation CEO_OF → Twitter.
+   But only ONE person can be CEO at a given time.
+   System compares years: 2022 is most recent → keep Elon Musk path.
+   Jack Dorsey 2006, 2015, Dick Costolo 2010, Parag Agrawal 2021 → marked contradicted.
+   Contradiction reason: "Superseded by year 2022"
+
+6. Explanation chain built:
+   "Selected: Elon Musk --[CEO_OF]--> Twitter [year:2022] (sources=2) score=0.94
+    Removed: Parag Agrawal --[CEO_OF]--> Twitter [2021] reason: Superseded by 2022
+    Removed: Jack Dorsey --[CEO_OF]--> Twitter [2015] reason: Superseded by 2022"
+
+7. Answer: "Elon Musk is the current CEO/owner of Twitter (now X Corp), having
+            acquired the company in October 2022, superseding Parag Agrawal who
+            held the position until then. This fact is supported by 2 independent
+            sources in your documents."
+
+8. Confidence: ~78%
+   (high entropy resolution + support=2 + recent 2022 fact)
+
+─────────────────────────────────────────────────────────────────────────────
+RESULT: TruthfulRAG v5 is MORE ACCURATE, MORE EXPLAINABLE, MORE VERIFIABLE.
+─────────────────────────────────────────────────────────────────────────────
+
+================================================================================
+SECTION 7 — THE OPEN SOURCE RAG PROGRESS: WHERE IT IS HEADED
+================================================================================
+
+7.1 Current Best Practices (2024-2025)
+--------------------------------------------------------------------------
+
+The open-source community has converged on several best practices:
+
+HYBRID SEARCH (we implement this in [N3]):
+  Combining keyword search (BM25) with semantic search (dense retrieval).
+  Now considered the standard. Pre-2023: only one or the other.
+
+RERANKING:
+  After initial retrieval, use a cross-encoder model to re-rank results.
+  Cross-encoder: takes (query, document) → relevance score (more accurate).
+  Bi-encoder (what we use for semantic search): encodes separately, faster.
+  Libraries: sentence-transformers rerankers, Cohere Rerank API.
+
+KNOWLEDGE GRAPHS (we implement this throughout):
+  Microsoft GraphRAG, LlamaIndex Property Graph, TruthfulRAG all show:
+  structured knowledge > flat text chunks for complex reasoning.
+
+ADAPTIVE RAG:
+  Self-RAG: LLM decides IF it needs to retrieve.
+  CRAG: evaluate retrieved docs before using them.
+  Our system: always retrieves (not adaptive yet, potential future improvement).
+
+CONFIDENCE/UNCERTAINTY QUANTIFICATION (we implement [N7]):
+  Growing recognition that reliability scores are essential.
+  LangSmith (LangChain's monitoring product) provides this for LangChain apps.
+  Our _confidence() is a lightweight domain-specific version.
+
+7.2 What We Could Add Next (Future Improvements)
+--------------------------------------------------------------------------
+
+IMPROVEMENT A: Multi-hop reasoning
+  Current: single step retrieval (find relevant edges)
+  Future: follow chains of edges automatically
+  Example: "Who is the wife of the CEO of the company that owns Instagram?"
+  Would need: Instagram → owned by → Meta → CEO → Mark Zuckerberg → wife → ?
+
+IMPROVEMENT B: Document loader integration
+  Current: corpus.json with manual text
+  Future: Load any PDF, website, or database automatically using LangChain loaders
+  Code needed:
+    from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
+
+IMPROVEMENT C: Cross-encoder reranking
+  Current: combined formula for ranking paths
+  Future: use a cross-encoder model as a final reranking step
+  This would improve path selection accuracy significantly.
+
+IMPROVEMENT D: LangGraph agent loop
+  Current: single pipeline run
+  Future: LangGraph agent that iterates:
+    retrieve → evaluate → if insufficient → re-query → evaluate again
+  This is called "Agentic RAG" or "corrective RAG"
+
+IMPROVEMENT E: Persistent knowledge graph
+  Current: clear graph on every run
+  Future: accumulate knowledge over time (NEVER clearing)
+    → The graph grows as new documents are added
+    → Old facts get updated (not deleted) when contradicted
+
+================================================================================
+SECTION 8 — WHY WE CHOSE OLLAMA + QWEN2.5 FOR LOCAL LLM
+================================================================================
+
+CONSTRAINT: We need maximum privacy and zero API costs.
+SOLUTION: Run the LLM locally using Ollama.
+
+QWEN2.5:7B-INSTRUCT:
+  - Made by: Alibaba DAMO Academy (China)
+  - Size: 7 billion parameters (medium-sized LLM)
+  - License: Qwen License (permissive for research use)
+  - Context window: 128,000 tokens (can read very long documents)
+  - Instruction tuned: trained to follow instructions ("instruct" in name)
+  - Performance: comparable to GPT-3.5 on most benchmarks
+  - Why good for us:
+    → Follows structured JSON instructions well (needed for triple extraction)
+    → Handles multi-lingual text (Indian names, etc.)
+    → Fast enough on consumer GPUs (4-8 GB VRAM required)
+    → Free to use, runs completely offline
+
+ALL-MINILM-L6-V2 (Embedding Model):
+  - Made by: Microsoft / Sentence-Transformers project
+  - Size: 22 million parameters (tiny compared to LLM)
+  - Output: 384-dimensional vectors
+  - Speed: ~14,000 sentences/second on CPU (very fast)
+  - License: Apache 2.0 (fully open)
+  - Why good for us:
+    → Perfect balance of speed and quality
+    → Used in millions of RAG applications worldwide
+    → Captures semantic meaning well for English text
+    → Runs on CPU without VRAM (no GPU needed)
+
+================================================================================
+SECTION 9 — THE FULL OPEN SOURCE STACK WE USE
+================================================================================
+
+Layer               | Technology        | Open Source? | License
+─────────────────────────────────────────────────────────────────────────────
+Language Model      | Qwen2.5-7B        | Yes (weights) | Qwen License
+LLM Runtime         | Ollama            | Yes           | MIT
+LLM Framework       | LangChain         | Yes           | MIT
+Graph Construction  | LLMGraphTransformer | Yes (lang.) | MIT
+Graph Database      | Neo4j Community   | Yes           | GPL v3
+Graph Plugin        | APOC              | Yes           | Apache 2.0
+Embedding Model     | all-MiniLM-L6-v2  | Yes           | Apache 2.0
+Embedding Runtime   | sentence-trans.   | Yes           | Apache 2.0
+BM25 Search         | rank-bm25         | Yes           | Apache 2.0
+Math Library        | NumPy             | Yes           | BSD
+Environment Secrets | python-dotenv     | Yes           | BSD
+Programming Language| Python 3.11+      | Yes           | PSF License
+─────────────────────────────────────────────────────────────────────────────
+TOTAL COST TO RUN: $0.00 per query
+TOTAL PROPRIETARY COMPONENTS: 0
+ALL COMPUTATION: Local, private, offline capable
+─────────────────────────────────────────────────────────────────────────────
+
+================================================================================
+SECTION 10 — WHAT MAKES TRUTHFULRAG v5 UNIQUE IN THE OPEN SOURCE LANDSCAPE
+================================================================================
+
+Microsoft GraphRAG:
+  ✓ Uses knowledge graphs
+  ✗ No entropy-based conflict resolution
+  ✗ No temporal decay
+  ✗ No confidence scores
+  ✗ Very expensive to build (large LLM call budget)
+
+LlamaIndex Property Graph:
+  ✓ Uses knowledge graphs
+  ✗ No conflict resolution
+  ✗ No temporal reasoning
+  ✗ No corroboration counting
+
+Standard LangChain RAG:
+  ✓ Easy to set up
+  ✗ Text chunks only (no graph structure)
+  ✗ No conflict resolution
+  ✗ No temporal reasoning
+
+TRUTHFULRAG v5:
+  ✓ Knowledge graph with temporal edges
+  ✓ Entropy-based conflict resolution (from v4 paper)
+  ✓ Cross-document corroboration [N1]
+  ✓ Temporal decay on old facts [N2]
+  ✓ Hybrid BM25 + semantic retrieval [N3]
+  ✓ Temporal snapshot queries [N4]
+  ✓ Explainable answer generation [N6]
+  ✓ Calibrated confidence scores [N7]
+  ✓ Auto schema inference [A4+]
+  ✓ 100% open source, runs locally, zero API cost
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+This file is a companion to PROJECT_EXPLANATION.txt
+Together they cover the full TruthfulRAG v5 project context.
+================================================================================
