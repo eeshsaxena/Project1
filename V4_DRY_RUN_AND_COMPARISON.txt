@@ -1,0 +1,191 @@
+================================================================================
+          TRUTHFULRAG v4 (BASELINE) : DRY RUN & COMPARISON
+================================================================================
+
+Let's freeze time again and trace exactly what happens when you run the 
+ORIGINAL paper's implementation: `python main.py --corpus corpus.json`
+
+We will use the EXACT SAME SCENARIO as we used for v5 to clearly see the differences.
+
+================================================================================
+THE SCENARIO DATA
+================================================================================
+Documents in corpus.json:
+  Doc 1: "Narendra Modi served as Prime Minister of India in 2014."
+  Doc 2: "Rahul Gandhi was sworn in as Prime Minister of India in 2024."
+  Doc 3: "Narendra Modi was the PM of India."
+
+Query: 
+  "Who is the current PM of India?"
+
+Current Year (System Time): 2026
+
+================================================================================
+PHASE 1: PRE-PIPELINE
+================================================================================
+There is no Pre-Pipeline in v4.
+Schema MUST be manually hardcoded in `corpus.json` or natively in the Python code by the user.
+
+v4 Hardcoded Config requirement:
+`entity_types` = ["PERSON", "LOCATION"]
+`relation_types` = ["PM_OF"]
+*(If the user forgets to add "ROLE" or "COUNTRY", the graph will break or miss facts!)*
+
+================================================================================
+PHASE 2: MODULE A - GRAPH CONSTRUCTION
+================================================================================
+
+1. The database is wiped clean (`MATCH (n) DETACH DELETE n`).
+2. `_extract(doc)` loops through the 3 documents individually.
+
+PROMPT GIVEN TO LLM:
+"""
+Extract ALL facts as JSON list...
+Entities: ['PERSON', 'LOCATION']
+Relations: ['PM_OF']
+Text: "Narendra Modi served as Prime Minister of India in 2014."
+"""
+
+LLM REPLIES:
+Doc 1: [{"head": "Narendra Modi", "relation": "PM_OF", "tail": "India", "year": 2014}]
+Doc 2: [{"head": "Rahul Gandhi", "relation": "PM_OF", "tail": "India", "year": 2024}]
+Doc 3: [{"head": "Narendra Modi", "relation": "PM_OF", "tail": "India", "year": null}]
+
+3. `_accumulate()` runs.
+   *MISSING v5 FEATURE:* v4 does NOT count corroborating documents. It blindly overwrites facts.
+   It sees two Modi facts. It just keeps one. It does NOT track that 2 sources said it.
+
+4. `_store_all()` pushes this to Neo4j.
+
+THE GRAPH NOW LOOKS LIKE THIS:
+(Narendra Modi) --[PM_OF {year:2014}]--> (India)
+(Rahul Gandhi)  --[PM_OF {year:2024}]--> (India)
+
+*Notice: There is no `support` metadata on the arrows.*
+
+================================================================================
+PHASE 3: MODULE B - GRAPH RETRIEVAL
+================================================================================
+
+1. Query drops in: "Who is the current PM of India?"
+
+2. `detect_intent(query)`: Factual_lookup. tau = 0.25.
+
+3. `_keys(query)`: Entities: ["PM", "India"].
+
+4. The Retriever looks at ALL edges in the Graph.
+   Path 1: Modi -> PM_OF -> India
+   Path 2: Rahul -> PM_OF -> India
+
+5. Mathematical Scoring:
+   Let's calculate the score for Path 2 (Rahul Gandhi):
+   
+   A. `ref_p` (Relevance): Does the path contain query words? Yes. Score = ~0.8
+   B. `hub_pen` (Hub Penalty): Normal node. Penalty = 1.0
+   C. `ppr_avg` (PageRank): Next to "India". +0.5 boost.
+   
+   *MISSING v5 FEATURE:* No Temporal Decay `decay` multiplier. 
+   *MISSING v5 FEATURE:* No Corroboration `corroborate` multiplier.
+   *MISSING v5 FEATURE:* No Hybrid/Semantic retrieval. It ONLY used BM25 keyword matching to find documents initially.
+   
+   Combined Score for Rahul = 0.8 * 1.0 * 1.5 = 1.20
+   Combined Score for Modi =  0.8 * 1.0 * 1.5 = 1.20  (TIE!)
+   
+   Result: Path 1 and Path 2 get the exact same mathematical score, even though one happened 10 years ago and the other happened 2 years ago.
+
+================================================================================
+PHASE 4: MODULE C - CONFLICT RESOLUTION
+================================================================================
+
+1. CONTRADICTION DETECTION:
+   Code scans paths pointing to "PM_OF -> India".
+   Rahul (2024) > Modi (2014).
+   Modi is marked `contradicted=True`.
+
+2. MEASURE THE LLM's INTERNAL KNOWLEDGE (H_param):
+   Asks LLM 3 times. LLM says "Narendra Modi".
+   H_param = 0.0 (LLM completely confident Modi is PM).
+
+3. MEASURE THE CONTEXT EFFECT (delta_H):
+   Provides LLM Context: Rahul Gandhi --[PM_OF]--> India [2024].
+   LLM gets confused. Half its answers say Modi, half say Rahul.
+   H_context = 0.63.
+   delta_H = (0.63 - 0.0) = -0.63.
+   
+   The context failed to convince the LLM. 
+
+4. SELECTION STRATEGY:
+   Falls back to "Grounding" strategy. Forces the Rahul path.
+
+================================================================================
+PHASE 5: FINAL OUTPUT
+================================================================================
+
+*MISSING v5 FEATURE:* No `_build_chain()` to explain why it picked Rahul.
+*MISSING v5 FEATURE:* No `EXPLAIN_PROMPT` to give an auditable answer.
+
+PROMPT GIVEN TO LLM:
+"""
+Context: Rahul Gandhi --[PM_OF]--> India [year: 2024]
+Question: Who is the current PM of India?
+Give a direct, one-sentence answer.
+"""
+
+LLM REPLIES:
+"Rahul Gandhi is the current Prime Minister of India."
+
+*MISSING v5 FEATURE:* No Confidence Score math. The system just outputs the string and stops.
+
+================================================================================
+TERMINAL OUTPUT YOU WOULD SEE (v4)
+================================================================================
+───
+  Query: Who is the current PM of India?
+───
+  [B]  E=['PM', 'India']  Rkw=['is']
+  [C7] Intent=factual_lookup
+  [C5] Contradictions removed: 1, remaining: 1
+  [C4] H_param str=0.0000 sem=0.0000
+  [C]  Path 1... ΔH=-0.6300
+
+  ✓ Answer: Rahul Gandhi is the current Prime Minister of India.
+================================================================================
+
+================================================================================
+THE COMPARISON MATRIX: WHY v5 SUCCEEDS WHERE v4 FAILS
+================================================================================
+
+If you look at the terminal output above, v4 gives the correct answer ("Rahul Gandhi"), but it hides extremely dangerous flaws under the hood. Here is why v5 was necessary.
+
+1. THE SCORE TIE PROBLEM (Fixed by [N2] Temporal Decay)
+   In v4, Rahul Gandhi (2024) and Modi (2014) scored exactly 1.20. 
+   Why? Because v4 does not care about age until the very last second during contradiction checking.
+   If the graph was larger and we only retrieved the `top_k_paths=5`, older, heavily-linked facts could easily push the Newer facts off the leaderboard entirely, meaning the contradiction checker would never even see the 2024 fact.
+   v5 fixed this. In v5, Modi's score was crushed to 0.65 while Rahul's stayed at 1.30.
+
+2. THE MISSING EVIDENCE PROBLEM (Fixed by [N1] Corroboration)
+   In v4, both men scored 1.20. 
+   v4 completely erased the fact that Modi had TWO documents supporting him and Rahul only had one. In forensic/legal AI, destroying source counts is unacceptable.
+   v5 fixed this by injecting `{support: 2}` into Modi's graph edge and multiplying his base score mathematically by `log(1+2) * 0.4`, preserving the evidence.
+
+3. THE HIDDEN UNCERTAINTY PROBLEM (Fixed by [N7] Confidence Score)
+   Look at the final v4 terminal output above. It says "Rahul Gandhi is the PM."
+   For a user reading that screen, the system seems 100% confident. 
+   But internally, `delta_H` was negative! The LLM was fiercely fighting the graph! 
+   v4 hides this system-level panic attack from the user. It just blindly outputs the grounded context.
+   v5 fixed this. v5 prints `Confidence: 38%` right below the answer, warning the user: "I gave you the answer found in the graph, but my neural network violently disagreed with it. Trust this with caution."
+
+4. THE "BLACK BOX" PROBLEM (Fixed by [N6] Explanation Chain)
+   In v4, Modi was silently deleted in the background. The user has no idea a conflict even took place.
+   v5 fixed this by writing: "This was chosen because the document stating he was sworn in during 2024 supersedes older records from 2014 indicating Narendra Modi."
+
+5. THE FRAGILITY PROBLEM (Fixed by [A4+] Schema Inference)
+   If you ran the exact same v4 code on medical documents, it would crash or return empty databases. Why? Because v4's schema was hardcoded to look for "Prime Ministers". 
+   v5 reads the medical docs on boot-up, realizes it's looking at medicine, and rewrites its own brain to look for "DRUGS" and "SYMPTOMS" before extracting a single fact.
+
+================================================================================
+CONCLUSION
+================================================================================
+TruthfulRAG v4 proved that *finding contradictions using Entropy in Knowledge Graphs* is a brilliant idea.
+
+TruthfulRAG v5 proves that to put that academic idea into **Production Software**, you need Time, Corroboration, Auditability, Hybrid-Searching, and Self-Adapting Schemas.
