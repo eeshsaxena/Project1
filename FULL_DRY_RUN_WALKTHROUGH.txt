@@ -1,0 +1,216 @@
+================================================================================
+          TRUTHFULRAG v5 : THE COMPLETE STEP-BY-STEP DRY RUN
+================================================================================
+
+Let's freeze time and trace exactly what happens under the hood when you hit 'Enter' 
+to run: `python enhanced_main.py --corpus corpus.json`
+
+We will follow every prompt, every mathematical calculation, and every decision 
+the system makes, step-by-step.
+
+================================================================================
+THE SCENARIO DATA
+================================================================================
+Documents in corpus.json:
+  Doc 1: "Narendra Modi served as Prime Minister of India in 2014."
+  Doc 2: "Rahul Gandhi was sworn in as Prime Minister of India in 2024."
+  Doc 3: "Narendra Modi was the PM of India."
+
+Query: 
+  "Who is the current PM of India?"
+
+Current Year (System Time): 2026
+
+================================================================================
+PHASE 1: PRE-PIPELINE & SCHEMA INFERENCE [A4+]
+================================================================================
+
+1. Code starts. Neo4j database connects. Ollama connects.
+2. `_infer_schema(docs)` is called with our 3 documents.
+
+PROMPT GIVEN TO LLM:
+"""
+Read the following text samples and infer the most useful entity types and relation types...
+[1] Narendra Modi served as Prime Minister of India in 2014.
+[2] Rahul Gandhi was sworn in as Prime Minister of India in 2024.
+[3] Narendra Modi was the PM of India.
+JSON:
+"""
+
+LLM REPLIES:
+{"entity_types": ["PERSON", "COUNTRY", "ROLE"], "relation_types": ["SERVED_AS", "SWORN_IN_AS", "IS_PM_OF"]}
+
+RESULT: The `CFG` dictionary is instantly updated. The system now knows exactly what to extract.
+
+================================================================================
+PHASE 2: MODULE A - GRAPH CONSTRUCTION
+================================================================================
+
+1. The database is wiped clean (`MATCH (n) DETACH DELETE n`).
+2. `_extract(doc)` loops through the 3 documents individually.
+
+PROMPT GIVEN TO LLM (For Doc 1):
+"""
+Entities: ['PERSON', 'COUNTRY', 'ROLE']
+Relations: ['SERVED_AS', 'SWORN_IN_AS', 'IS_PM_OF']
+Extract ALL facts as JSON list...
+Text:
+"Narendra Modi served as Prime Minister of India in 2014."
+"""
+
+LLM REPLIES (For Doc 1):
+[{"head": "Narendra Modi", "relation": "SERVED_AS", "tail": "India", "year": 2014}]
+
+LLM REPLIES (For Doc 2):
+[{"head": "Rahul Gandhi", "relation": "SWORN_IN_AS", "tail": "India", "year": 2024}]
+
+LLM REPLIES (For Doc 3):
+[{"head": "Narendra Modi", "relation": "IS_PM_OF", "tail": "India", "year": null}]
+
+3. `_accumulate()` runs CROSS-DOCUMENT CORROBORATION [N1].
+   It sees two facts about Narendra Modi being PM of India (Doc 1 and Doc 3).
+   It bundles them together:
+   -> TripleRecord(Modi, SERVED_AS, India, year=2014, support_count=2)
+   -> TripleRecord(Rahul, SWORN_IN_AS, India, year=2024, support_count=1)
+
+4. `_store_all()` pushes this to Neo4j.
+5. `_disambiguate()` looks for similar words. None here.
+6. `_normalize()` asks the LLM to fix the arrows. The LLM changes "SWORN_IN_AS" and "IS_PM_OF" to just "PM_OF".
+
+THE GRAPH NOW LOOKS LIKE THIS:
+(Narendra Modi) --[PM_OF {year:2014, support:2}]--> (India)
+(Rahul Gandhi)  --[PM_OF {year:2024, support:1}]--> (India)
+
+================================================================================
+PHASE 3: MODULE B - GRAPH RETRIEVAL
+================================================================================
+
+1. Query drops in: "Who is the current PM of India?"
+
+2. `detect_intent(query)`:
+   The LLM classifies this query as "factual_lookup". Very strict. Threshold (tau) will be 0.25 limit.
+
+3. `_keys(query)`:
+   PROMPT: "Extract entities and relations..."
+   LLM Replies: Entities: ["PM", "India"], Relations: ["is"]
+
+4. The Retriever looks at ALL edges in the Graph.
+   Path 1: Modi -> PM_OF -> India
+   Path 2: Rahul -> PM_OF -> India
+
+5. Mathematical Scoring (`retrieve`):
+   Let's calculate the score for Path 2 (Rahul Gandhi):
+   
+   A. `ref_p` (Relevance): Does the path contain query words? Yes ("PM", "India"). Score = ~0.8
+   
+   B. `hub_pen` (Hub Penalty): Does "India" have > 10 arrows connected to it? No. Penalty = 1.0 (Safe)
+   
+   C. `ppr_avg` (PageRank): PageRank leaked starting from "India". Both paths sit right next to "India". Both get +0.5 boost.
+   
+   D. `decay` (Temporal Decay [N2]): 
+      Year = 2024. Current Year = 2026. Age = 2 years.
+      Math: exp(-0.08 * 2) = exp(-0.16) = 0.852 (85% trust retained).
+   
+   E. `corroborate` (Support Count [N1]):
+      Support = 1. Math: log(1 + 1) * 0.4 = 0.277 (27% bonus boost).
+      
+   Combined Score for Rahul = 0.8 * 1.0 * 1.5 * 0.852 * 1.277 = 1.30
+   Combined Score for Modi =  0.8 * 1.0 * 1.5 * 0.380 (12 yr decay) * 1.43 (2 docs) = 0.65
+   
+   Result: Both paths are retrieved to go to the next phase.
+
+================================================================================
+PHASE 4: MODULE C - CONFLICT RESOLUTION
+================================================================================
+
+1. CONTRADICTION DETECTION:
+   The code scans the two paths. It notices BOTH point to "PM_OF -> India".
+   Rule: You can't have two PMs of the same country at the exact same chronological time in this system model. 
+   Calculation: Rahul (2024) > Modi (2014).
+   Action: The Modi path is marked `contradicted=True`. Conflict reason: "Superseded by year 2024".
+   
+   *Only the Rahul Gandhi path survives into the Entropy phase.*
+
+2. MEASURE THE LLM's INTERNAL KNOWLEDGE (H_param):
+   PROMPT (Run 3 times internally at temp 0.7):
+   "Answer this question from memory only: Who is the current PM of India?"
+   
+   LLM (Trained in 2023) Replies:
+   Sample 1: "Narendra Modi"
+   Sample 2: "Narendra Modi"
+   Sample 3: "Narendra Modi is the PM."
+   
+   The `_H_sem` Semantic Entropy math groups these as 1 identical meaning.
+   Entropy Math: p * log(p) -> 1.0 * log(1.0) = 0.
+   H_param = 0.0. (The LLM is 100% blindly confident that Modi is STILL the PM based on its old training data).
+
+3. MEASURE THE CONTEXT EFFECT (delta_H):
+   PROMPT:
+   "Context: Rahul Gandhi --[PM_OF]--> India [year: 2024]
+    Question: Who is the current PM of India?"
+   
+   LLM Replies (Run 3 times internally):
+   Sample 1: "Narendra Modi" (hallucination, it ignored the context cause its internal memory is too strong).
+   Sample 2: "Rahul Gandhi"
+   Sample 3: "Rahul Gandhi"
+   
+   Entropy Math: It gave mixed answers. Its confusion went UP. 
+   H_context = 0.63. 
+   delta_H calculation: (0.63 - 0.0) = -0.63.
+   
+   Wait! `delta_H` is negative! This means the graph context did NOT help the LLM. It actually made the LLM confused because the context directly fought the LLM's training weights.
+
+4. SELECTION STRATEGY:
+   Because the LLM failed to accept the context (it failed the `delta_h > tau` check for the strict conflict strategy), it falls back to the "Grounding" strategy. Grounding strategy simply says: "The LLM is corrupted/stubborn here, ignore its entropy math and just FORCE-FEED it the newest path."
+   Selected Path: Rahul Gandhi.
+
+================================================================================
+PHASE 5: FINAL OUTPUT & AUDIT CHAIN
+================================================================================
+
+1. BUILDING THE REASONING CHAIN [N6]:
+   `_build_chain()` creates this string block:
+   "Selected evidence:
+      ✓ Rahul Gandhi --[PM_OF]--> India [year: 2024] (sources=1)  score=1.30
+    Removed as outdated/contradicted:
+      ✗ Narendra Modi --[PM_OF]--> India [year: 2014]  reason: Superseded by year 2024"
+
+2. FINAL ANSWER GENERATION [N6 EXPLAIN PROMPT]:
+   PROMPT GIVEN TO LLM:
+   "You resolved a knowledge conflict. Provide a clear answer with brief reasoning.
+    Conflict Resolution Chain: [Inserts the chain built above]
+    Question: Who is the current PM of India?
+    Answer (include WHAT and WHY):"
+    
+   LLM GENERATES FINAL ANSWER:
+   "Based on the resolved knowledge, Rahul Gandhi is the current Prime Minister of India. 
+   This was chosen because the document stating he was sworn in during 2024 supersedes 
+   older records from 2014 indicating Narendra Modi."
+
+3. CALCULATING THE FINAL CONFIDENCE SCORE [N7]:
+   Let's crunch the final pie-chart grades for the terminal output!
+   
+   A. Entropy Score (`h_sig`): Our `delta_H` was negative, so `h_sig` = 0%. (Out of 40%)
+   B. Support Score (`sup_s`): 1 source. log(1+1)/log(6) = 0.38. (0.38 * 30%) = 11.4%.
+   C. Recency Score (`rec_s`): 2 years old. exp(-0.05 * 2) = 0.90. (0.90 * 30%) = 27%.
+   
+   Total Confidence = 0.0 + 11.4 + 27 = 38.4%
+   *Result rounded: 38%*
+
+================================================================================
+TERMINAL OUTPUT YOU WOULD SEE
+================================================================================
+───
+  Query: Who is the current PM of India?
+───
+  [B]  E=['PM', 'India']  Rkw=['is']
+  [C7] Intent=factual_lookup
+  [C5] Contradictions removed: 1, remaining: 1
+  [C4] H_param str=0.0000 sem=0.0000
+  [C]  Path 1... ΔH=-0.6300
+
+  ✓ Answer: Based on the resolved knowledge, Rahul Gandhi is the current Prime Minister of India. This was chosen because the document stating he was sworn in during 2024 supersedes older records from 2014 indicating Narendra Modi.
+  Confidence: 38%  Time=3.2s  Cache 8/23 hits (35%)
+================================================================================
+END OF DRY RUN
+================================================================================
