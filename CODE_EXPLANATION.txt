@@ -1,0 +1,313 @@
+================================================================================
+          TRUTHFULRAG v5 : COMPLETE LINE-BY-LINE CODE EXPLANATION
+================================================================================
+
+This document explains every section and line of: enhanced_main.py
+We group lines into logical blocks so it is easy to read.
+
+================================================================================
+PART 1: IMPORTS AND SETUP (Lines 1 - 43)
+================================================================================
+
+Lines 1-2:
+from __future__ import annotations
+import sys
+- "annotations" allows us to use modern Python type hinting (like List[str]) 
+  without errors in older Python versions.
+- "sys" is used for system-level operations (like exiting the script or 
+  fixing terminal encoding).
+
+Lines 15-20: Standard Library Imports
+import argparse, difflib, hashlib, json, logging, math, os, re, time
+import datetime
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+import numpy as np
+- These are built-in Python tools:
+  - argparse: to read command-line commands (like --corpus corpus.json)
+  - difflib: for fuzzy string matching (used in entity disambiguation)
+  - hashlib: for MD5 hashing (used in the LLM cache)
+  - json: to read/write JSON files (corpus.json, LLM outputs)
+  - re: for Regular Expressions (finding text patterns)
+  - Counter, defaultdict: specialized dictionaries for counting things
+  - dataclass: a clean way to define objects that just hold data
+  - numpy: for vector math (cosine similarity for embeddings)
+
+Lines 21-25: Third-Party AI/Database Imports
+from dotenv import load_dotenv
+from langchain_core.documents import Document
+from langchain_neo4j import Neo4jGraph
+from langchain_experimental.graph_transformers import LLMGraphTransformer
+from langchain_ollama import ChatOllama
+- load_dotenv: loads passwords/API keys from a secret .env file.
+- Document: LangChain's standard way to wrap text.
+- Neo4jGraph: LangChain's connection to our Neo4j database.
+- LLMGraphTransformer: LangChain's built-in graph extraction tool.
+- ChatOllama: Connects to our local copy of Ollama to run the LLM.
+
+Line 27:
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+- Forces the terminal to use UTF-8 characters so symbols like '→' don't crash Windows.
+
+Lines 29-36: Optional Imports for Search
+try: from sentence_transformers import SentenceTransformer; _ST = True
+except ImportError: ...
+try: from rank_bm25 import BM25Okapi; _BM25 = True
+except ImportError: ...
+- We try to load sentence-transformers (for semantic search) and rank-bm25 (for keyword search).
+- If they aren't installed, we set flags (_ST=False, _BM25=False) so the script doesn't crash, it just disables those features gracefully.
+
+Lines 38-40:
+logging.getLogger("neo4j").setLevel(logging.ERROR)
+...
+load_dotenv()
+- Silences annoying non-critical warnings from neo4j/http libraries.
+- Loads environment variables.
+
+Lines 42-43:
+CURRENT_YEAR: int = datetime.date.today().year
+- [N2 Feature] Gets the real current year dynamically. Used for temporal decay calculations so older facts score lower over time.
+
+================================================================================
+PART 2: CONFIGURATION DIRECTORY (Lines 45 - 100)
+================================================================================
+
+Lines 49-95: CFG: Dict[str, Any] = { ... }
+- The master configuration dictionary. Everything can be tweaked here.
+- "llm_model": Uses "qwen2.5:7b-instruct" by default.
+- "llm_temperature": 0.0 for deterministic answers.
+- "llm_temp_sampler": 0.7 for entropy sampling (we WANT random variations here).
+- "neo4j_uri", "neo4j_user": Database connection details.
+- "embedding_model": "all-MiniLM-L6-v2" for fast semantic search.
+- "top_k_paths": We retrieve the top 5 paths from the graph.
+- "ppr_damping", "ppr_iterations": Math config for PageRank traversal.
+- "schema_entity_types", "schema_relation_types": Left empty! Will be auto-filled by the LLM later [A4+ Feature].
+- "n_entropy_samples": 3. We ask the LLM 3 times to measure its uncertainty.
+- Features toggles tracking the 6 novel improvements ([N1] corroborated weight, [N2] temporal decay lambda, [N4] snapshot year, [N6] explain chain, [N7] confidence weights).
+
+Lines 97-100: Terminal Setup
+try:    _TW = min(os.get_terminal_size().columns, 80)
+except: _TW = 72
+SEP = "─" * _TW
+- Figures out how wide the terminal is to draw nice horizontal line separators.
+
+================================================================================
+PART 3: THE CACHE SYSTEM (Lines 102 - 121)
+================================================================================
+
+Lines 103-115: class LLMCache
+- AI calls take time (2-10 seconds locally). If we ask the exact same question twice, we shouldn't waste time making the LLM calculate it again.
+- _k(self, p, t): Creates a unique "hash" (ID) based on the prompt text and the temperature.
+- get/set: Stores/retrieves answers in memory.
+- stats(): Tells us how much time we saved (e.g. "Cache 8/20 hits").
+
+Lines 117-121: def cached_invoke(llm, prompt):
+- This is a wrapper function. Everywhere else in the code, instead of doing `llm.invoke()`, we do `cached_invoke()`.
+- It checks the cache first. If found, returns it instantly. If not, calls the real LLM, strips whitespace, saves to cache, and returns it.
+
+================================================================================
+PART 4: AI PROMPT TEMPLATES (Lines 123 - 156)
+================================================================================
+
+Lines 124-128: _triple_prompt()
+- Given text, entity types, and relation types, asks the LLM to extract JSON facts (Head, Relation, Tail, Year).
+- This is how we build the graph from raw sentences.
+
+Lines 130-138: INTENT_PROMPT, KEY_PROMPT, PARAM_PROMPT, RAG_PROMPT
+- INTENT_PROMPT: Asks "Is this a factual, temporal, comparison, or causal question?"
+- KEY_PROMPT: Asks "What are the main nouns and verbs in this question?" Let's us search the graph.
+- PARAM_PROMPT: Asks the LLM to answer from its own memory (no documents provided). Used to measure internal confidence.
+- RAG_PROMPT: Asks the LLM to answer using only the provided context.
+
+Lines 140-143: EXPLAIN_PROMPT
+- [N6 Feature] Instead of just a direct answer, forces the LLM to explain WHY it picked certainty facts and discarded others based on our contradiction rules.
+
+Lines 145-156: SCHEMA_INFER_PROMPT
+- [A4+ Feature] Given a few sample sentences, asks the LLM "What kind of data are we looking at?" and returns a JSON list of categories (e.g., PERSON, COMPANY, LOCATION).
+
+================================================================================
+PART 5: HYBRID RETRIEVER (Lines 158 - 193)
+================================================================================
+
+Lines 158-167: HybridRetriever __init__
+- [N3 Feature] In standard RAG, you search for text. We do two searches:
+  1. BM25 (keyword exact match)
+  2. Embedder (semantic meaning match - e.g., "automobile" matches "car")
+
+Lines 168-193: retrieve()
+- Gets scores from BM25 and Semantic search separately.
+- Converts raw scores into RANKS (1st place, 2nd place, 30th place).
+- Applies RRF (Reciprocal Rank Fusion): formula `1 / (60 + rank)`.
+- A document ranking high in BOTH keyword and meaning gets the top spot.
+
+================================================================================
+PART 6: MODULE A - GRAPH CONSTRUCTION (Lines 195 - 359)
+================================================================================
+
+Lines 196-199: TripleRecord
+- A simple data container for a fact: Head (Elon), Relation (CEO), Tail (Twitter), Year (2022).
+- support_count = 1: [N1 Feature] Defaults to 1. If we see this fact again in another document, it increases.
+
+Lines 201-207: EnhancedGraphConstructor __init__
+- Connects to the LLM, Neo4j, and initializes an empty dictionary `_triple_bank` to hold facts before saving them to the database.
+
+Lines 208-252: _infer_schema()
+- [A4+ Feature] Takes the first 5 documents. Sends them to the LLM using SCHEMA_INFER_PROMPT.
+- The LLM replies with JSON (e.g., {"entity_types": ["PERSON"]}).
+- We strip any markdown (```json ... ```) just in case the LLM formatting is weird.
+- We save these types into the main `self.cfg`. Now the rest of the pipeline knows what to look for.
+
+Line 254-256: _clear()
+- Runs `MATCH (n) DETACH DELETE n` in Neo4j to wipe the database clean for a fresh run.
+
+Lines 258-269: _extract()
+- Takes one sentence. Uses `_triple_prompt` (now populated with our dynamic schema) to ask the LLM for facts.
+- Parses the JSON response into Python dictionaries.
+
+Lines 271-281: _accumulate()
+- [N1 Feature] Takes the extracted triples.
+- Instead of immediately saving to database, stores them in `_triple_bank`.
+- If a triple already exists (Key: "elon_ceo_twitter"), we doing `support_count += 1`. This counts corroborating evidence across multiple documents.
+
+Lines 283-299: _store_all()
+- Loops through the `_triple_bank`.
+- Generates Cypher queries (Neo4j code) to write the nodes and edges.
+- Creates relationships containing the `{support: count, year: year}` metadata.
+
+Lines 301-316: _disambiguate()
+- [A2 Feature] Fetches all node names (e.g., "Twitter", "Twitter Inc.").
+- Uses `difflib` (fuzzy string matching). If two names are 85% similar, it tells Neo4j to MERGE them into a single node using an `apoc.refactor` plugin command.
+
+Lines 318-339: _normalize()
+- [A3 Feature] Fetches up to 50 relation names (e.g., "is Ceo Of", "leads").
+- Asks the LLM to format them into standard UPPER_SNAKE_CASE (e.g., "CEO_OF").
+- Updates the relationships in Neo4j via APOC.
+
+Lines 341-359: build(docs)
+- The master function for construction.
+- 1. Infers schema. 2. Clears graph. 3. Uses LangChain's built-in LLMGraphTransformer for generic pass. 4. Loops through docs, runs _extract + _accumulate. 5. Stores all. 6. Disambiguates & Normalizes. 7. Returns node/edge count.
+
+================================================================================
+PART 7: MODULE B - GRAPH RETRIEVAL (Lines 360 - 524)
+================================================================================
+
+Lines 361-367: KnowledgePath
+- A dataclass representing a single trail through the graph (e.g. "Elon --> CEO_OF --> Twitter").
+- Holds metadata: score, max_year, support, entropy shifts (delta_h), and whether it was eventually contradicted.
+
+Lines 369-375: EnhancedGraphRetriever __init__
+- Sets up retriever with embedders and an empty dictionary `_deg` to cache node degree (how many connections a node has).
+
+Lines 376-387: _keys()
+- Asks LLM to extract Entities and Relation verbs from the user's question (e.g. "Who leads Tesla" -> E=["Tesla"], R=["leads"]).
+
+Lines 389-392: detect_intent()
+- Asks LLM to classify the question. Different intents require different math thresholds later (factual vs temporal).
+
+Lines 394-397: _extract_query_year()
+- [N4 Feature] Uses Regex to scan the question for a 4-digit year (19xx or 20xx). E.g., "Who was PM in 2010?" -> Returns 2010.
+
+Lines 399-409: _node_ids()
+- Simply asks Neo4j for a list of all Node IDs currently in the database.
+
+Lines 411-427: _edges()
+- Asks Neo4j for all edges (relationships).
+- [N4 Feature] If `snapshot_year` is active (e.g. 2010), it deletes any edges from the list that happened AFTER 2010. It creates a "time-travel" view of the graph.
+
+Lines 429-433: _deg_of()
+- Looks up how many connections an entity has in Neo4j. (Used to penalize "hubs" like the word "United States" which connect to everything and aren't useful).
+
+Lines 435-454: _ppr()
+- [B4 Feature] Personalized PageRank.
+- Starts at the query entities (e.g., "Tesla"). Creates a probability fluid (score) that leaks to connected nodes. It simulates someone clicking random links starting from "Tesla". Nodes closer to "Tesla" get higher scores.
+
+Lines 456-465: _filter_edges()
+- [B5 Feature] Compares the query relation ("leads") to the edge relation ("CEO_OF") using strict semantic math (embeddings dot product). Throws away totally unrelated edges (like "BORN_IN").
+
+Lines 467-473: _ref_p()
+- [B1 Feature] Relevance probability. Basic check: Does this graph path contain words from the user's question? Higher overlap = higher base score.
+
+Lines 475-479: _temporal_decay()
+- [N2 Feature] The older a fact is compared to the current year, the lower its score multiplier becomes uses exponential math (exp(-lambda * age)).
+
+Lines 481-524: retrieve(query)
+- The master retrieval function.
+- Runs keys, intent, snapshot extraction. Gets edges, filters them, runs PPR.
+- Loops through all valid edges. Calculates the massive combined score:
+  `combined = (ref_p * hub_pen) * (1 + ppr_avg) * decay * (1 + corroborate)`
+- Sorts paths by score, returns top K.
+
+================================================================================
+PART 8: MODULE C - CONFLICT RESOLUTION (Lines 526 - 684)
+================================================================================
+
+Lines 527-531: _H_str()
+- Calculates text entropy. If I ask a question 3 times and get [A, A, A], entropy is 0. If I get [A, B, C], entropy is high. Uses classic Shannon Entropy formula p*log(p).
+
+Lines 533-546: _H_sem()
+- Calculates semantic entropy. If I get ["Elon", "Mr Musk", "Jack Dorsey"], standard text entropy says they are 3 unique answers. Semantic entropy converts them to vectors and realizes "Elon" and "Mr Musk" mean the same thing (clusters them), returning a lower, more accurate entropy.
+
+Lines 548-567: _detect_contradictions()
+- Scans all retrieved paths.
+- If it sees two paths with the exact same relation and tail but different heads (e.g. "Modi -> PM_OF -> India" and "Rahul -> PM_OF -> India").
+- It compares their years. The older one is marked `contradicted=True`.
+
+Lines 569-585: EnhancedConflictResolver & _entropy()
+- Resolves conflicts. 
+- _entropy() asks the LLM a question 3 times (with temperature 0.7) and returns the calculated text/semantic entropy.
+
+Lines 587-595: _confidence()
+- [N7 Feature] Calculates a final 0 to 1 confidence score based on:
+  1. H_signal (Did the context reduce the LLMs uncertainty?)
+  2. Support (Did multiple documents say this?)
+  3. Recency (Is the fact new or 10 years old?)
+
+Lines 597-608: _build_chain()
+- [N6 Feature] Creates a text string explaining "I selected this fact. I discarded that fact because it was older."
+
+Lines 610-684: resolve()
+- The master resolution function.
+- 1. Runs contradiction detection to remove stale facts.
+- 2. Asks the LLM the question with NO context to see how confused it is natively (H_param).
+- 3. Calculates 'tau' (the threshold of how much a document MUST help to be used).
+- 4. For each fact, asks the LLM again *with* the fact as context. If the LLMs confusion goes down significantly (delta_H > tau), the fact is deemed corrective and helpful.
+- 5. Selects the winning facts.
+- 6. Asks for the final answer (using EXPLAIN_PROMPT if contradictions existed).
+- 7. Calculates final confidence score and returns all metadata.
+
+================================================================================
+PART 9: PIPELINE WRAPPERS & RUNNERS (Lines 686 - 791)
+================================================================================
+
+Lines 687-714: EnhancedPipeline
+- A high-level object that ties everything together.
+- .ingest(docs): Runs Module A.
+- .query(q): Runs Module B, then Module C, prints the final answer and time taken.
+
+Lines 716-749: run_comparison()
+- Takes the corpus docs and a list of queries. 
+- Runs the pipeline against every query.
+- Prints the massive, beautiful table at the end showing exactly which v5 features were active (e.g., "[A4+] Schema inferred").
+
+Lines 751-791: _load_corpus() & _interactive_input()
+- Helper tools. Loads a file named `corpus.json` or allows the user to type documents into the terminal manually if they didn't provide a file.
+
+================================================================================
+PART 10: SCRIPT ENTRY POINT (Lines 794 - 881)
+================================================================================
+
+Lines 795-832: argparse setup
+- If you run `python enhanced_main.py --help`, this defines what you see.
+- Handles flags like `--model`, `--interactive`, `--corpus`.
+
+Lines 834-878: Logic Flow
+- Checks if the user provided a corpus via file, terminal, or arguments.
+- If they provided nothing, it auto-generates a blank `corpus.json` template in the folder and tells the user to fill it out.
+
+Line 880: run_comparison(DOCS, QUERIES)
+- Kicks off the entire pipeline!
+
+================================================================================
+END OF CODE EXPLANATION
+================================================================================
