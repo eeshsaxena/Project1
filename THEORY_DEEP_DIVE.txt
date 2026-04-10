@@ -1,0 +1,585 @@
+================================================================================
+          TRUTHFULRAG v5 — COMPLETE THEORETICAL FOUNDATIONS
+          Everything Behind the Math, Models, and Algorithms
+================================================================================
+
+This file is a deep-dive into the THEORY behind every concept used in this
+project. It covers the academic and mathematical foundations that were built
+upon, from Information Theory to Graph Algorithms to Language Models.
+
+================================================================================
+THEORY 1: LARGE LANGUAGE MODELS AND PARAMETRIC MEMORY
+================================================================================
+
+1.1 What is a Language Model?
+--------------------------------------------------------------------------------
+A Language Model (LM) is a probability distribution over sequences of words.
+Given a sequence of words w1, w2, ..., wt, it assigns a probability:
+
+    P(w1, w2, ..., wt)
+
+Using the chain rule of probability:
+    P(w1, ..., wt) = P(w1) × P(w2|w1) × P(w3|w1,w2) × ... × P(wt|w1,...,wt-1)
+
+A language model learns to predict the next token given all previous tokens.
+Modern LLMs (GPT, LLaMA, Qwen) implement this using the Transformer architecture.
+
+1.2 The Transformer Architecture
+--------------------------------------------------------------------------------
+The Transformer uses a mechanism called "self-attention" to relate every word
+in a sequence to every other word simultaneously.
+
+For input tokens X = {x1, x2, ..., xn}, three matrices are learned:
+  - Q (Queries): What am I looking for?
+  - K (Keys):   What do I contain?
+  - V (Values): What information do I carry?
+
+Attention is computed as:
+    Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) × V
+
+Where d_k is the dimensionality of the key vectors (sqrt(d_k) prevents vanishing gradients).
+
+Stacking many such "attention heads" and feed-forward layers gives us the
+Transformer's ability to understand long-range language dependencies.
+
+1.3 Parametric Memory
+--------------------------------------------------------------------------------
+After training on trillions of tokens of internet text, an LLM stores knowledge
+in its 7 billion (or more) numerical weights (parameters). This is called
+"parametric memory" — the LLM's hard-wired beliefs about the world.
+
+The problem:
+  - Parametric memory is frozen after training.
+  - If the world changes after training, the LLM does not know.
+  - Parametric memory can also be plain wrong (biased training data).
+  - The model cannot cite which source it learned a fact from.
+
+This is the fundamental motivation for RAG — augmenting parametric memory
+with external, verifiable, updatable documents at inference time.
+
+================================================================================
+THEORY 2: INFORMATION ENTROPY (THE CORE OF MODULE C)
+================================================================================
+
+2.1 Shannon Entropy
+--------------------------------------------------------------------------------
+Claude Shannon (1948) defined entropy as the mathematical measure of
+uncertainty or randomness in a probability distribution:
+
+    H(X) = -SUM over all x in X: p(x) × log₂ p(x)
+
+Intuition:
+  - If a coin always lands heads: p(heads)=1, H = -1×log₂(1) = 0 (no surprise)
+  - If a fair coin: p(heads)=p(tails)=0.5, H = -(0.5×log₂0.5 + 0.5×log₂0.5) = 1
+  - The more uncertain the outcome, the higher the entropy.
+
+In TruthfulRAG, entropy measures how UNCERTAIN the LLM is about an answer.
+
+2.2 Why Sample the LLM Multiple Times?
+--------------------------------------------------------------------------------
+An LLM at temperature T generates text stochastically. At T=0, it is
+deterministic (always picks the highest-probability token). At T>0, it
+samples from the probability distribution, sometimes picking rarer words.
+
+If we ask the same question N times at temperature T=0.7:
+  - If the LLM is CERTAIN: it gives the same answer every time → H=0
+  - If the LLM is CONFUSED: it gives different answers each time → H>0
+
+By sampling N=3 times and computing H over the answers, we measure the
+LLM's internal uncertainty. This is the KEY INNOVATION of TruthfulRAG v4.
+
+H_str in our code:
+    answers = ["Modi", "Modi", "Gandhi"]
+    p("Modi") = 2/3, p("Gandhi") = 1/3
+    H = -(2/3 × log(2/3) + 1/3 × log(1/3)) = 0.918 nats
+
+2.3 Semantic Entropy (v5 Enhancement)
+--------------------------------------------------------------------------------
+String entropy has a flaw: "Narendra Modi" and "PM Modi" are the same
+answer but string entropy treats them as different → artificially inflated H.
+
+FarquharEtal2023 introduced Semantic Entropy: cluster semantically equivalent
+answers together before computing entropy.
+
+Algorithm (_H_sem in our code):
+  1. Encode all N answers as embedding vectors.
+  2. Cluster using greedy cosine similarity threshold (thresh=0.85):
+     - Start: every answer in its own cluster.
+     - For each pair (i, j): if cosine_sim(embed_i, embed_j) >= 0.85, same cluster.
+  3. Count cluster sizes as the probability distribution.
+  4. Compute Shannon entropy over cluster probabilities.
+
+Result: "Narendra Modi" and "PM Modi" → same cluster → lower entropy →
+more accurate uncertainty measurement.
+
+2.4 Delta-H: The Corrective Signal
+--------------------------------------------------------------------------------
+For each retrieved graph path, we measure:
+
+    ΔH = H(LLM answer WITH path as context) - H(LLM answer WITHOUT context)
+
+If ΔH < 0: The path made the LLM LESS uncertain → the path is corrective.
+If ΔH > 0: The path made the LLM MORE uncertain → the path caused confusion.
+If ΔH = 0: The path had no effect.
+
+The threshold τ: a path is only selected if it reduces uncertainty by at
+least τ (domain-tuned). This separates truly corrective facts from noise.
+
+2.5 Max Entropy
+--------------------------------------------------------------------------------
+For N samples, maximum possible entropy is:
+    H_max = log(N)  [when all N answers are different]
+
+For N=3: H_max = log(3) ≈ 1.0986 nats
+
+If H_param >= 0.85 × H_max (i.e., the LLM is maximally confused), the system
+switches to "grounding" strategy — simply forcing the most recent graph fact
+rather than filtering by ΔH, since the LLM is too lost to meaningfully improve.
+
+================================================================================
+THEORY 3: KNOWLEDGE GRAPHS
+================================================================================
+
+3.1 Graph Theory Basics
+--------------------------------------------------------------------------------
+A graph G = (V, E) consists of:
+  - V: a set of vertices (nodes) → entities in our case (people, orgs, places)
+  - E: a set of edges → relationships between entities
+
+A directed graph has ordered edges (a → b means "a leads to b").
+A labeled graph has named edge types (a --[CEO_OF]--> b).
+A property graph stores attributes on nodes and edges ({year: 2022, support: 2}).
+
+TruthfulRAG's knowledge graph is a directed, labeled property graph stored in Neo4j.
+
+3.2 Why Knowledge Graphs Over Text Chunks?
+--------------------------------------------------------------------------------
+Standard RAG stores text as chunks. Problems:
+  - A chunk containing "Elon Musk CEO Twitter 2022" and "Jack Dorsey CEO Twitter
+    2015" will be retrieved as one unit — the LLM must resolve the conflict alone.
+  - There is no way to ask: "Who were ALL CEOs of Twitter?" efficiently.
+  - There is no structured path from "Entity A" to "Entity B."
+
+Knowledge graphs solve these by:
+  - Separating each fact into an explicit triple.
+  - Storing facts as queryable structured data.
+  - Enabling graph traversal algorithms (BFS, DFS, PageRank).
+  - Supporting temporal metadata (year attached to each edge).
+
+3.3 RDF vs. Property Graphs
+--------------------------------------------------------------------------------
+RDF (Resource Description Framework — W3C standard):
+  - Triples only: (subject, predicate, object)
+  - No properties on edges.
+  - Used in Wikidata, DBpedia.
+
+Property Graphs (used by Neo4j):
+  - Nodes can have properties: {id: "Elon Musk", born: 1971}
+  - Edges can have properties: {year: 2022, support: 2}
+  - More flexible for temporal and corroboration metadata (exactly what we need).
+
+We chose Neo4j because it natively supports:
+  - APOC library for node merging (entity disambiguation).
+  - Cypher query language (expressive graph queries).
+  - Edge properties (critical for storing year and support).
+
+3.4 Cypher Query Language
+--------------------------------------------------------------------------------
+Cypher is Neo4j's query language — like SQL but for graphs.
+
+Key commands used in TruthfulRAG v5:
+
+MATCH: Find patterns in the graph.
+    MATCH (a)-[r]->(b) RETURN a, r, b
+    (Finds all nodes connected by any edge)
+
+MERGE: Insert or update (never duplicate).
+    MERGE (a:Entity {id:'Elon Musk'}) MERGE (b:Entity {id:'Twitter'})
+    MERGE (a)-[rel:CEO_OF {year:2022, support:2}]->(b)
+    (Creates or finds the node/edge — idempotent)
+
+DETACH DELETE: Remove all.
+    MATCH (n) DETACH DELETE n
+    (Wipes the graph including all edge references first)
+
+================================================================================
+THEORY 4: GRAPH RETRIEVAL ALGORITHMS
+================================================================================
+
+4.1 Personalized PageRank (PPR)
+--------------------------------------------------------------------------------
+The original PageRank (Larry Page, Sergey Brin, 1998) ranks web pages by
+imagining a "random surfer" who clicks random links. Pages with more incoming
+links from important pages rank higher.
+
+The PageRank formula:
+    PR(u) = (1 - d) × (1/N) + d × SUM of PR(v)/OutDegree(v) over all v→u
+
+Where d = damping factor (0.85 means 85% chance to follow a link,
+15% chance to teleport to a random page).
+
+Personalized PageRank modifies this: instead of teleporting to a random page,
+teleport to the SEED NODES (entities mentioned in the query).
+
+This means nodes closely connected to the query entities accumulate higher scores.
+
+Implementation in TruthfulRAG (power iteration):
+    pr = initial seed scores (1/|seeds| for each seed node, 0 for others)
+    for i in range(20 iterations):
+        new_pr = zeros
+        for each edge (src → tgt):
+            new_pr[tgt] += pr[src] / out_degree[src]
+        pr = (1 - d) × seed_dist + d × new_pr
+
+After 20 iterations, pr[v] represents how relevant node v is to the query entities.
+
+4.2 Reciprocal Rank Fusion (RRF)
+--------------------------------------------------------------------------------
+RRF is a method to combine multiple ranked lists into a single ranked list
+without requiring score normalization.
+
+For each document d, across k different ranking systems:
+    RRF_score(d) = SUM over all ranking systems i: 1 / (K + rank_i(d))
+
+Where K = 60 (empirically derived constant from Cormack et al., 2009).
+
+Why K=60? It prevents the top-1 document from completely dominating the merged
+ranking. It is equivalent to saying: "The value of being ranked 1st is equal to
+being ranked 61st from 60th" — a smooth diminishing returns curve.
+
+Example in TruthfulRAG [N3]:
+  BM25 ranking of 3 documents: [Doc2, Doc1, Doc3]
+  Semantic ranking:             [Doc1, Doc2, Doc3]
+
+  RRF score(Doc1) = 1/(60+2) + 1/(60+1) = 0.0161 + 0.0164 = 0.0325
+  RRF score(Doc2) = 1/(60+1) + 1/(60+2) = 0.0164 + 0.0161 = 0.0325
+  RRF score(Doc3) = 1/(60+3) + 1/(60+3) = 0.0159 + 0.0159 = 0.0317
+
+  Final order: [Doc1≈Doc2, Doc3]
+  Both Doc1 and Doc2 are well-supported across both methods.
+
+4.3 BM25 (Best Match 25)
+--------------------------------------------------------------------------------
+BM25 is a probabilistic ranking function that extends TF-IDF with:
+  1. Term frequency saturation (more occurrences help less and less)
+  2. Document length normalization
+
+Formula:
+    BM25(D, Q) = SUM over each term t in Q:
+        IDF(t) × (TF(t,D) × (k1+1)) / (TF(t,D) + k1 × (1 - b + b × |D|/avgdl))
+
+Where:
+  - IDF(t) = log((N - df(t) + 0.5) / (df(t) + 0.5) + 1)
+    (N = total documents, df(t) = documents containing term t)
+  - TF(t,D) = occurrence count of term t in document D
+  - k1 = 1.5 (typical), b = 0.75 (length normalization)
+  - avgdl = average document length
+
+The k1 parameter controls term frequency saturation:
+  - At k1→∞, BM25 becomes standard TF-IDF (no saturation)
+  - At k1=0, term frequency is ignored (IDF only)
+  - k1=1.2-2.0 is standard practice
+
+4.4 cosine similarity (Semantic Search & Relation Filtering)
+--------------------------------------------------------------------------------
+A sentence embedding is a dense vector in R^d (d=384 for all-MiniLM-L6-v2).
+Two semantically similar sentences will have vectors pointing in similar
+directions.
+
+Cosine similarity measures the angle between two vectors:
+    cos_sim(A, B) = (A · B) / (||A|| × ||B||)
+
+Where:
+  - A · B is the dot product (sum of element-wise products)
+  - ||A|| is the L2 norm (sqrt of sum of squares)
+
+Range: [-1, 1] where 1=identical direction, 0=orthogonal, -1=opposite.
+
+In TruthfulRAG:
+  - Relation filtering [B5]: cos_sim(query_embed, relation_label_embed) >= 0.30
+  - Semantic entropy [C4]: cos_sim(answer_A, answer_B) >= 0.85 → same cluster
+
+================================================================================
+THEORY 5: TEMPORAL REASONING IN KNOWLEDGE GRAPHS
+================================================================================
+
+5.1 The Problem of Temporal Facts
+--------------------------------------------------------------------------------
+Most facts in the real world are NOT eternally true.
+  - "Barack Obama IS president of the USA" (true 2009-2017, false otherwise)
+  - "Narendra Modi IS PM of India" (true 2014-2024, false in our corpus scenario)
+
+A knowledge graph that treats all facts as timeless will fail for queries like:
+  - "Who was PM in 2016?" (answer: Modi, even if a newer PM exists)
+  - "What was Twitter's CEO in 2021?" (answer: Parag Agrawal)
+
+Temporal KG research (Allen, 1983; Lao et al., 2012) defines two approaches:
+  1. Valid-time intervals: each triple has [start_year, end_year]
+  2. Transaction-time: when the fact was added to the database
+
+TruthfulRAG uses a simplified version of approach 1: a single year attribute
+representing when the fact was ASSERTED to be true (not an interval).
+
+5.2 Exponential Temporal Decay [N2]
+--------------------------------------------------------------------------------
+Our temporal decay formula comes from the physics of radioactive decay:
+
+    N(t) = N₀ × e^(-λt)
+
+Where N₀ is the initial value, t is time elapsed, and λ is the decay constant.
+
+Applied to facts:
+    decay(year) = exp(-λ × max(0, CURRENT_YEAR - year))
+
+Properties:
+  - year = CURRENT_YEAR: decay = exp(0) = 1.0 (100% weight, perfectly current)
+  - year = CURRENT_YEAR - 1: decay = exp(-0.08) = 0.923 (1 year old: 92% trust)
+  - year = CURRENT_YEAR - 5: decay = exp(-0.40) = 0.670 (5 years old: 67% trust)
+  - year = CURRENT_YEAR - 10: decay = exp(-0.80) = 0.449 (10 years: 45% trust)
+  - year = CURRENT_YEAR - 20: decay = exp(-1.60) = 0.202 (20 years: 20% trust)
+
+Choice of λ=0.08:
+  The "half-life" of information is -log(0.5)/λ = 0.693/0.08 ≈ 8.7 years.
+  After 8.7 years, a fact retains only 50% of its original weight.
+  This is reasonable for general political/corporate knowledge.
+  For medicine (drugs change faster): higher λ. For history: lower λ.
+
+5.3 Temporal Snapshot Queries [N4]
+--------------------------------------------------------------------------------
+This is the concept of a "temporal database" applied to KG-RAG.
+
+In standard database theory, a "temporal database" maintains the full history
+of every record with valid timestamps. A snapshot query asks: "Show me the
+database as it looked on date D."
+
+In TruthfulRAG v5:
+  - All edges have an optional year property.
+  - Snapshot query: filter out edges where year > query_year.
+  - Result: the union of all facts that were known to be true as of query_year.
+
+This allows correct answers to historical questions that would otherwise be
+contaminated by newer, post-historical facts.
+
+================================================================================
+THEORY 6: ENTITY DISAMBIGUATION
+================================================================================
+
+6.1 The Entity Resolution Problem
+--------------------------------------------------------------------------------
+In any large corpus, the same real-world entity will appear under many names:
+  - "Elon Musk", "Musk", "Elon R. Musk", "Mr. Musk", "the Tesla CEO"
+  - "Twitter", "Twitter Inc.", "X Corp", "X", "@Twitter"
+
+If each name becomes a separate graph node, the graph is fragmented. PPR
+starting from "Twitter" will not reach "X" facts even though they are the same.
+
+Entity resolution (also called record linkage or deduplication) is the process
+of identifying when two names refer to the same entity.
+
+6.2 Ratcliff/Obershelp String Similarity
+--------------------------------------------------------------------------------
+Python's difflib.SequenceMatcher uses the Ratcliff/Obershelp algorithm.
+
+Algorithm:
+  1. Find the longest common substring.
+  2. Recursively find longest common substrings in the left and right remainders.
+  3. Score = 2 × total_matching_characters / total_characters_in_both_strings
+
+Properties:
+  - Score range: [0, 1]. 1.0 = identical. 0.0 = nothing in common.
+  - "Twitter" vs "Twitter Inc." = 14/22 × 2 = 0.909 → MERGE
+  - "Modi" vs "Gandhi" = very low → DO NOT MERGE
+  - Threshold in v5: 0.85 (strict enough to avoid false merges)
+
+Limitation: purely string-based, does not use semantic meaning.
+"Joe Biden" vs "POTUS" = 0.0 despite being the same entity.
+A production system would use named entity linking (NEL) with a knowledge base.
+
+6.3 APOC Merge Operations
+--------------------------------------------------------------------------------
+Neo4j's APOC (A Package Of Components) library provides graph refactoring tools.
+
+apoc.refactor.mergeNodes([keep, old], {properties: 'combine', mergeRels: true}):
+  - Combines both nodes' properties.
+  - Rewires all edges that pointed to 'old' to now point to 'keep'.
+  - Deletes the 'old' node.
+  - Result: a single node with the union of all relationships.
+
+apoc.refactor.setType(r, 'NEW_TYPE'):
+  - Changes an edge's type label without creating a new edge.
+  - Used for relation normalisation [A3].
+
+================================================================================
+THEORY 7: RELATION CANONICALIZATION
+================================================================================
+
+7.1 The Problem
+--------------------------------------------------------------------------------
+The same semantic relationship appears in many surface forms in natural language:
+  "is the CEO of", "leads", "runs", "heads", "is in charge of", "oversees"
+
+If our graph stores all of these as different edge types, the graph is fractured:
+  - PPR from "Elon" along "leads" edges won't reach "CEO_OF" paths.
+  - Filtering by "CEO" semantics requires matching all variants.
+
+7.2 LLM-Based Normalization
+--------------------------------------------------------------------------------
+We use the LLM to canonicalize all relation types in a single batch prompt:
+
+    "Canonicalize to UPPER_SNAKE_CASE. Return JSON {'ORIG': 'CANON', ...}
+     Relations: ['leads', 'is ceo of', 'CEO_OF', 'heads', 'LEADS']
+     JSON:"
+
+LLM returns: {"leads": "LEADS", "is ceo of": "CEO_OF", "CEO_OF": "CEO_OF", ...}
+
+The mapping is applied via APOC's setType.
+
+This is an application of LLMs as semantic normalizers — using the model's
+language understanding to unify expressions that mean the same thing.
+
+================================================================================
+THEORY 8: THE CONFIDENCE SCORE FORMULA
+================================================================================
+
+8.1 Multi-Factor Confidence Scoring [N7]
+--------------------------------------------------------------------------------
+The confidence score is a weighted combination of three independent signals.
+The design follows the Forecasting literature (Tetlock, 2015) and calibration
+research in machine learning.
+
+Component 1 — Entropy Resolution Signal (weight 40%):
+    h_sig = min(|ΔH| / (τ + ε), 2.0) / 2.0
+
+  This measures how strongly the winning evidence changed the LLM's uncertainty.
+  Capped at 2τ to prevent unrealistically high scores from unstable models.
+  ε = 1e-9 prevents division by zero.
+
+  h_sig = 0.0 when ΔH = 0 (context had no effect)
+  h_sig = 1.0 when |ΔH| >= 2τ (context strongly resolved uncertainty)
+
+Component 2 — Source Support (weight 30%):
+    sup_s = min(log(1 + support) / log(6), 1.0)
+
+  Uses logarithm because: going from 1 source to 2 sources is a huge gain,
+  but going from 5 to 6 sources is marginal.
+  Normalized so that support=5 approximately gives sup_s=1.0.
+  (log(6)/log(6) = 1.0)
+
+Component 3 — Recency (weight 30%):
+    rec_s = exp(-0.05 × max(0, CURRENT_YEAR - year))
+
+  Similar to temporal decay but slower (λ=0.05 for confidence vs 0.08 for scoring).
+  Rationale: a 10-year-old fact might still be correct (geography doesn't change fast).
+  The decay is gentler here to avoid penalizing stable facts too harshly.
+
+Final:
+    confidence = w_h × h_sig + w_sup × sup_s + w_rec × rec_s
+               = 0.40 × h_sig + 0.30 × sup_s + 0.30 × rec_s
+
+The weights reflect the relative importance of each signal. The entropy signal
+gets the highest weight because it is the core novelty of TruthfulRAG.
+
+8.2 Calibration
+--------------------------------------------------------------------------------
+A well-calibrated confidence score means: if the system says 70%, it should be
+correct 70% of the time. Poor calibration is when models say "99% confident" but
+are correct only 60% of the time.
+
+The three-factor formula is designed to be pessimistic by default:
+  - A newly-added corpus fact with only 1 source and ΔH=0 scores ~35-40%.
+  - Only when multiple sources + strong entropy signal + recent fact → 80%+.
+
+This conservative design is intentional for high-stakes domains.
+
+================================================================================
+THEORY 9: WHY ENTROPY DETECTS "PARAMETRIC DOMINANCE"
+================================================================================
+
+This explains the 42% confidence result from our actual run.
+
+9.1 The Phenomenon
+--------------------------------------------------------------------------------
+When the LLM's parametric knowledge strongly contradicts the RAG context,
+it ignores the context — answering from memory instead.
+
+In our case:
+  - LLM trained pre-2024 → strongly "knows" Narendra Modi as PM of India.
+  - Corpus says Rahul Gandhi is PM since 2024.
+  - H_param = 0 (LLM 100% certain: Modi is PM, answers same all 3 times).
+  - After providing the Rahul Gandhi graph path:
+    - 1 of 3 samples still says "Modi" (ignores context)
+    - 2 of 3 samples say "Rahul Gandhi" (follows context)
+    - H_context > 0 (now the model is SPLIT between its memory and the context)
+    - ΔH = H_context - H_param = positive (uncertainty INCREASED)
+    - This fails the ΔH < -τ criterion for the conflict strategy.
+
+9.2 Interpretation
+--------------------------------------------------------------------------------
+A negative ΔH (uncertainty decreased) = "The context helped clarify things."
+A positive ΔH (uncertainty increased) = "The context is FIGHTING the LLM's beliefs."
+
+When ΔH is positive, the system correctly switches to "grounding" mode:
+  "I can't convince the LLM normally. I'll just force-feed it the latest fact."
+
+The resulting 42% confidence correctly signals:
+  "I gave you the answer from the corpus, but my internal uncertainty signals
+   suggest the LLM's weights strongly disagree with this corpus fact. Do not
+   fully trust this answer without independent verification."
+
+This is the most HONEST behaviour a RAG system can exhibit.
+
+================================================================================
+THEORY 10: THE OPEN WORLD ASSUMPTION IN KNOWLEDGE GRAPHSS
+================================================================================
+
+10.1 Closed World vs Open World
+--------------------------------------------------------------------------------
+Closed World Assumption (CWA):
+  "If something is not in the database, it is false."
+  Used by: relational databases, logic programming (Prolog).
+
+Open World Assumption (OWA):
+  "If something is not in the database, we do not know if it is true or false."
+  Used by: knowledge graphs, semantic web, ontologies.
+
+TruthfulRAG uses OWA: if a fact is not in our graph, the system says
+"No relevant paths found" — it does NOT assume the fact is false.
+
+10.2 Implications for Conflict Resolution
+--------------------------------------------------------------------------------
+Under OWA, two triples that appear contradictory may both be true under
+different interpretations:
+  "Modi IS PM of India" (true 2014-2024)
+  "Rahul Gandhi IS PM of India" (true 2024-present)
+
+These are not logically contradictory — they are valid at different times.
+TruthfulRAG's contradiction detector resolves this by comparing years:
+newer year → more current truth → older path marked superseded.
+
+This is a special case of temporal OWA reasoning: the truth value of a
+proposition can change over time, and the most recent assertion wins.
+
+================================================================================
+SUMMARY: THEORY MAP TO CODE
+================================================================================
+
+| Theory Concept          | Code Location              | Line(s) in enhanced_main.py |
+|-------------------------|----------------------------|-----------------------------|
+| Parametric memory       | PARAM_PROMPT, _entropy()   | 135, 575                    |
+| Shannon entropy         | _H_str()                   | 527-531                     |
+| Semantic entropy        | _H_sem()                   | 533-546                     |
+| Delta-H selection       | resolve()                  | 641-654                     |
+| PPR traversal           | _ppr()                     | 435-454                     |
+| RRF fusion              | HybridRetriever.retrieve() | 186-191                     |
+| BM25 scoring            | HybridRetriever.__init__   | 163-164                     |
+| Cosine similarity       | _filter_edges(), _H_sem()  | 456-465, 541                |
+| Temporal decay          | _temporal_decay()          | 475-479                     |
+| Temporal snapshot       | _edges()                   | 423-426                     |
+| Entity disambiguation   | _disambiguate()            | 301-316                     |
+| Relation normalisation  | _normalize()               | 318-339                     |
+| Confidence score        | _confidence()              | 587-595                     |
+| Schema inference        | _infer_schema()            | 208-252                     |
+
+================================================================================
+END OF THEORY DOCUMENT
+================================================================================
