@@ -1,0 +1,14 @@
+{
+  "docs": [
+    "Dr. APJ Abdul Kalam served as the Chief Scientific Adviser to the Government of India and led the Pokhran-II nuclear tests in 1998.",
+    "Dr. APJ Abdul Kalam became the 11th President of India in 2002 and served until 2007.",
+    "Dr. Vikram Sarabhai founded the Indian Space Research Organisation (ISRO) in 1969 and is considered the father of the Indian space programme.",
+    "Dr. Vikram Sarabhai passed away in 1971. After his death, Dr. Satish Dhawan took over as Chairman of ISRO in 1972.",
+    "ISRO successfully launched Chandrayaan-1 in 2008, which confirmed the presence of water molecules on the Moon.",
+    "ISRO's Chandrayaan-3 mission successfully landed on the south pole of the Moon on August 23, 2023, making India the first country to achieve this feat."
+  ],
+  "queries": [
+    "Who is the father of the Indian space programme?",
+    "Which ISRO mission first confirmed water on the Moon?"
+  ]
+}
