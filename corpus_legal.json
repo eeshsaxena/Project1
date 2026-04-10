@@ -1,0 +1,14 @@
+{
+  "docs": [
+    "The Indian Penal Code of 1860 defines murder under Section 302 with punishment of death or life imprisonment.",
+    "The Bharatiya Nyaya Sanhita (BNS) replaced the Indian Penal Code in 2024 and defines murder under Section 101.",
+    "The Criminal Procedure Code of 1973 governed criminal trials in India for over five decades.",
+    "The Bharatiya Nagarik Suraksha Sanhita (BNSS) replaced the Criminal Procedure Code in 2024.",
+    "Under the Indian Evidence Act of 1872, digital evidence was not originally admissible in court.",
+    "The Bharatiya Sakshya Adhiniyam of 2024 replaced the Indian Evidence Act and explicitly recognises electronic records as primary evidence."
+  ],
+  "queries": [
+    "Which law currently governs murder charges in India?",
+    "Is digital evidence admissible in Indian courts?"
+  ]
+}

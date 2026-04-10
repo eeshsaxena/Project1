@@ -1,0 +1,14 @@
+{
+  "docs": [
+    "Aspirin was approved by the FDA in 1950 for treating fever and pain.",
+    "Ibuprofen replaced Aspirin as the first-line treatment for fever in children in 1986 due to Aspirin's link to Reye's syndrome.",
+    "Aspirin is still recommended by cardiologists in 2023 for prevention of heart attacks in high-risk patients.",
+    "Metformin was introduced in 1957 as the primary drug for managing Type 2 Diabetes.",
+    "Insulin therapy has been used since 1921 when Banting and Best discovered insulin at the University of Toronto.",
+    "Ozempic (semaglutide) was approved by the FDA in 2017 for Type 2 Diabetes and gained approval for obesity treatment in 2021."
+  ],
+  "queries": [
+    "What is the current first-line treatment for fever in children?",
+    "Which drug is used for Type 2 Diabetes management?"
+  ]
+}
