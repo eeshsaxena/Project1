@@ -169,17 +169,24 @@ def _do_ingest(corpus_path: str):
 
 # ── Helper: serialise a KnowledgePath ───────────────────────────────────────
 def _kp(kp) -> dict:
+    # KnowledgePath may not have h/r/t fields — fall back to parsing context
+    ctx = kp.context or ""
+    parts = [p.strip() for p in ctx.split("->")]
+    head     = getattr(kp, "head",     parts[0] if len(parts) > 0 else "")
+    relation = getattr(kp, "relation", parts[1] if len(parts) > 1 else "")
+    tail     = getattr(kp, "tail",     parts[2] if len(parts) > 2 else "")
     return {
-        "head":     kp.head,
-        "relation": kp.relation,
-        "tail":     kp.tail,
-        "context":  kp.context,
+        "head":     head,
+        "relation": relation,
+        "tail":     tail,
+        "context":  ctx,
         "score":    round(float(kp.score or 0), 4),
-        "support":  kp.support,
-        "max_year": kp.max_year,
-        "delta_h":  round(float(kp.delta_h), 4) if kp.delta_h is not None else None,
+        "support":  getattr(kp, "support", 1),
+        "max_year": getattr(kp, "max_year", 0),
+        "delta_h":  round(float(kp.delta_h), 4) if getattr(kp, "delta_h", None) is not None else None,
         "corrective": bool(getattr(kp, "is_corrective", False)),
     }
+
 
 # ── API ──────────────────────────────────────────────────────────────────────
 

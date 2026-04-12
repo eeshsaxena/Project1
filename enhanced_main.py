@@ -297,10 +297,14 @@ class EnhancedGraphConstructor:
             tl = re.sub(r"'", "", rec.tail)
             yr = rec.year; sc = rec.support_count
             if yr:
-                q = (f"MERGE (a:Entity {{id:'{h}'}}) MERGE (b:Entity {{id:'{tl}'}}) "
+                hs = h.replace("'", "\\'")
+                ts = tl.replace("'", "\\'")
+                q = (f"MERGE (a:Entity {{id:'{hs}'}}) MERGE (b:Entity {{id:'{ts}'}}) "
                      f"MERGE (a)-[rel:{r} {{year:{yr}, support:{sc}}}]->(b)")
             else:
-                q = (f"MERGE (a:Entity {{id:'{h}'}}) MERGE (b:Entity {{id:'{tl}'}}) "
+                hs = h.replace("'", "\\'")
+                ts = tl.replace("'", "\\'")
+                q = (f"MERGE (a:Entity {{id:'{hs}'}}) MERGE (b:Entity {{id:'{ts}'}}) "
                      f"MERGE (a)-[rel:{r} {{support:{sc}}}]->(b)")
             try: self.graph.query(q); total += 1
             except Exception: pass
@@ -315,8 +319,10 @@ class EnhancedGraphConstructor:
                 a, b = ids[i], ids[j]
                 if difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio() >= 0.85 and a != b:
                     try:
+                        as_ = a.replace("'", "\\'")
+                        bs_ = b.replace("'", "\\'")
                         self.graph.query(
-                            f"MATCH (old:Entity {{id:'{b}'}}) MATCH (keep:Entity {{id:'{a}'}}) "
+                            f"MATCH (old:Entity {{id:'{bs_}'}}) MATCH (keep:Entity {{id:'{as_}'}}) "
                             f"CALL apoc.refactor.mergeNodes([keep,old],"
                             f"{{properties:'combine',mergeRels:true}}) YIELD node RETURN node")
                         merged += 1
@@ -436,7 +442,8 @@ class EnhancedGraphRetriever:
 
     def _deg_of(self, nid: str) -> int:
         if nid not in self._deg:
-            rows = self.graph.query(f"MATCH (n{{id:'{nid}'}})-[r]-() RETURN count(r) AS d")
+            ns = nid.replace("'", "\\'")
+            rows = self.graph.query(f"MATCH (n{{id:'{ns}'}})-[r]-() RETURN count(r) AS d")
             self._deg[nid] = rows[0]["d"] if rows else 0
         return self._deg[nid]
 
