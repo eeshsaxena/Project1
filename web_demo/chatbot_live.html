@@ -294,7 +294,8 @@ function renderStatus(d){
     lock(false);
     if(d.sample_queries?.length) injectSamples(d.sample_queries);
   }
-  if(d.status==='idle'&&!corpusLoaded) loadList();
+  if(!corpusLoaded) loadList();
+
 }
 let corpusLoaded=false;
 async function loadList(){
