@@ -264,6 +264,25 @@ nav{height:50px;display:flex;align-items:center;justify-content:space-between;
 const API = 'http://localhost:5000';
 let busy=false, mode='qa';
 let lcQ=0,v5Q=0,totalConf=0,confN=0,totalCon=0,totalStale=0,v5Times=[];
+let v5Ready=false, lcReady=false, srvStatus='idle';
+
+// ── v5 building banner ────────────────────────────────────────────────────
+function showV5Building(){
+  const m=document.getElementById('v5-msgs');
+  if(document.getElementById('v5-build-notice')) return;
+  const d=document.createElement('div');
+  d.id='v5-build-notice'; d.className='msg bot fu';
+  d.innerHTML='<div class="bbl v5-bbl" style="border-color:rgba(77,126,247,.3)">' +
+    '<span class="schema-box" style="font-size:.7rem">v5 knowledge graph is being built — LC is ready to query</span>' +
+    '<div style="font-size:.72rem;color:var(--dim);margin-top:.35rem">TruthfulRAG v5 requires building a Neo4j graph from your corpus. This takes 2-4 minutes. Both panels will activate when ready.</div>' +
+  '</div>';
+  m.appendChild(d); m.scrollTop=1e9;
+}
+function hideV5Building(){
+  const el=document.getElementById('v5-build-notice');
+  if(el) el.remove();
+}
+
 
 // ── Status polling ────────────────────────────────────────────────────────
 async function poll(){
@@ -287,15 +306,31 @@ function renderStatus(d){
   chip('c-lc',d.lc_ready,'LC');
   chip('c-v5',d.v5_ready,'v5');
   document.getElementById('setup-msg').textContent=d.message||'';
+  srvStatus=d.status;
+  v5Ready=d.v5_ready;
+  lcReady=d.lc_ready;
+
   if(d.status==='ingesting'){
     document.getElementById('load-btn').disabled=true;
-    lock(true);
+    // LC ready → only unlock input, show v5 building notice
+    if(d.lc_ready){
+      document.getElementById('q-input').disabled=busy;
+      document.getElementById('send-btn').disabled=busy;
+      document.getElementById('claim-input').disabled=busy;
+      document.getElementById('verify-btn').disabled=busy;
+      showV5Building();
+    } else {
+      lock(true);
+    }
   } else if(d.status==='ready'||d.status==='lc_only'){
+    hideV5Building();
     lock(false);
+    document.getElementById('load-btn').disabled=false;
     if(d.sample_queries?.length) injectSamples(d.sample_queries);
+  } else {
+    document.getElementById('load-btn').disabled=false;
   }
   if(!corpusLoaded) loadList();
-
 }
 let corpusLoaded=false;
 async function loadList(){
@@ -352,19 +387,37 @@ function setMode(m){
 async function send(){
   const q=document.getElementById('q-input').value.trim();
   if(!q||busy) return;
-  busy=true; lock(true);
+  busy=true;
+  document.getElementById('send-btn').disabled=true;
+  document.getElementById('q-input').disabled=true;
   userMsg(q);
   document.getElementById('q-input').value='';
-  const lt=addTyping('lc-msgs'), vt=addTyping('v5-msgs');
-  const [lr,vr]=await Promise.all([fetchAPI('/api/query/lc',{question:q}),fetchAPI('/api/query/v5',{question:q})]);
-  rm(lt,'lc-msgs'); rm(vt,'v5-msgs');
-  renderLC(lr); renderV5(vr);
+
+  const lt=addTyping('lc-msgs');
+  // Only query v5 if it's ready — otherwise show a waiting message
+  let vt=null;
+  if(v5Ready){ vt=addTyping('v5-msgs'); }
+  else { appendBbl('v5-msgs','v5-bbl',
+    '<span class="warn-box" style="font-size:.72rem">v5 knowledge graph is still building. Your LC answer is ready on the left. v5 will be available in a moment.</span>',
+    [{cls:'mt-warn',t:'v5 building'}]); }
+
+  const [lr, vr] = await Promise.all([
+    fetchAPI('/api/query/lc',{question:q}),
+    v5Ready ? fetchAPI('/api/query/v5',{question:q}) : Promise.resolve({_skipped:true})
+  ]);
+
+  rm(lt,'lc-msgs');
+  if(vt) rm(vt,'v5-msgs');
+  renderLC(lr);
+  if(!vr._skipped) renderV5(vr);
+
   // stats
-  lcQ++; v5Q++;
+  lcQ++;
   document.getElementById('s1').textContent=lcQ;
-  document.getElementById('s2').textContent=v5Q;
   document.getElementById('lc-qm').textContent=lcQ+' queries';
-  if(!vr.error){
+  if(v5Ready && !vr._skipped && !vr.error){
+    v5Q++;
+    document.getElementById('s2').textContent=v5Q;
     totalCon+=vr.contradictions_removed||0;
     document.getElementById('s3').textContent=totalCon;
     const st=(vr.total_paths||0)-(vr.selected_paths||0);
@@ -376,7 +429,9 @@ async function send(){
     document.getElementById('v5-confm').textContent=(confN?Math.round(totalConf/confN)+'%':'--')+' avg';
     document.getElementById('v5-conm').textContent=totalCon+' conflicts';
   }
-  busy=false; lock(false);
+  busy=false;
+  document.getElementById('send-btn').disabled=false;
+  document.getElementById('q-input').disabled=false;
 }
 
 // ── Claim verify ──────────────────────────────────────────────────────────
