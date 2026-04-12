@@ -772,8 +772,14 @@ class EnhancedPipeline:
         for i, kp in enumerate(paths):
             for j, kp2 in enumerate(paths):
                 if i>=j: continue
-                if (kp.relation==kp2.relation and kp.tail==kp2.tail
-                        and kp.head!=kp2.head and kp.max_year and kp2.max_year
+                # parse head/relation/tail safely from context string
+                def _parts(k):
+                    p = [x.strip() for x in (k.context or "").split("->")]
+                    return p[0] if len(p)>0 else "", p[1] if len(p)>1 else "", p[2] if len(p)>2 else ""
+                h1,r1,t1 = _parts(kp)
+                h2,r2,t2 = _parts(kp2)
+                if (r1 and r1==r2 and t1 and t1==t2 and h1!=h2
+                        and kp.max_year and kp2.max_year
                         and abs(kp.max_year-kp2.max_year)>=1):
                     loser = kp if kp.max_year<kp2.max_year else kp2
                     if loser not in removed_paths: removed_paths.append(loser)
@@ -797,7 +803,7 @@ class EnhancedPipeline:
         conf = self.resolver._confidence(
             delta_h=0, tau=0.25, support=best.support if best else 1, year_gap=year_gap)
         elapsed = time.time()-t0
-        verdict_sym = {"SUPPORTED":"✓","REFUTED":"✗","UNCERTAIN":"?"}[verdict]
+        verdict_sym = {"SUPPORTED":"[+]","REFUTED":"[-]","UNCERTAIN":"[?]"}[verdict]
         print(f"  {verdict_sym} Verdict : {verdict}")
         print(f"    Reason  : {reason}")
         print(f"    Confidence: {conf*100:.0f}%  Time={elapsed:.1f}s")
