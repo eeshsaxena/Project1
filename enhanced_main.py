@@ -1,7 +1,7 @@
 from __future__ import annotations
 import sys
 # ================================================================
-# TruthfulRAG v5 — ENHANCED (6 Novel Improvements over v4)
+# TruthfulRAG v5 — ENHANCED (8 Novel Improvements over v4)
 # Builds on: TruthfulRAG v4 (arXiv:2511.10375)
 # Novel additions:
 #   [N1] Cross-Document Corroboration Scoring
@@ -10,6 +10,8 @@ import sys
 #   [N4] Temporal Graph Snapshots (year-anchored filtering)
 #   [N6] Explanation-Chain Answer Generation
 #   [N7] Calibrated Answer Confidence Score
+#   [N8] Claim Verification Mode (SUPPORTED / REFUTED / UNCERTAIN)
+#   [N9] Adaptive Entropy Sampling (skip sampling for high/low-score paths)
 # Run: python enhanced_main.py
 # ================================================================
 import argparse, difflib, hashlib, json, logging, math, os, re, time
@@ -92,6 +94,12 @@ CFG: Dict[str, Any] = {
     "explanation_chain":      True,
     # ── [N7] Confidence Score ─────────────────────────────────────
     "confidence_weights":     {"h":0.40,"sup":0.30,"rec":0.30},
+    # ── [N8] Claim Verification ───────────────────────────────────
+    "verify_mode":            False,   # set True via --verify flag
+    # ── [N9] Adaptive Entropy Sampling ────────────────────────────
+    "adaptive_entropy":       True,    # skip sampling when path score is extreme
+    "adaptive_high_thresh":   0.70,    # path score above this → assume trustworthy
+    "adaptive_low_thresh":    0.05,    # path score below this → assume stale/skip
 }
 
 # Terminal-width separator — adapts to console, never magic-number
@@ -706,12 +714,88 @@ class EnhancedPipeline:
         paths, intent = self.retriever.retrieve(q)
         if not paths:
             return {"answer":"No relevant paths found.","meta":{},"elapsed":time.time()-t0}
+        # [N9] Adaptive entropy: skip sampling for extremes
+        if self.cfg.get("adaptive_entropy", True):
+            skipped = 0
+            for kp in paths:
+                if kp.score >= self.cfg.get("adaptive_high_thresh", 0.70):
+                    kp._skip_entropy = True; skipped += 1  # high-score = trust directly
+                elif kp.score <= self.cfg.get("adaptive_low_thresh", 0.05):
+                    kp._skip_entropy = True; skipped += 1  # near-zero = stale, skip
+            if self.cfg["verbose"] and skipped:
+                print(f"  [N9] Adaptive entropy: skipped sampling for {skipped}/{len(paths)} paths")
         sel, answer, meta = self.resolver.resolve(q, paths, intent)
         elapsed = time.time()-t0
         print(f"\n  ✓ Answer: {answer}")
         conf = meta.get("confidence", "N/A")
         print(f"  Confidence: {conf*100:.0f}%  Time={elapsed:.1f}s  {_CACHE.stats()}")
         return {"answer":answer,"paths":sel,"meta":meta,"elapsed":elapsed}
+
+    # ── [N8] CLAIM VERIFICATION ────────────────────────────────────────────
+    def verify(self, claim: str) -> Dict:
+        """[N8] Claim Verifier: check whether a stated claim is SUPPORTED,
+        REFUTED, or UNCERTAIN based on the current knowledge graph.
+
+        Unlike query(), which answers open questions, verify() takes a
+        declarative claim and returns a structured verdict with evidence.
+        """
+        VERIFY_PROMPT = (
+            "You are a fact-checker. Given the following knowledge graph evidence "
+            "and a claim, decide:\n"
+            "  - SUPPORTED  : the evidence clearly backs the claim\n"
+            "  - REFUTED    : the evidence clearly contradicts the claim\n"
+            "  - UNCERTAIN  : the evidence is insufficient to decide\n\n"
+            "Evidence from knowledge graph:\n{evidence}\n\n"
+            "Claim to verify: \"{claim}\"\n\n"
+            "Reply in EXACTLY this format (no extra text):\n"
+            "VERDICT: <SUPPORTED|REFUTED|UNCERTAIN>\n"
+            "REASON: <one sentence explaining why>"
+        )
+        t0 = time.time()
+        print(f"\n{SEP}\n  [N8] Verifying claim: \"{claim}\"\n{SEP}")
+        # reuse normal retrieval — treat claim as query
+        paths, intent = self.retriever.retrieve(claim)
+        if not paths:
+            return {"verdict":"UNCERTAIN","reason":"No relevant facts in knowledge graph.",
+                    "confidence":0.0,"elapsed":time.time()-t0}
+        # detect contradictions (may refute the claim automatically)
+        from enhanced_main import CURRENT_YEAR  # self-import safe
+        removed_paths = []
+        surviving = []
+        for i, kp in enumerate(paths):
+            for j, kp2 in enumerate(paths):
+                if i>=j: continue
+                if (kp.relation==kp2.relation and kp.tail==kp2.tail
+                        and kp.head!=kp2.head and kp.max_year and kp2.max_year
+                        and abs(kp.max_year-kp2.max_year)>=1):
+                    loser = kp if kp.max_year<kp2.max_year else kp2
+                    if loser not in removed_paths: removed_paths.append(loser)
+        surviving = [p for p in paths if p not in removed_paths]
+        evidence = "\n".join(f"- {kp.context} (year={kp.max_year}, support={kp.support})"
+                              for kp in (surviving or paths)[:5])
+        raw = cached_invoke(self.resolver.llm,
+                            VERIFY_PROMPT.format(evidence=evidence, claim=claim))
+        # parse structured reply
+        verdict = "UNCERTAIN"
+        reason  = raw
+        for line in raw.splitlines():
+            if line.startswith("VERDICT:"):
+                v = line.split(":",1)[1].strip().upper()
+                if v in ("SUPPORTED","REFUTED","UNCERTAIN"): verdict = v
+            elif line.startswith("REASON:"):
+                reason = line.split(":",1)[1].strip()
+        # confidence: higher if supported by recent, multi-source evidence
+        best = surviving[0] if surviving else (paths[0] if paths else None)
+        year_gap = CURRENT_YEAR - best.max_year if (best and best.max_year) else 5
+        conf = self.resolver._confidence(
+            delta_h=0, tau=0.25, support=best.support if best else 1, year_gap=year_gap)
+        elapsed = time.time()-t0
+        verdict_sym = {"SUPPORTED":"✓","REFUTED":"✗","UNCERTAIN":"?"}[verdict]
+        print(f"  {verdict_sym} Verdict : {verdict}")
+        print(f"    Reason  : {reason}")
+        print(f"    Confidence: {conf*100:.0f}%  Time={elapsed:.1f}s")
+        return {"verdict":verdict,"reason":reason,"confidence":conf,
+                "evidence_used":len(surviving or paths),"elapsed":elapsed}
 
 # ── COMPARISON RUNNER ─────────────────────────────────────────────
 def run_comparison(docs: List[str], queries: List[str]):
@@ -733,18 +817,20 @@ def run_comparison(docs: List[str], queries: List[str]):
     # Feature summary derived from active CFG — no hardcoded rows
     print(f"\n{BAR}\n  v5 Active Features\n{BAR}")
     features = [
-        ("[N1] Corroboration",      f"weight={CFG['corroboration_weight']}"),
-        ("[N2] Temporal decay",     f"lambda={CFG['temporal_decay_lambda']}  year={CURRENT_YEAR}"),
-        ("[N3] Hybrid retrieval",   "BM25+Semantic RRF" if CFG["use_hybrid_retrieval"] else "BM25 only"),
-        ("[N4] Temporal snapshot",  f"auto-detect from query"),
-        ("[N6] Explanation chain",  "ON" if CFG["explanation_chain"] else "OFF"),
-        ("[N7] Confidence score",   f"weights={CFG['confidence_weights']}"),
-        ("[A4+] Schema (auto)",      f"inferred from {CFG.get('schema_infer_sample',5)} docs"),
-        ("Entity types",            str(CFG["schema_entity_types"]) or "pending inference"),
-        ("Relation types",          str(CFG["schema_relation_types"]) or "pending inference"),
+        ("[N1] Corroboration",        f"weight={CFG['corroboration_weight']}"),
+        ("[N2] Temporal decay",        f"lambda={CFG['temporal_decay_lambda']}  year={CURRENT_YEAR}"),
+        ("[N3] Hybrid retrieval",      "BM25+Semantic RRF" if CFG["use_hybrid_retrieval"] else "BM25 only"),
+        ("[N4] Temporal snapshot",     "auto-detect from query"),
+        ("[N6] Explanation chain",     "ON" if CFG["explanation_chain"] else "OFF"),
+        ("[N7] Confidence score",      f"weights={CFG['confidence_weights']}"),
+        ("[N8] Claim verifier",        "Available via --verify \"claim\""),
+        ("[N9] Adaptive entropy",      f"ON  high={CFG['adaptive_high_thresh']}  low={CFG['adaptive_low_thresh']}" if CFG.get('adaptive_entropy') else "OFF"),
+        ("[A4+] Schema (auto)",        f"inferred from {CFG.get('schema_infer_sample',5)} docs"),
+        ("Entity types",              str(CFG["schema_entity_types"]) or "pending inference"),
+        ("Relation types",            str(CFG["schema_relation_types"]) or "pending inference"),
     ]
     for label, val in features:
-        print(f"  {label:<28} {val}")
+        print(f"  {label:<30} {val}")
     print(BAR)
     return results
 
@@ -825,11 +911,17 @@ Examples:
                     help="suppress verbose logging")
     ap.add_argument("--schema-sample", "-s", type=int, default=5, metavar="N",
                     help="docs sampled for schema auto-inference (default: 5)")
+    ap.add_argument("--verify",        "-V",  nargs="+", metavar="CLAIM",
+                    help="[N8] verify one or more claims against the ingested graph")
+    ap.add_argument("--no-adaptive",         action="store_true",
+                    help="[N9] disable adaptive entropy sampling (always sample all paths)")
     args = ap.parse_args()
 
-    if args.model:      CFG["llm_model"] = args.model
-    if args.no_verbose: CFG["verbose"]   = False
+    if args.model:       CFG["llm_model"] = args.model
+    if args.no_verbose:  CFG["verbose"]   = False
+    if args.no_adaptive: CFG["adaptive_entropy"] = False
     CFG["schema_infer_sample"] = args.schema_sample
+    VERIFY_CLAIMS = args.verify or []
 
     # ── Resolve corpus source (priority: --corpus > --docs > --interactive) ──
     DOCS: List[str]    = []
@@ -874,7 +966,18 @@ Examples:
 
     if not DOCS:
         print("  [ERROR] No documents provided. Exiting."); sys.exit(1)
-    if not QUERIES:
-        print("  [WARN] No queries provided — running ingest only.")
+    if not QUERIES and not VERIFY_CLAIMS:
+        print("  [WARN] No queries or claims — running ingest only.")
 
-    run_comparison(DOCS, QUERIES)
+    # ── Normal Q&A mode ──
+    if QUERIES or not VERIFY_CLAIMS:
+        run_comparison(DOCS, QUERIES)
+
+    # ── [N8] Claim Verification mode ──
+    if VERIFY_CLAIMS:
+        print(f"\n{'═'*72}\n  [N8] Claim Verification Mode\n{'═'*72}")
+        pipe = EnhancedPipeline()
+        if DOCS:  pipe.ingest(DOCS)   # re-use graph already built above if possible
+        for claim in VERIFY_CLAIMS:
+            result = pipe.verify(claim)
+            print()

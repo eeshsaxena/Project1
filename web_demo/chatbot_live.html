@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TruthfulRAG v5 — Live Chatbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#050507; --s1:#0b0b0f; --s2:#111118; --card:#13131a; --border:#1c1c28;
+  --text:#d4d4e0; --dim:#7a7a90; --accent:#4d7ef7; --dim-acc:#1a2550;
+  --red:#c94444; --green:#3a9444; --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
+  --line:1px solid var(--border);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;font-size:14px;}
+
+/* NAV */
+nav{height:50px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.5rem;background:rgba(5,5,7,.96);border-bottom:var(--line);flex-shrink:0;}
+.nav-brand{font-family:var(--mono);font-size:.8rem;color:var(--accent);}
+.nav-links{display:flex;gap:.1rem;}
+.nav-links a{font-size:.75rem;color:var(--dim);text-decoration:none;padding:.35rem .8rem;border-radius:4px;transition:color .15s;}
+.nav-links a:hover{color:var(--text);}
+.nav-right{display:flex;align-items:center;gap:.6rem;}
+.status-row{display:flex;align-items:center;gap:.45rem;}
+.s-chip{font-family:var(--mono);font-size:.6rem;padding:.18rem .5rem;border-radius:3px;border:var(--line);}
+.s-on{color:var(--green);border-color:rgba(58,148,68,.35);background:rgba(58,148,68,.07);}
+.s-off{color:var(--dim);background:rgba(255,255,255,.03);}
+.s-load{color:var(--accent);border-color:rgba(77,126,247,.35);}
+.back-a{font-size:.72rem;color:var(--dim);border:var(--line);border-radius:4px;padding:.25rem .7rem;text-decoration:none;transition:all .18s;}
+.back-a:hover{border-color:var(--accent);color:var(--accent);}
+
+/* SETUP */
+#setup{padding:.55rem 1.5rem;background:var(--s1);border-bottom:var(--line);
+  display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;flex-shrink:0;}
+.sl{font-family:var(--mono);font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;}
+.corpus-sel{background:var(--card);border:var(--line);color:var(--text);padding:.35rem .75rem;
+  border-radius:5px;font-size:.75rem;font-family:var(--mono);cursor:pointer;outline:none;min-width:220px;}
+.corpus-sel:focus{border-color:var(--accent);}
+.load-btn{background:var(--accent);border:none;color:#fff;padding:.35rem 1rem;border-radius:5px;
+  font-size:.75rem;font-weight:500;cursor:pointer;transition:all .18s;white-space:nowrap;font-family:var(--sans);}
+.load-btn:hover{background:#3a69d4;}
+.load-btn:disabled{opacity:.35;cursor:not-allowed;}
+#setup-msg{font-size:.72rem;color:var(--dim);flex:1;font-family:var(--mono);}
+
+/* SAMPLE ROW */
+#sample-row{display:none;padding:.4rem 1.5rem;background:rgba(255,255,255,.01);
+  border-bottom:var(--line);flex-shrink:0;flex-wrap:wrap;gap:.4rem;align-items:center;}
+#sample-row.show{display:flex;}
+.sq-lbl{font-family:var(--mono);font-size:.58rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;}
+.sq-btn{font-size:.68rem;background:transparent;border:var(--line);color:var(--dim);border-radius:4px;
+  padding:.22rem .6rem;cursor:pointer;transition:all .18s;font-family:var(--mono);}
+.sq-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* STATS */
+#stats{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);
+  border-bottom:var(--line);flex-shrink:0;}
+.sc{background:var(--bg);padding:.45rem .6rem;text-align:center;}
+.sv{font-family:var(--mono);font-size:.85rem;color:var(--accent);}
+.sk{font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-top:.1rem;}
+
+/* CHAT LAYOUT */
+#chat-layout{display:flex;flex:1;overflow:hidden;min-height:0;}
+.chat-col{display:flex;flex-direction:column;flex:1;border-right:var(--line);overflow:hidden;}
+.chat-col:last-child{border-right:none;}
+
+/* PANEL HEAD */
+.ph{padding:.6rem 1rem;border-bottom:var(--line);background:var(--s1);flex-shrink:0;display:flex;align-items:center;gap:.75rem;}
+.ph-tag{font-family:var(--mono);font-size:.6rem;padding:.18rem .5rem;border-radius:3px;font-weight:500;letter-spacing:.05em;}
+.ph-lc{color:var(--dim);border:var(--line);background:rgba(255,255,255,.03);}
+.ph-v5{color:var(--accent);border:1px solid rgba(77,126,247,.25);background:rgba(77,126,247,.07);}
+.ph-name{font-size:.82rem;font-weight:600;}
+.ph-sub{font-size:.64rem;color:var(--dim);}
+.ph-meta{margin-left:auto;display:flex;gap:.35rem;}
+.ph-m{font-family:var(--mono);font-size:.6rem;padding:.16rem .45rem;border-radius:3px;border:var(--line);color:var(--dim);}
+
+/* MESSAGES */
+.msgs{flex:1;overflow-y:auto;padding:.85rem;display:flex;flex-direction:column;gap:.65rem;min-height:0;}
+.msgs::-webkit-scrollbar{width:3px;}
+.msgs::-webkit-scrollbar-thumb{background:var(--border);}
+
+.msg{display:flex;flex-direction:column;gap:.25rem;}
+.msg.user{align-items:flex-end;}
+.msg.bot{align-items:flex-start;}
+.bbl{max-width:94%;padding:.6rem .9rem;border-radius:8px;font-size:.77rem;line-height:1.7;}
+.msg.user .bbl{background:var(--dim-acc);border:1px solid rgba(77,126,247,.25);color:#b8ccf4;border-radius:8px 8px 2px 8px;}
+.lc-bbl{background:rgba(255,255,255,.03);border:var(--line);border-radius:8px 8px 8px 2px;}
+.v5-bbl{background:rgba(77,126,247,.04);border:1px solid rgba(77,126,247,.15);border-radius:8px 8px 8px 2px;}
+
+.fact-rm{display:block;font-family:var(--mono);font-size:.64rem;color:var(--red);
+  border-left:2px solid var(--red);padding:.25rem .55rem;margin:.3rem 0;background:rgba(201,68,68,.05);line-height:1.5;}
+.fact-kp{display:block;font-family:var(--mono);font-size:.64rem;color:var(--green);
+  border-left:2px solid var(--green);padding:.25rem .55rem;margin:.3rem 0;background:rgba(58,148,68,.04);line-height:1.5;}
+.schema-box{display:block;font-family:var(--mono);font-size:.6rem;color:var(--accent);
+  border:1px solid rgba(77,126,247,.2);border-radius:4px;padding:.22rem .5rem;margin:.25rem 0;background:rgba(77,126,247,.05);}
+.warn-box{display:block;font-family:var(--mono);font-size:.65rem;color:var(--red);
+  border:1px solid rgba(201,68,68,.2);border-radius:4px;padding:.25rem .55rem;margin:.3rem 0;background:rgba(201,68,68,.05);}
+.info-box{display:block;font-size:.65rem;color:var(--green);
+  border:1px solid rgba(58,148,68,.2);border-radius:4px;padding:.25rem .55rem;margin:.3rem 0;background:rgba(58,148,68,.04);}
+
+/* confidence */
+.conf-row{display:flex;align-items:center;gap:.45rem;margin-top:.35rem;}
+.conf-bar{flex:1;height:3px;border-radius:2px;background:var(--border);}
+.conf-fill{height:100%;border-radius:2px;background:var(--accent);transition:width 1.2s ease;}
+.conf-pct{font-family:var(--mono);font-size:.65rem;color:var(--accent);}
+
+/* stats inside bubble */
+.bbl-stats{margin-top:.45rem;font-family:var(--mono);font-size:.6rem;color:var(--dim);display:flex;flex-wrap:wrap;gap:.5rem;}
+.bbl-stats b{color:var(--text);}
+
+/* msg tags */
+.mtags{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.2rem;}
+.mt{font-family:var(--mono);font-size:.58rem;padding:.14rem .45rem;border-radius:3px;border:var(--line);}
+.mt-t{color:var(--dim);}
+.mt-ok{color:var(--green);border-color:rgba(58,148,68,.3);background:rgba(58,148,68,.05);}
+.mt-warn{color:var(--red);border-color:rgba(201,68,68,.3);background:rgba(201,68,68,.05);}
+.mt-info{color:var(--accent);border-color:rgba(77,126,247,.3);background:rgba(77,126,247,.05);}
+.mt-dim{color:var(--dim);}
+
+/* typing */
+.typing{display:flex;gap:4px;align-items:center;padding:.5rem .7rem;}
+.typing i{display:block;width:5px;height:5px;border-radius:50%;background:var(--dim);animation:bounce .8s infinite;}
+.typing i:nth-child(2){animation-delay:.13s;}
+.typing i:nth-child(3){animation-delay:.26s;}
+
+.err-bbl{background:rgba(201,68,68,.06);border:1px solid rgba(201,68,68,.2);border-radius:8px;
+  padding:.6rem .9rem;font-size:.75rem;color:#e08080;max-width:94%;}
+
+/* INPUT */
+#input-area{border-top:var(--line);background:var(--s1);padding:.65rem 1.5rem;
+  display:flex;gap:.65rem;align-items:center;flex-shrink:0;}
+.mode-btns{display:flex;gap:.35rem;}
+.mbt{background:transparent;border:var(--line);color:var(--dim);padding:.35rem .8rem;
+  border-radius:5px;font-size:.73rem;font-weight:500;cursor:pointer;font-family:var(--sans);transition:all .18s;}
+.mbt.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.mbt:hover:not(.active){border-color:var(--dim);color:var(--text);}
+#q-input{flex:1;background:var(--card);border:var(--line);border-radius:6px;
+  padding:.55rem .9rem;color:var(--text);font-size:.78rem;font-family:var(--sans);outline:none;transition:border-color .18s;}
+#q-input:focus{border-color:var(--accent);}
+#q-input::placeholder{color:var(--dim);}
+#send-btn{background:var(--accent);border:none;color:#fff;padding:.55rem 1.3rem;border-radius:6px;
+  font-size:.78rem;font-weight:500;cursor:pointer;transition:all .18s;font-family:var(--sans);}
+#send-btn:hover{background:#3a69d4;}
+#send-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+/* VERIFY BAR */
+#verify-bar{display:none;border-top:var(--line);background:var(--s1);padding:.65rem 1.5rem;gap:.65rem;align-items:center;}
+#verify-bar.show{display:flex;}
+#claim-input{flex:1;background:var(--card);border:var(--line);border-radius:6px;
+  padding:.55rem .9rem;color:var(--text);font-size:.78rem;font-family:var(--sans);outline:none;transition:border-color .18s;}
+#claim-input:focus{border-color:var(--accent);}
+#claim-input::placeholder{color:var(--dim);}
+#verify-btn{background:transparent;border:1px solid var(--accent);color:var(--accent);
+  padding:.55rem 1.2rem;border-radius:6px;font-size:.78rem;font-weight:500;cursor:pointer;font-family:var(--sans);transition:all .18s;}
+#verify-btn:hover{background:var(--accent);color:#fff;}
+#verify-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+/* KEYFRAMES */
+@keyframes bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-5px);}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.fu{animation:fadeUp .3s ease;}
+</style>
+</head>
+<body style="display:flex;flex-direction:column;">
+
+<nav>
+  <div class="nav-brand">TruthfulRAG v5 &middot; Live Chat</div>
+  <div class="nav-links">
+    <a href="#stats">Stats</a>
+    <a href="chatbot.html">Pre-loaded Demo</a>
+  </div>
+  <div class="nav-right">
+    <div class="status-row">
+      <span class="s-chip s-off" id="c-ollama">Ollama</span>
+      <span class="s-chip s-off" id="c-neo4j">Neo4j</span>
+      <span class="s-chip s-off" id="c-lc">LC</span>
+      <span class="s-chip s-off" id="c-v5">v5</span>
+    </div>
+    <a class="back-a" href="index.html">Back to Showcase</a>
+  </div>
+</nav>
+
+<!-- SETUP BAR -->
+<div id="setup">
+  <span class="sl">Corpus:</span>
+  <select id="corpus-sel" class="corpus-sel" onchange="onSel()">
+    <option value="">Loading available corpora...</option>
+  </select>
+  <button id="load-btn" class="load-btn" onclick="loadCorpus()" disabled>Load and Build Graph</button>
+  <div id="setup-msg">Start server.py first, then select a corpus.</div>
+</div>
+
+<!-- SAMPLE QUERIES -->
+<div id="sample-row">
+  <span class="sq-lbl">Suggested queries:</span>
+</div>
+
+<!-- STATS STRIP -->
+<div id="stats">
+  <div class="sc"><div class="sv" id="s1">0</div><div class="sk">LC Queries</div></div>
+  <div class="sc"><div class="sv" id="s2">0</div><div class="sk">v5 Queries</div></div>
+  <div class="sc"><div class="sv" id="s3">0</div><div class="sk">Conflicts Resolved</div></div>
+  <div class="sc"><div class="sv" id="s4">0</div><div class="sk">Stale Removed</div></div>
+  <div class="sc"><div class="sv" id="s5">--</div><div class="sk">Avg Confidence</div></div>
+  <div class="sc"><div class="sv" id="s6">--</div><div class="sk">Avg v5 Time</div></div>
+</div>
+
+<!-- CHAT LAYOUT -->
+<div id="chat-layout">
+  <!-- LC -->
+  <div class="chat-col">
+    <div class="ph">
+      <span class="ph-tag ph-lc">LangChain RAG</span>
+      <div><div class="ph-name">Standard RAG</div><div class="ph-sub">chunk / embed / cosine / generate — no conflict detection</div></div>
+      <div class="ph-meta">
+        <span class="ph-m" id="lc-qm">0 queries</span>
+        <span class="ph-m">No confidence</span>
+        <span class="ph-m">No conflict check</span>
+      </div>
+    </div>
+    <div class="msgs" id="lc-msgs">
+      <div class="msg bot fu"><div class="bbl lc-bbl">
+        Standard LangChain RAG chatbot. I split your documents into fixed-size chunks, embed them, retrieve the top-K by cosine similarity, and generate an answer. I do not check for temporal conflicts, compute confidence, or verify claims. Load a corpus above and ask anything.
+      </div></div>
+    </div>
+  </div>
+
+  <!-- V5 -->
+  <div class="chat-col">
+    <div class="ph">
+      <span class="ph-tag ph-v5">TruthfulRAG v5</span>
+      <div><div class="ph-name">Conflict-Aware KG-RAG</div><div class="ph-sub">schema / graph / PPR / decay / entropy / confidence</div></div>
+      <div class="ph-meta">
+        <span class="ph-m" id="v5-qm">0 queries</span>
+        <span class="ph-m" id="v5-confm">-- avg conf</span>
+        <span class="ph-m" id="v5-conm">0 conflicts</span>
+      </div>
+    </div>
+    <div class="msgs" id="v5-msgs">
+      <div class="msg bot fu"><div class="bbl v5-bbl">
+        TruthfulRAG v5 chatbot. I build a knowledge graph from your corpus, score every fact by temporal decay (e^-lambda*t) times source corroboration, detect contradictions, filter surviving paths by entropy change (DeltaH), and return a calibrated confidence score with every answer. Load a corpus and ask anything, or switch to Claim Verify mode below.
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- INPUT BAR -->
+<div id="input-area">
+  <div class="mode-btns">
+    <button class="mbt active" id="tab-qa" onclick="setMode('qa')">Q and A</button>
+    <button class="mbt" id="tab-v" onclick="setMode('verify')">[N8] Claim Verify</button>
+  </div>
+  <input id="q-input" placeholder="Ask any question about the loaded corpus..." disabled onkeydown="if(event.key==='Enter')send()">
+  <button id="send-btn" onclick="send()" disabled>Send</button>
+</div>
+<div id="verify-bar">
+  <input id="claim-input" placeholder="Enter a claim to fact-check e.g. 'Aspirin is safe for children'" disabled>
+  <button id="verify-btn" onclick="verifyClaim()" disabled>Verify [N8]</button>
+</div>
+
+<script>
+const API = 'http://localhost:5000';
+let busy=false, mode='qa';
+let lcQ=0,v5Q=0,totalConf=0,confN=0,totalCon=0,totalStale=0,v5Times=[];
+
+// ── Status polling ────────────────────────────────────────────────────────
+async function poll(){
+  try{
+    const d=await(await fetch(`${API}/api/status`)).json();
+    renderStatus(d);
+  } catch {
+    document.getElementById('setup-msg').textContent='server.py not running — start it first.';
+    chip('c-ollama',false,'Ollama'); chip('c-neo4j',false,'Neo4j');
+    chip('c-lc',false,'LC'); chip('c-v5',false,'v5');
+  }
+}
+function chip(id,ok,lbl){
+  const el=document.getElementById(id);
+  el.textContent=lbl;
+  el.className='s-chip '+(ok?'s-on':'s-off');
+}
+function renderStatus(d){
+  chip('c-ollama',d.ollama,'Ollama');
+  chip('c-neo4j',d.neo4j,'Neo4j');
+  chip('c-lc',d.lc_ready,'LC');
+  chip('c-v5',d.v5_ready,'v5');
+  document.getElementById('setup-msg').textContent=d.message||'';
+  if(d.status==='ingesting'){
+    document.getElementById('load-btn').disabled=true;
+    lock(true);
+  } else if(d.status==='ready'||d.status==='lc_only'){
+    lock(false);
+    if(d.sample_queries?.length) injectSamples(d.sample_queries);
+  }
+  if(d.status==='idle'&&!corpusLoaded) loadList();
+}
+let corpusLoaded=false;
+async function loadList(){
+  corpusLoaded=true;
+  try{
+    const list=await(await fetch(`${API}/api/corpora`)).json();
+    const sel=document.getElementById('corpus-sel');
+    sel.innerHTML='<option value="">-- select a corpus --</option>';
+    list.forEach(c=>{
+      const o=document.createElement('option');
+      o.value=c.path;
+      o.textContent=`${c.name} (${c.docs} docs, ${c.queries} queries)`;
+      sel.appendChild(o);
+    });
+    document.getElementById('load-btn').disabled=false;
+  } catch(e){ document.getElementById('setup-msg').textContent='Could not load corpus list.'; }
+}
+function onSel(){ document.getElementById('load-btn').disabled=!document.getElementById('corpus-sel').value; }
+async function loadCorpus(){
+  const path=document.getElementById('corpus-sel').value;
+  if(!path) return;
+  document.getElementById('load-btn').disabled=true;
+  document.getElementById('setup-msg').textContent='Ingesting — LC is fast, v5 graph build takes 1-3 min...';
+  await fetch(`${API}/api/load`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({corpus_path:path})});
+}
+let samplesInjected=false;
+function injectSamples(qs){
+  if(samplesInjected) return; samplesInjected=true;
+  const row=document.getElementById('sample-row');
+  row.classList.add('show');
+  qs.forEach(q=>{
+    const b=document.createElement('button');
+    b.className='sq-btn'; b.textContent=q.length>55?q.slice(0,53)+'...':q;
+    b.onclick=()=>{ document.getElementById('q-input').value=q; send(); };
+    row.appendChild(b);
+  });
+}
+function lock(l){
+  document.getElementById('send-btn').disabled=l||busy;
+  document.getElementById('q-input').disabled=l||busy;
+  document.getElementById('claim-input').disabled=l||busy;
+  document.getElementById('verify-btn').disabled=l||busy;
+}
+function setMode(m){
+  mode=m;
+  document.getElementById('tab-qa').classList.toggle('active',m==='qa');
+  document.getElementById('tab-v').classList.toggle('active',m==='verify');
+  document.getElementById('input-area').style.display=m==='qa'?'':'none';
+  const vb=document.getElementById('verify-bar');
+  m==='verify'?vb.classList.add('show'):vb.classList.remove('show');
+}
+
+// ── Send Q&A ─────────────────────────────────────────────────────────────
+async function send(){
+  const q=document.getElementById('q-input').value.trim();
+  if(!q||busy) return;
+  busy=true; lock(true);
+  userMsg(q);
+  document.getElementById('q-input').value='';
+  const lt=addTyping('lc-msgs'), vt=addTyping('v5-msgs');
+  const [lr,vr]=await Promise.all([fetchAPI('/api/query/lc',{question:q}),fetchAPI('/api/query/v5',{question:q})]);
+  rm(lt,'lc-msgs'); rm(vt,'v5-msgs');
+  renderLC(lr); renderV5(vr);
+  // stats
+  lcQ++; v5Q++;
+  document.getElementById('s1').textContent=lcQ;
+  document.getElementById('s2').textContent=v5Q;
+  document.getElementById('lc-qm').textContent=lcQ+' queries';
+  if(!vr.error){
+    totalCon+=vr.contradictions_removed||0;
+    document.getElementById('s3').textContent=totalCon;
+    const st=(vr.total_paths||0)-(vr.selected_paths||0);
+    if(st>0) totalStale+=st;
+    document.getElementById('s4').textContent=totalStale;
+    if(vr.confidence!=null){ totalConf+=vr.confidence; confN++; document.getElementById('s5').textContent=Math.round(totalConf/confN)+'%'; }
+    if(vr.elapsed){ v5Times.push(vr.elapsed); document.getElementById('s6').textContent=(v5Times.reduce((a,b)=>a+b,0)/v5Times.length).toFixed(1)+'s'; }
+    document.getElementById('v5-qm').textContent=v5Q+' queries';
+    document.getElementById('v5-confm').textContent=(confN?Math.round(totalConf/confN)+'%':'--')+' avg';
+    document.getElementById('v5-conm').textContent=totalCon+' conflicts';
+  }
+  busy=false; lock(false);
+}
+
+// ── Claim verify ──────────────────────────────────────────────────────────
+async function verifyClaim(){
+  const c=document.getElementById('claim-input').value.trim();
+  if(!c||busy) return;
+  busy=true; lock(true);
+  addMsg('lc-msgs','user',`Claim: "${c}"`);
+  addMsg('v5-msgs','user',`[N8] Verify: "${c}"`);
+  const lt=addTyping('lc-msgs'), vt=addTyping('v5-msgs');
+  await sleep(700);
+  rm(lt,'lc-msgs');
+  appendBbl('lc-msgs','lc-bbl',`<span class="warn-box">LangChain RAG has no Claim Verification mode. It cannot return SUPPORTED / REFUTED / UNCERTAIN verdicts. This is exclusive to TruthfulRAG v5 [N8].</span>`,
+    [{cls:'mt-warn',t:'N8 not available in standard RAG'}]);
+  const vr=await fetchAPI('/api/verify',{claim:c});
+  rm(vt,'v5-msgs');
+  renderVerify(vr);
+  document.getElementById('claim-input').value='';
+  busy=false; lock(false);
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────
+function renderLC(d){
+  if(d.error){ appendErr('lc-msgs',d.error); return; }
+  const scores=(d.top_scores||[]).map(s=>s.toFixed(3)).join(', ');
+  const html=`${d.answer}
+    <div class="bbl-stats">
+      <span>Chunks: <b>${d.chunks||'?'}</b></span>
+      <span>Top cosine scores: <b>${scores||'--'}</b></span>
+      <span>Conflicts detected: <b style="color:var(--red)">0</b></span>
+      <span>Confidence: <b style="color:var(--red)">None</b></span>
+      <span>Time: <b>${d.elapsed}s</b></span>
+    </div>`;
+  appendBbl('lc-msgs','lc-bbl',html,[{cls:'mt-t',t:d.elapsed+'s'},{cls:'mt-dim',t:'No conflict check'},{cls:'mt-dim',t:'No confidence'}]);
+}
+function renderV5(d){
+  if(d.error){ appendErr('v5-msgs',d.error); return; }
+  const paths=d.paths||[];
+  const kept=paths.filter(p=>p.corrective||(p.delta_h!=null&&p.delta_h<0)||p.score>0.3);
+  const removed=paths.filter(p=>!kept.includes(p));
+  let html='';
+  if(d.intent) html+=`<span class="schema-box">intent=${d.intent} | strategy=${d.strategy||'--'}</span>`;
+  removed.slice(0,3).forEach(p=>{
+    const decay=p.max_year?` (decay=e^-0.08x${2026-p.max_year}=${Math.exp(-0.08*(2026-p.max_year)).toFixed(4)})`:'';
+    html+=`<span class="fact-rm">- ${p.head} / ${p.relation} / ${p.tail}${decay}</span>`;
+  });
+  kept.slice(0,4).forEach(p=>{
+    html+=`<span class="fact-kp">+ ${p.head} / ${p.relation} / ${p.tail}${p.max_year?' ['+p.max_year+']':''} score=${p.score}</span>`;
+  });
+  html+=`<div style="margin-top:.35rem">${d.answer}</div>`;
+  const conf=d.confidence||0;
+  html+=`<div class="conf-row"><div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div><span class="conf-pct">${conf}%</span></div>`;
+  html+=`<div class="bbl-stats">
+    <span>Paths total: <b>${d.total_paths||'?'}</b></span>
+    <span>Retained: <b>${d.selected_paths||'?'}</b></span>
+    <span>Contradictions: <b style="color:${d.contradictions_removed?'var(--accent)':'var(--dim)'}">${d.contradictions_removed||0}</b></span>
+    <span>Low-score removed: <b style="color:var(--red)">${removed.length}</b></span>
+    <span>Time: <b>${d.elapsed}s</b></span>
+  </div>`;
+  const tags=[{cls:'mt-t',t:d.elapsed+'s'},{cls:conf>=70?'mt-ok':conf>=50?'mt-info':'mt-warn',t:'Conf: '+conf+'%'}];
+  if(d.contradictions_removed>0) tags.push({cls:'mt-info',t:d.contradictions_removed+' conflict(s)'});
+  if(removed.length>0) tags.push({cls:'mt-warn',t:removed.length+' removed'});
+  appendBbl('v5-msgs','v5-bbl',html,tags);
+}
+function renderVerify(d){
+  if(d.error){ appendErr('v5-msgs',d.error); return; }
+  const v=d.verdict||'UNCERTAIN';
+  const vc={'SUPPORTED':'info-box','REFUTED':'warn-box','UNCERTAIN':''}[v]||'';
+  const conf=d.confidence!=null?Math.round(d.confidence<=1?d.confidence*100:d.confidence):0;
+  let html=`<span class="${vc||'schema-box'}" style="font-weight:600">Verdict: ${v}</span>`;
+  html+=`<div style="font-size:.72rem;color:var(--dim);margin:.35rem 0;">${d.reason||'--'}</div>`;
+  html+=`<div class="conf-row"><div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div><span class="conf-pct">${conf}%</span></div>`;
+  html+=`<div class="bbl-stats"><span>Evidence paths: <b>${d.evidence_used||'?'}</b></span><span>Time: <b>${d.elapsed?d.elapsed.toFixed(2)+'s':'--'}</b></span></div>`;
+  appendBbl('v5-msgs','v5-bbl',html,[{cls:'mt-t',t:d.elapsed?d.elapsed.toFixed(2)+'s':'--'},{cls:conf>=70?'mt-ok':'mt-info',t:'Conf: '+conf+'%'},{cls:'mt-info',t:'[N8] Claim Verifier'}]);
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────
+function userMsg(q){ addMsg('lc-msgs','user',`You: ${q}`); addMsg('v5-msgs','user',`You: ${q}`); }
+function addMsg(cid,role,html){
+  const d=document.createElement('div'); d.className=`msg ${role} fu`;
+  d.innerHTML=`<div class="bbl ${role==='user'?'':''}">${html}</div>`;
+  const c=document.getElementById(cid); c.appendChild(d); c.scrollTop=1e9;
+}
+function appendBbl(cid,bblCls,html,tags){
+  const d=document.createElement('div'); d.className='msg bot fu';
+  let t=tags.map(x=>`<span class="mt ${x.cls}">${x.t}</span>`).join('');
+  d.innerHTML=`<div class="bbl ${bblCls}">${html}</div><div class="mtags">${t}</div>`;
+  const c=document.getElementById(cid); c.appendChild(d); c.scrollTop=1e9;
+}
+function appendErr(cid,msg){
+  const d=document.createElement('div'); d.className='msg bot fu';
+  d.innerHTML=`<div class="err-bbl">Error: ${msg}</div>`;
+  const c=document.getElementById(cid); c.appendChild(d); c.scrollTop=1e9;
+}
+function addTyping(cid){
+  const d=document.createElement('div'); d.className='msg bot fu';
+  d.innerHTML=`<div class="bbl lc-bbl"><div class="typing"><i></i><i></i><i></i></div></div>`;
+  const c=document.getElementById(cid); c.appendChild(d); c.scrollTop=1e9; return d;
+}
+function rm(el,cid){ document.getElementById(cid).removeChild(el); }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function fetchAPI(path,body){
+  try{ return await(await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json(); }
+  catch(e){ return {error:String(e)}; }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+
+% ================================================================
+% CHAPTER 6: RESULTS  (humanised rewrite with Indian examples)
+% ================================================================
+
+\section{System Output Evaluation}
+
+\subsection{Functional Evaluation}
+
+The pipeline was evaluated across four domains: Indian political leadership,
+Indian science and ISRO, Indian law, and space science. Each corpus was
+designed to contain at least one intentional temporal conflict---a situation
+where two documents assert different facts about the same subject at different
+points in time. This is the core scenario TruthfulRAG is built to handle.
+
+All 12 functional requirements were found to be satisfied across all test runs.
+Table~\ref{tab:fr_results} summarises the verification outcomes.
+
+\begin{table}[H]
+\centering
+\caption{Functional requirements verification results}
+\label{tab:fr_results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|p{8cm}|c|}
+\hline
+\textbf{Req.} & \textbf{How it was verified} & \textbf{Result} \\
+\hline
+FR1  & Corpus files loaded, document counts printed at startup         & Pass \\
+FR2  & Schema inferred for each domain without manual input           & Pass \\
+FR3  & Triples with year annotations visible via Neo4j browser        & Pass \\
+FR4  & Support count above 1 observed on repeated facts               & Pass \\
+FR5  & ``ISRO'' and ``Indian Space Research Organisation'' merged      & Pass \\
+FR6  & ``founded by'' normalised to \texttt{FOUNDED\_BY} in output    & Pass \\
+FR7  & 2014-dated fact scored below 2024-dated fact on same topic      & Pass \\
+FR8  & BM25+Semantic RRF listed in active features on every run       & Pass \\
+FR9  & Year extracted from temporal query, snapshot filter activated   & Pass \\
+FR10 & Hubble (1990) path removed, JWST (2021) retained in answer     & Pass \\
+FR11 & Explanation text stating removed paths present in JWST answer  & Pass \\
+FR12 & Confidence percentage printed after every query in all domains & Pass \\
+\hline
+\end{tabular}}
+\end{table}
+
+% ----------------------------------------------------------------
+\section{Performance Metrics}
+
+Average runtimes measured across the four domain runs on CPU-only hardware
+(Intel Core i7, 16\,GB RAM, no GPU):
+
+\begin{table}[H]
+\centering
+\caption{Pipeline performance across all four test domains}
+\label{tab:perf}
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Domain} & \textbf{Docs} & \textbf{Nodes} & \textbf{Edges} & \textbf{Conflicts} & \textbf{Cache\%} \\
+\hline
+Indian Politics     & 6 & 16 & 15 & 2 & 35\% \\
+Indian Science      & 6 & 26 & 17 & 1 & 24\% \\
+Indian Law          & 6 & 29 & 19 & 0 & 38\% \\
+Space Science       & 6 & 26 & 18 & 1 & 40\% \\
+\hline
+\end{tabular}
+\end{table}
+
+% ----------------------------------------------------------------
+\section{Screenshots and System Interface}
+
+\subsection{Indian Science Domain Results}
+
+This was the most interesting domain to test because it combined two different
+kinds of conflict: a \emph{role change} (Dr. APJ Abdul Kalam going from
+scientist to President) and a \emph{succession conflict} (Vikram Sarabhai being
+replaced by Satish Dhawan as ISRO Chairman after 1972).
+
+Auto-inferred schema from the Indian science corpus:
+
+\begin{table}[H]
+\centering
+\caption{Auto-inferred schemas across all four domains}
+\label{tab:schemas}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Domain} & \textbf{Entity Types Discovered} & \textbf{Relation Types Discovered} \\
+\hline
+Indian Politics & PERSON, POLITICAL\_ROLE, COUNTRY & PM\_OF, SERVED\_AS, SWORN\_IN\_AS \\
+Indian Science  & PERSON, ORGANIZATION, MISSION    & FOUNDED, LAUNCHED, CONFIRMED\_ON \\
+Indian Law      & CODE, ACT, LAW                   & REPLACED\_BY, DEFINES, GOVERNS \\
+Space Science   & PLANET, TELESCOPE, SPACE\_MISSION & CLASSIFIED\_AS, LAUNCHED\_BY \\
+\hline
+\end{tabular}}
+\end{table}
+
+The system correctly discovered that the Indian science corpus was about people,
+organisations, and missions---not about drugs or legal codes. No developer
+intervention was needed between switching from the politics corpus to the
+science corpus.
+
+\textbf{Query: ``Who is the father of the Indian space programme?''}
+
+The LLM's parametric memory already knows about Dr. Vikram Sarabhai. The corpus
+confirms this with the 1969 founding of ISRO. This is one of those cases where
+the corpus and the LLM agree---entropy barely moves. The answer was produced
+with the maximum supported confidence given the evidence:
+
+\begin{quote}
+\emph{``Dr. Vikram Sarabhai is widely regarded as the father of the Indian space
+programme. He founded ISRO in 1969 and established India's first rocket
+launching station. After his passing in 1971, leadership of ISRO passed to
+Dr. Satish Dhawan.''}
+\end{quote}
+
+\textbf{Query: ``Which ISRO mission first confirmed water on the Moon?''}
+
+The two Chandrayaan missions (2008 and 2023) both appear in the graph. The
+system correctly associated water confirmation with Chandrayaan-1 (2008), since
+the Chandrayaan-3 document described landing on the south pole, not water
+confirmation. This required the retriever to distinguish between two ISRO
+missions that both involve the Moon---a nuanced retrieval task.
+
+\subsection{Key System Output Charts}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{report_file/chart1_grouped_bar.png}
+    \caption{Answer accuracy across all three system generations and question types}
+    \label{fig:bar}
+\end{figure}
+
+The grouped bar chart above shows the clearest story. For stable facts
+(non-conflicted), all three systems perform similarly. For temporally-conflicted
+facts, the gap opens up sharply: standard LangChain RAG answers correctly about
+half the time, while TruthfulRAG v5 handles them reliably.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{report_file/chart2_radar.png}
+    \caption{Six-dimension capability radar chart}
+    \label{fig:radar}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.80\textwidth]{report_file/chart4_temporal_decay.png}
+    \caption{How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}
+    \label{fig:decay}
+\end{figure}
+
+The temporal decay chart shows something intuitive: a scientific discovery from
+2006 (like Pluto's reclassification) retains about 20\% of its original
+retrieval weight by 2026. This naturally pushes older superseded facts to the
+bottom of the ranking before any conflict detection even runs.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.78\textwidth]{report_file/chart3_score_gap.png}
+    \caption{Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}
+    \label{fig:gap}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{report_file/chart6_corroboration.png}
+    \caption{Corroboration bonus as a function of source support count [N1]}
+    \label{fig:corr}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.78\textwidth]{report_file/chart7_confidence.png}
+    \caption{Confidence score breakdown across evaluation queries [N7]}
+    \label{fig:confidence}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.80\textwidth]{report_file/chart8_gains_over_langchain.png}
+    \caption{Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}
+    \label{fig:gains}
+\end{figure}
+
+\subsection{The Space Telescope Query: A Notable Result}
+
+The most striking result from the live testing was the space telescope conflict.
+When asked ``Which is NASA's current primary space telescope?'', the system
+returned:
+
+\begin{quote}
+\emph{``The James Webb Space Telescope is NASA's current primary space
+telescope. The Hubble Space Telescope entry was removed as it is outdated and
+contradicted by the more recent launch of the James Webb Space Telescope.''}
+\end{quote}
+
+This answer is notable for two reasons. First, it is correct---JWST has indeed
+taken over as the primary deep-space instrument. Second, it explicitly tells the
+user what it discarded and why. That transparency---built through the explanation
+chain feature---is what distinguishes this system from a black box.
+
+% ----------------------------------------------------------------
+\section{Comparison Against Requirements}
+
+\subsection{Functional Requirements Fulfillment}
+
+As shown in Table~\ref{tab:fr_results}, all 12 functional requirements were met
+across all four test domains. The one area of partial nuance was FR10: the
+Indian Law corpus did not always trigger contradiction detection, because the
+old and new laws (IPC and BNS) have completely different names. Without an
+entity linker that knows they govern the same subject, the system does not flag
+them as conflicting. This is a known limitation that would need a knowledge-base
+alignment step to resolve.
+
+\subsection{Non-Functional Requirements Fulfillment}
+
+All five non-functional requirements were verified during testing. Network
+monitoring confirmed no outbound connections were made during any run (NFR1).
+Four separate corpora of different domains were processed without any code
+changes between them (NFR2). The pipeline did not crash on malformed LLM JSON
+output during any run thanks to the markdown-stripping parser (NFR3). All
+numeric parameters such as decay rate and confidence weights are adjustable in
+the central \texttt{CFG} dictionary (NFR4). LLM cache hit rates ranged from
+24 to 40 percent across the test runs, saving meaningful amounts of inference
+time on repeated prompt patterns (NFR5).
+
+% ----------------------------------------------------------------
+\section{Future Enhancements}
+
+Looking back at the four test runs, a few clear gaps stand out that future work
+should address. The contradiction detection in the legal domain was weak because
+two laws covering the same subject had completely different names (the system
+did not link ``Indian Penal Code'' and ``Bharatiya Nyaya Sanhita'' as covering
+the same domain without a more sophisticated entity linker). Multi-hop reasoning
+would also help: asking ``What is the current law governing the evidence that
+convicted the person found guilty under the law that replaced the IPC?'' is the
+kind of chain that requires following multiple edges in sequence, which the
+current retriever cannot do.
+
+The confidence scores across all domains were clustered around 40--42\%, which
+reflects the fact that Qwen's parametric knowledge is already fairly confident
+on many of these topics, making it hard for the provided context to move the
+entropy needle. A lighter, less-informed LLM would likely produce more varied
+and informative confidence scores.

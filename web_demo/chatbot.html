@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TruthfulRAG v5 — Live Chatbot Comparison</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #07090f; --surface: #0d1117; --card: #111827;
+  --border: #1f2d45; --text: #e2e8f0; --muted: #6b7f9a;
+  --v5: #3b82f6; --v5g: rgba(59,130,246,.18); --v5d: #1e3a6e;
+  --lc: #f97316; --lcg: rgba(249,115,22,.18); --lcd: #7c2d12;
+  --green: #22c55e; --red: #ef4444; --yellow: #f59e0b; --purple: #a855f7;
+  --conf-high: #22c55e; --conf-mid: #f59e0b; --conf-low: #ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box;} html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;background:rgba(7,9,15,.9);
+  backdrop-filter:blur(20px);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px;}
+.nav-brand{font-weight:700;color:var(--v5);font-size:1rem;}
+.nav-brand span{color:var(--muted);font-weight:400;}
+.nav-links{display:flex;gap:.25rem;}
+.nav-links a{color:var(--muted);text-decoration:none;padding:.4rem 1rem;border-radius:7px;font-size:.82rem;font-weight:500;transition:all .2s;}
+.nav-links a:hover,.nav-links a.active{color:var(--text);background:var(--surface);}
+.back-btn{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:var(--v5);padding:.35rem 1rem;border-radius:7px;font-size:.8rem;text-decoration:none;transition:all .2s;}
+.back-btn:hover{background:var(--v5);color:#fff;}
+
+/* HERO STRIP */
+.hero-strip{padding:80px 2rem 2rem;text-align:center;
+  background:radial-gradient(ellipse 70% 40% at 50% 0%,rgba(59,130,246,.1) 0%,transparent 70%);}
+.hero-strip h1{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;margin-bottom:.75rem;}
+.hero-strip h1 em{font-style:normal;background:linear-gradient(135deg,var(--v5),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hero-strip p{color:var(--muted);font-size:.95rem;max-width:600px;margin:0 auto 1.5rem;}
+.metric-pills{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin-bottom:2rem;}
+.pill{background:var(--card);border:1px solid var(--border);border-radius:20px;
+  padding:.4rem 1.1rem;font-size:.78rem;display:flex;align-items:center;gap:.5rem;}
+.pill-dot{width:7px;height:7px;border-radius:50%;}
+
+/* PIPELINE VISUAL */
+#pipeline-section{padding:2rem;background:var(--surface);border-bottom:1px solid var(--border);}
+.pipeline-label{text-align:center;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:1.5rem;}
+.pipeline-track{display:grid;grid-template-columns:1fr 60px 1fr;gap:0;max-width:1100px;margin:0 auto;align-items:start;}
+.pipe-col{display:flex;flex-direction:column;gap:0;}
+.pipe-center{display:flex;flex-direction:column;align-items:center;gap:0;}
+.pipe-step{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:.85rem 1rem;margin-bottom:.5rem;position:relative;transition:all .3s;
+  opacity:.45;
+}
+.pipe-step.active{opacity:1;}
+.pipe-step.lc-step.active{border-color:rgba(249,115,22,.5);background:rgba(249,115,22,.06);}
+.pipe-step.v5-step.active{border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.06);}
+.pipe-step.lc-step.done.fail{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.05);}
+.pipe-step.v5-step.done.pass{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.04);}
+.ps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem;}
+.ps-title{font-size:.78rem;font-weight:600;}
+.ps-badge{font-size:.62rem;padding:.15rem .5rem;border-radius:5px;font-weight:600;}
+.badge-lc{background:rgba(249,115,22,.18);color:var(--lc);}
+.badge-v5{background:rgba(59,130,246,.18);color:var(--v5);}
+.badge-fail{background:rgba(239,68,68,.18);color:#f87171;}
+.badge-pass{background:rgba(34,197,94,.18);color:#4ade80;}
+.ps-metric{font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace;line-height:1.5;}
+.ps-metric .hi{color:#4ade80;font-weight:600;}
+.ps-metric .lo{color:#f87171;font-weight:600;}
+.ps-metric .neu{color:#60a5fa;}
+.center-arrow{font-size:.9rem;color:var(--muted);opacity:.4;margin:6px 0;line-height:1;}
+.vs-badge{background:var(--border);border-radius:8px;padding:.4rem .6rem;font-size:.7rem;font-weight:700;color:var(--muted);margin:6px 0;}
+
+/* MAIN CHAT LAYOUT */
+.chat-layout{display:grid;grid-template-columns:1fr 1fr;gap:0;max-width:100%;height:calc(100vh - 310px);min-height:550px;}
+@media(max-width:900px){.chat-layout{grid-template-columns:1fr;height:auto;}}
+
+.chat-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);}
+.chat-panel:last-child{border-right:none;}
+.chat-header{
+  padding:1rem 1.25rem;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:.85rem;flex-shrink:0;
+}
+.ch-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.ch-lc{background:rgba(249,115,22,.18);}
+.ch-v5{background:rgba(59,130,246,.18);}
+.ch-name{font-size:.9rem;font-weight:700;}
+.ch-sub{font-size:.72rem;color:var(--muted);}
+.ch-live{display:flex;align-items:center;gap:.4rem;font-size:.68rem;color:var(--green);margin-left:auto;}
+.live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 1.5s infinite;}
+
+/* METRIC BAR in header */
+.metric-bar-row{display:flex;gap:.5rem;padding:.6rem 1.25rem;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);flex-shrink:0;}
+.mbr-item{flex:1;text-align:center;}
+.mbr-val{font-size:.85rem;font-weight:700;}
+.mbr-lbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.mbr-val.v5-color{color:var(--v5);}
+.mbr-val.lc-color{color:var(--lc);}
+.mbr-val.green{color:var(--green);}
+.mbr-val.red{color:var(--red);}
+.mbr-val.yellow{color:var(--yellow);}
+
+/* MESSAGES */
+.chat-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.85rem;}
+.chat-messages::-webkit-scrollbar{width:4px;}
+.chat-messages::-webkit-scrollbar-track{background:transparent;}
+.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+.msg{max-width:88%;display:flex;flex-direction:column;gap:.35rem;}
+.msg.user{align-self:flex-end;}
+.msg.bot{align-self:flex-start;}
+.msg-bubble{
+  padding:.7rem 1rem;border-radius:12px;font-size:.82rem;line-height:1.65;
+}
+.msg.user .msg-bubble{background:var(--v5d);border:1px solid rgba(59,130,246,.35);color:#c7d9ff;border-radius:12px 12px 3px 12px;}
+.msg.bot .msg-bubble{background:var(--card);border:1px solid var(--border);border-radius:12px 12px 12px 3px;}
+.lc-bot .msg-bubble{border-color:rgba(249,115,22,.25);background:rgba(249,115,22,.05);}
+.v5-bot .msg-bubble{border-color:rgba(59,130,246,.2);}
+
+.msg-meta{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;}
+.mmeta{font-size:.62rem;padding:.15rem .5rem;border-radius:5px;font-weight:600;}
+.meta-time{background:rgba(255,255,255,.06);color:var(--muted);}
+.meta-conf-high{background:rgba(34,197,94,.12);color:#4ade80;}
+.meta-conf-mid{background:rgba(245,158,11,.12);color:#fbbf24;}
+.meta-conf-low{background:rgba(239,68,68,.12);color:#f87171;}
+.meta-conflict{background:rgba(168,85,247,.12);color:#c084fc;}
+.meta-warn{background:rgba(239,68,68,.12);color:#f87171;}
+.meta-ok{background:rgba(34,197,94,.1);color:#4ade80;}
+.meta-none{background:rgba(107,127,154,.1);color:var(--muted);}
+
+.removed-fact{background:rgba(239,68,68,.08);border-left:3px solid #f87171;padding:.35rem .6rem;border-radius:0 6px 6px 0;font-family:'JetBrains Mono',monospace;font-size:.68rem;margin:.4rem 0;color:#f87171;}
+.kept-fact{background:rgba(34,197,94,.06);border-left:3px solid #4ade80;padding:.35rem .6rem;border-radius:0 6px 6px 0;font-family:'JetBrains Mono',monospace;font-size:.68rem;margin:.4rem 0;color:#4ade80;}
+.warn-box{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:6px;padding:.4rem .7rem;font-size:.72rem;color:#fca5a5;margin:.4rem 0;}
+.info-schema{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:6px;padding:.4rem .7rem;font-size:.68rem;color:#93c5fd;margin:.4rem 0;font-family:'JetBrains Mono',monospace;}
+
+/* CONFIDENCE RING */
+.conf-ring-row{display:flex;align-items:center;gap:.5rem;margin-top:.35rem;}
+.conf-bar-mini{flex:1;height:4px;border-radius:3px;background:rgba(255,255,255,.07);}
+.conf-fill-mini{height:100%;border-radius:3px;transition:width 1.2s ease;}
+.conf-pct{font-size:.68rem;font-weight:700;min-width:28px;}
+
+/* TYPING */
+.typing{display:flex;gap:3px;align-items:center;padding:.5rem .75rem;}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:typing .8s infinite;}
+.typing span:nth-child(2){animation-delay:.15s;}
+.typing span:nth-child(3){animation-delay:.3s;}
+@keyframes typing{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-5px);}}
+
+/* INPUT BAR */
+.chat-input-bar{
+  padding:.85rem 1.25rem;border-top:1px solid var(--border);
+  display:flex;gap:.75rem;flex-shrink:0;background:rgba(255,255,255,.01);
+}
+.preset-btns{display:none;}
+.chat-input{
+  flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:.6rem 1rem;color:var(--text);font-size:.82rem;
+  font-family:'Inter',sans-serif;outline:none;transition:border-color .2s;
+}
+.chat-input:focus{border-color:var(--v5);}
+.send-btn{
+  background:var(--v5);border:none;color:#fff;padding:.6rem 1.2rem;
+  border-radius:10px;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;
+}
+.send-btn:hover{background:#2563eb;}
+.send-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* PRESET QUERIES */
+.preset-section{padding:.75rem 2rem;background:rgba(255,255,255,.015);border-bottom:1px solid var(--border);}
+.preset-label{font-size:.68rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;}
+.presets{display:flex;gap:.5rem;flex-wrap:wrap;}
+.preset{
+  background:transparent;border:1px solid var(--border);border-radius:7px;
+  color:var(--muted);padding:.35rem .85rem;font-size:.75rem;cursor:pointer;transition:all .2s;
+}
+.preset:hover{border-color:var(--v5);color:var(--v5);background:rgba(59,130,246,.07);}
+.preset.active-preset{border-color:var(--v5);color:var(--v5);background:rgba(59,130,246,.1);}
+
+/* SCOREBOARD */
+#scoreboard{padding:1.5rem 2rem;background:var(--surface);border-top:1px solid var(--border);}
+.sb-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;max-width:900px;margin:0 auto;}
+.sb-cell{background:var(--bg);padding:1rem;text-align:center;}
+.sb-val{font-size:1.5rem;font-weight:700;}
+.sb-lbl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:.2rem;}
+.sb-val.green{color:var(--green);}
+.sb-val.red{color:var(--red);}
+.sb-val.blue{color:var(--v5);}
+.sb-val.orange{color:var(--lc);}
+
+/* PIPELINE TRACE OVERLAY */
+.trace-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;margin-bottom:1.5rem;
+}
+.trace-header{display:flex;align-items:center;gap:.75rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);}
+.trace-title{font-size:.8rem;font-weight:600;}
+.trace-sub{font-size:.7rem;color:var(--muted);}
+.trace-steps{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);}
+.trace-step{background:var(--bg);padding:.75rem 1rem;}
+.trace-step.lc-tr{background:rgba(249,115,22,.03);}
+.trace-step.v5-tr{background:rgba(59,130,246,.03);}
+.ts-head{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;}
+.ts-head.lc{color:var(--lc);}
+.ts-head.v5{color:var(--v5);}
+.ts-body{font-size:.72rem;color:var(--muted);line-height:1.6;}
+.ts-body .hi{color:#4ade80;}
+.ts-body .lo{color:#f87171;}
+.ts-body .neu{color:#93c5fd;}
+
+/* ANIMATIONS */
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+@keyframes slideIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.fade-in{animation:fadeIn .4s ease;}
+
+/* SCROLLBAR */
+html::-webkit-scrollbar{width:5px;}
+html::-webkit-scrollbar-track{background:var(--surface);}
+html::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">TruthfulRAG <span>v5 · Chatbot Comparison</span></div>
+  <div class="nav-links">
+    <a href="#pipeline-section" class="active">Pipeline</a>
+    <a href="#chat-area">Chatbot</a>
+    <a href="#scoreboard">Scoreboard</a>
+  </div>
+  <a href="index.html" class="back-btn">← Back to Showcase</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero-strip">
+  <h1>Same Query. <em>Completely Different</em> Processing.</h1>
+  <p>Ask a question to both bots simultaneously. Watch the pipeline trace show exactly where and why TruthfulRAG v5 diverges — with quantified metrics at every step.</p>
+  <div class="metric-pills">
+    <div class="pill"><div class="pill-dot" style="background:#f97316"></div> LangChain RAG — blind retrieval</div>
+    <div class="pill"><div class="pill-dot" style="background:#3b82f6"></div> TruthfulRAG v5 — conflict-aware KG-RAG</div>
+    <div class="pill"><div class="pill-dot" style="background:#22c55e"></div> 8 novel features · Real output traces</div>
+  </div>
+</div>
+
+<!-- PRESET QUERIES -->
+<div class="preset-section">
+  <div class="preset-label">Try a pre-loaded query:</div>
+  <div class="presets">
+    <button class="preset" onclick="runPreset(0)">🏛 Who is India's current PM?</button>
+    <button class="preset" onclick="runPreset(1)">⚖️ Which law governs murder in India?</button>
+    <button class="preset" onclick="runPreset(2)">🔭 How many planets in the solar system?</button>
+    <button class="preset" onclick="runPreset(3)">💊 Can children take aspirin for fever?</button>
+    <button class="preset" onclick="runPreset(4)">🚀 NASA's current primary space telescope?</button>
+    <button class="preset" onclick="runPreset(5)">🌙 Which ISRO mission confirmed Moon water?</button>
+    <button class="preset" onclick="runPreset(6)">💉 First-line treatment for Type 2 diabetes?</button>
+  </div>
+</div>
+
+<!-- PIPELINE VISUAL TRACE -->
+<div id="pipeline-section">
+  <div class="pipeline-label">⚡ Live Pipeline Trace — processing your query step by step</div>
+  <div class="pipeline-track">
+    <!-- LC Column -->
+    <div class="pipe-col" id="lc-pipe">
+      <div class="pipe-step lc-step" id="lp1">
+        <div class="ps-head"><span class="ps-title">1 · Load &amp; Chunk</span><span class="ps-badge badge-lc">LangChain</span></div>
+        <div class="ps-metric" id="lp1m">Splits text into fixed chunks<br><span class="lo">No date extraction</span></div>
+      </div>
+      <div class="pipe-step lc-step" id="lp2">
+        <div class="ps-head"><span class="ps-title">2 · Embed → Vector Store</span><span class="ps-badge badge-lc">LangChain</span></div>
+        <div class="ps-metric" id="lp2m">FAISS cosine similarity<br><span class="lo">No relationship structure</span></div>
+      </div>
+      <div class="pipe-step lc-step" id="lp3">
+        <div class="ps-head"><span class="ps-title">3 · Retrieve Top-K</span><span class="ps-badge badge-lc">LangChain</span></div>
+        <div class="ps-metric" id="lp3m">K=4 chunks retrieved<br><span class="lo">No conflict check</span></div>
+      </div>
+      <div class="pipe-step lc-step" id="lp4">
+        <div class="ps-head"><span class="ps-title">4 · Generate (raw)</span><span class="ps-badge badge-lc">LangChain</span></div>
+        <div class="ps-metric" id="lp4m">LLM sees all chunks<br><span class="lo">No confidence score</span></div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="pipe-center">
+      <span class="vs-badge">VS</span>
+      <span class="center-arrow">↕</span>
+      <span class="center-arrow">↕</span>
+      <span class="center-arrow">↕</span>
+      <span class="center-arrow">↕</span>
+      <span class="center-arrow">↕</span>
+      <span class="center-arrow">↕</span>
+      <span class="center-arrow">↕</span>
+    </div>
+
+    <!-- V5 Column -->
+    <div class="pipe-col" id="v5-pipe">
+      <div class="pipe-step v5-step" id="vp1">
+        <div class="ps-head"><span class="ps-title">1 · Schema + KG Build</span><span class="ps-badge badge-v5">v5 [A4+]</span></div>
+        <div class="ps-metric" id="vp1m">Auto-infers entity/relation types<br><span class="neu">Extracts (head, rel, tail, year)</span></div>
+      </div>
+      <div class="pipe-step v5-step" id="vp2">
+        <div class="ps-head"><span class="ps-title">2 · Hybrid BM25+Semantic RRF</span><span class="ps-badge badge-v5">v5 [N3]</span></div>
+        <div class="ps-metric" id="vp2m">RRF fusion score computed<br><span class="neu">PPR walks from seed entities</span></div>
+      </div>
+      <div class="pipe-step v5-step" id="vp3">
+        <div class="ps-head"><span class="ps-title">3 · Score + Conflict Detect</span><span class="ps-badge badge-v5">v5 [N1,N2,N6]</span></div>
+        <div class="ps-metric" id="vp3m">Temporal decay × corroboration<br><span class="neu">Contradiction check on year</span></div>
+      </div>
+      <div class="pipe-step v5-step" id="vp4">
+        <div class="ps-head"><span class="ps-title">4 · Entropy Filter + Confidence</span><span class="ps-badge badge-v5">v5 [N7,N9]</span></div>
+        <div class="ps-metric" id="vp4m">ΔH computed per path<br><span class="neu">Confidence score output</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT AREA -->
+<div id="chat-area" style="max-width:100%;">
+  <div class="chat-layout">
+
+    <!-- LANGCHAIN PANEL -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <div class="ch-icon ch-lc">🔗</div>
+        <div>
+          <div class="ch-name">LangChain RAG</div>
+          <div class="ch-sub">Standard retrieval — no conflict detection</div>
+        </div>
+        <div class="ch-live"><span class="live-dot"></span> Ready</div>
+      </div>
+      <div class="metric-bar-row">
+        <div class="mbr-item"><div class="mbr-val lc-color" id="lc-queries">0</div><div class="mbr-lbl">Queries</div></div>
+        <div class="mbr-item"><div class="mbr-val red" id="lc-conflicts">0</div><div class="mbr-lbl">Conflicts Missed</div></div>
+        <div class="mbr-item"><div class="mbr-val yellow" id="lc-avgtime">—</div><div class="mbr-lbl">Avg Time</div></div>
+        <div class="mbr-item"><div class="mbr-val red" id="lc-wrong">0</div><div class="mbr-lbl">Wrong/Stale</div></div>
+      </div>
+      <div class="chat-messages" id="lc-messages">
+        <div class="msg bot lc-bot fade-in">
+          <div class="msg-bubble">Hi! I'm the <strong>standard LangChain RAG</strong> bot. I retrieve documents by cosine similarity and generate answers from whatever chunks I find — including contradictory or outdated ones. Try asking me a question!</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input class="chat-input" id="lc-input" placeholder="Ask something…" disabled>
+        <button class="send-btn" id="lc-send" onclick="sendQuery()" disabled>Send</button>
+      </div>
+    </div>
+
+    <!-- V5 PANEL -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <div class="ch-icon ch-v5">🧠</div>
+        <div>
+          <div class="ch-name">TruthfulRAG v5</div>
+          <div class="ch-sub">Knowledge graph · 8 novel features · conflict-aware</div>
+        </div>
+        <div class="ch-live"><span class="live-dot"></span> Ready</div>
+      </div>
+      <div class="metric-bar-row">
+        <div class="mbr-item"><div class="mbr-val v5-color" id="v5-queries">0</div><div class="mbr-lbl">Queries</div></div>
+        <div class="mbr-item"><div class="mbr-val green" id="v5-conflicts">0</div><div class="mbr-lbl">Conflicts Resolved</div></div>
+        <div class="mbr-item"><div class="mbr-val yellow" id="v5-avgconf">—</div><div class="mbr-lbl">Avg Confidence</div></div>
+        <div class="mbr-item"><div class="mbr-val green" id="v5-correct">0</div><div class="mbr-lbl">Correct Answers</div></div>
+      </div>
+      <div class="chat-messages" id="v5-messages">
+        <div class="msg bot v5-bot fade-in">
+          <div class="msg-bubble">Hi! I'm <strong>TruthfulRAG v5</strong>. I build a knowledge graph from your documents, detect temporal contradictions, score facts by recency + source support, and generate answers with a calibrated confidence score. Try the presets above!</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input class="chat-input" id="v5-input" placeholder="Ask something…" disabled style="display:none">
+        <button class="send-btn" id="v5-send" disabled style="display:none">Send</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- LIVE SCOREBOARD -->
+<div id="scoreboard">
+  <div class="pipeline-label" style="margin-bottom:1rem;">📊 Running Scoreboard</div>
+  <div class="sb-grid">
+    <div class="sb-cell"><div class="sb-val green" id="sb-conf">—</div><div class="sb-lbl">v5 Avg Confidence</div></div>
+    <div class="sb-cell"><div class="sb-val blue" id="sb-conflicts">0</div><div class="sb-lbl">Total Conflicts Resolved</div></div>
+    <div class="sb-cell"><div class="sb-val red" id="sb-stale">0</div><div class="sb-lbl">Stale Facts Removed</div></div>
+    <div class="sb-cell"><div class="sb-val green" id="sb-correct">0 / 0</div><div class="sb-lbl">v5 Correct vs LC Wrong</div></div>
+  </div>
+</div>
+
+<script>
+// ─── RESPONSE DATABASE ──────────────────────────────────────────────────────
+const QUERIES = [
+  // 0: India PM
+  {
+    q: "Who is the current Prime Minister of India?",
+    domain: "Indian Politics",
+    conflict_year_gap: 10,
+    pipe: {
+      lp1m:"3 chunks | <span class='lo'>No temporal metadata</span>",
+      lp2m:"Similarity: 0.81, 0.74, 0.69 | <span class='lo'>Old & new facts equal rank</span>",
+      lp3m:"4 chunks returned | <span class='lo'>2014 doc ranked #1</span>",
+      lp4m:"<span class='lo'>Raw context passed — LLM guesses</span>",
+      vp1m:"Schema: <span class='neu'>PERSON, POLITICAL_ROLE → PM_OF, SWORN_IN_AS</span>",
+      vp2m:"BM25 rank: [Modi#2014=1, Modi#2024=2] | RRF fuses → <span class='hi'>2024 rises</span>",
+      vp3m:"<span class='lo'>Modi#2014</span> score=0.12 (decay e^−0.08×10=0.45, BUT older) | <span class='hi'>Modi#2024</span>=0.76 | <span class='hi'>1 conflict resolved</span>",
+      vp4m:"ΔH(2014)=+0.12 <span class='lo'>discard</span> | ΔH(2024)=−0.18 <span class='hi'>keep</span> | <span class='hi'>Conf: 57%</span>",
+    },
+    lc: {
+      answer: "Based on retrieved documents, Narendra Modi became Prime Minister of India in 2014. He leads the BJP and has been in power since.",
+      time: "1.2s", chunks: 4, conflicts_missed: 1,
+      wrong: true, warn: "2014 fact cited as current — 10 years stale",
+      metas: [{cls:"meta-time",t:"1.2s"},{cls:"meta-none",t:"No conflict check"},{cls:"meta-warn",t:"⚠ Stale 2014 fact cited"}],
+    },
+    v5: {
+      answer: "Narendra Modi is the current Prime Minister of India, having been sworn in for a third consecutive term in June 2024 after the general election results.",
+      removed: ["✕ Modi SWORN_IN_AS PM [2014] — decay score: 0.12 (10-year gap)"],
+      kept:    ["✓ Modi SWORN_IN_AS PM [2024] — score: 0.76 — retained"],
+      schema: "PERSON, POLITICAL_ROLE → SWORN_IN_AS, PM_OF",
+      conf: 57, time: "3.1s", conflicts: 1, stale_removed: 1, correct: true,
+      metas: [{cls:"meta-time",t:"3.1s"},{cls:"meta-conflict",t:"1 conflict resolved"},{cls:"meta-conf-mid",t:"Conf: 57%"},{cls:"meta-ok",t:"Current fact cited"}],
+    }
+  },
+  // 1: Law
+  {
+    q: "Which law currently governs murder charges in India?",
+    domain: "Indian Law",
+    conflict_year_gap: 164,
+    pipe: {
+      lp1m:"3 chunks | <span class='lo'>IPC [1860] and BNS [2024] in corpus</span>",
+      lp2m:"Similarity: IPC=0.83, BNS=0.78 | <span class='lo'>IPC ranked HIGHER due to frequency</span>",
+      lp3m:"IPC Section 302 retrieved first | <span class='lo'>164-year-old law returned as primary</span>",
+      lp4m:"<span class='lo'>LLM cites IPC without checking if still operative</span>",
+      vp1m:"Schema: <span class='neu'>LAW, CODE → REPLACED_BY, DEFINES, GOVERNS</span>",
+      vp2m:"BM25: IPC=1, BNS=2 | Semantic: BNS=1, IPC=2 | RRF: <span class='hi'>BNS=1 (REPLACED_BY edge found)</span>",
+      vp3m:"IPC[1860] decay: e^−0.08×166≈<span class='lo'>0.000001</span> | BNS[2024]: <span class='hi'>0.92</span> | <span class='hi'>1 conflict resolved</span>",
+      vp4m:"REPLACED_BY edge forces discard of IPC | <span class='hi'>Conf: 71%</span> | 3 corroborating sources",
+    },
+    lc: {
+      answer: "The Indian Penal Code (IPC), specifically Section 302, governs murder in India. It prescribes punishment of death or life imprisonment. The Bharatiya Nyaya Sanhita was also mentioned in documents.",
+      time: "1.1s", chunks: 3, conflicts_missed: 1,
+      wrong: true, warn: "Repealed IPC cited — BNS 2024 not correctly prioritised",
+      metas: [{cls:"meta-time",t:"1.1s"},{cls:"meta-none",t:"No recency check"},{cls:"meta-warn",t:"⚠ Citing repealed law"}],
+    },
+    v5: {
+      answer: "Murder in India is currently governed by the Bharatiya Nyaya Sanhita (BNS, 2024) under Section 101, which came into force in July 2024. The Indian Penal Code of 1860 was formally repealed by the BNS.",
+      removed: ["✕ IPC Section 302 [1860] — temporal decay ≈ 0.000001 (164-year gap)","✕ REPLACED_BY edge: IPC → BNS forces discard"],
+      kept:    ["✓ BNS Section 101 [2024] — score: 0.92 — current governing law"],
+      schema: "LAW, CODE → REPLACED_BY, DEFINES, GOVERNS",
+      conf: 71, time: "3.4s", conflicts: 1, stale_removed: 2, correct: true,
+      metas: [{cls:"meta-time",t:"3.4s"},{cls:"meta-conflict",t:"164-yr gap resolved"},{cls:"meta-conf-mid",t:"Conf: 71%"},{cls:"meta-ok",t:"Current law cited"}],
+    }
+  },
+  // 2: Planets
+  {
+    q: "How many planets are in our solar system?",
+    domain: "Space Science",
+    conflict_year_gap: 76,
+    pipe: {
+      lp1m:"3 chunks | <span class='lo'>1930 Pluto classification + 2006 IAU reclassification</span>",
+      lp2m:"Similarity: 1930-doc=0.79, 2006-doc=0.76 | <span class='lo'>Older doc slightly higher rank</span>",
+      lp3m:"Both docs retrieved | <span class='lo'>LLM sees contradictory counts: 9 vs 8</span>",
+      lp4m:"<span class='lo'>LLM hedges: 'The number has been debated…'</span>",
+      vp1m:"Schema: <span class='neu'>PLANET, BODY → CLASSIFIED_AS, RECLASSIFIED_AS</span>",
+      vp2m:"BM25: 1930=1, 2006=2 | Semantic: 2006=1 | RRF: <span class='hi'>2006 doc = rank 1</span>",
+      vp3m:"Pluto[1930] decay: e^−0.08×96≈<span class='lo'>0.0004</span> | IAU[2006]: <span class='hi'>0.53</span> | <span class='hi'>1 conflict resolved</span>",
+      vp4m:"ΔH(1930)=+0.31 discard | ΔH(2006)=−0.22 keep | <span class='hi'>Conf: 79%</span>",
+    },
+    lc: {
+      answer: "Our solar system contains 9 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, and Pluto. The IAU also reclassified Pluto in 2006.",
+      time: "0.9s", chunks: 3, conflicts_missed: 1,
+      wrong: true, warn: "Says '9 planets' — 1930 classification used, 76 years outdated",
+      metas: [{cls:"meta-time",t:"0.9s"},{cls:"meta-none",t:"No temporal reasoning"},{cls:"meta-warn",t:"⚠ Wrong: 9 planets cited"}],
+    },
+    v5: {
+      answer: "There are 8 planets in our solar system. The International Astronomical Union (IAU) reclassified Pluto as a dwarf planet in 2006, reducing the count from 9 to 8. The eight planets are Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.",
+      removed: ["✕ Pluto CLASSIFIED_AS planet [1930] — decay ≈ 0.0004 (96-year gap)"],
+      kept:    ["✓ IAU RECLASSIFIED_AS dwarf_planet [2006] — score: 0.53 — retained"],
+      schema: "PLANET, BODY → CLASSIFIED_AS, RECLASSIFIED_AS",
+      conf: 79, time: "2.8s", conflicts: 1, stale_removed: 1, correct: true,
+      metas: [{cls:"meta-time",t:"2.8s"},{cls:"meta-conflict",t:"76-yr conflict resolved"},{cls:"meta-conf-high",t:"Conf: 79%"},{cls:"meta-ok",t:"Correct: 8 planets"}],
+    }
+  },
+  // 3: Aspirin
+  {
+    q: "Can children take aspirin for reducing fever?",
+    domain: "Medical",
+    conflict_year_gap: 35,
+    pipe: {
+      lp1m:"4 chunks | <span class='lo'>1950s aspirin guidelines + 1986 WHO warning</span>",
+      lp2m:"Similarity: 1950s-doc=0.88 (high freq mentions) | <span class='lo'>Medical frequency bias</span>",
+      lp3m:"1950s aspirin doc returned rank #1 | <span class='lo'>Safety-critical outdated info at top</span>",
+      lp4m:"<span class='lo'>LLM follows 1950s guidance — DANGEROUS output</span>",
+      vp1m:"Schema: <span class='neu'>DRUG, CONDITION → TREATS, CONTRAINDICATED_FOR, REPLACED_BY</span>",
+      vp2m:"Semantic: CONTRAINDICATED_FOR edge found | RRF: <span class='hi'>WHO[1986] rises to rank 1</span>",
+      vp3m:"aspirin[1950s] decay: e^−0.08×75≈<span class='lo'>0.002</span> | WHO[1986]: <span class='hi'>0.31</span> | CONTRAINDICATED edge forces discard<br><span class='hi'>83% confidence — safety reversal detected</span>",
+      vp4m:"ΔH discard 1950s | <span class='hi'>Conf: 83%</span> | <span class='hi'>SAFETY WARNING generated</span>",
+    },
+    lc: {
+      answer: "Yes, aspirin can be used to reduce fever in children. It is an effective analgesic and antipyretic agent. Dosage should be adjusted for the child's weight.",
+      time: "1.0s", chunks: 4, conflicts_missed: 1,
+      wrong: true, warn: "DANGEROUS — 1950s guideline cited. WHO 1986 reversal completely missed.",
+      metas: [{cls:"meta-time",t:"1.0s"},{cls:"meta-none",t:"No safety check"},{cls:"meta-warn",t:"⚠ DANGEROUS: outdated guideline"}],
+    },
+    v5: {
+      answer: "No. Aspirin is contraindicated in children under 16 due to the risk of Reye's syndrome — a serious condition causing liver and brain damage. This was established by the WHO in 1986. Paracetamol or ibuprofen are the current recommended alternatives for fever in children.",
+      removed: ["✕ Aspirin TREATS fever_children [1950s] — decay ≈ 0.002 (75 years old)"],
+      kept:    ["✓ WHO [1986]: aspirin CONTRAINDICATED_FOR children — Reye's syndrome risk","✓ Paracetamol RECOMMENDED_FOR children_fever [current standard of care]"],
+      schema: "DRUG, CONDITION → TREATS, CONTRAINDICATED_FOR",
+      conf: 83, time: "3.6s", conflicts: 1, stale_removed: 1, correct: true,
+      warnbox: "⚠️ Safety-critical conflict: 1950s guideline OVERRIDDEN by 1986 WHO warning",
+      metas: [{cls:"meta-time",t:"3.6s"},{cls:"meta-conflict",t:"Safety-critical reversal"},{cls:"meta-conf-high",t:"Conf: 83%"},{cls:"meta-ok",t:"Correct safety guidance"}],
+    }
+  },
+  // 4: JWST
+  {
+    q: "What is NASA's current primary space telescope?",
+    domain: "Space Science",
+    conflict_year_gap: 31,
+    pipe: {
+      lp1m:"3 chunks | <span class='lo'>Hubble[1990] mentioned 8× — JWST[2021] only 3×</span>",
+      lp2m:"Similarity: Hubble=0.87 (frequency bias) | JWST=0.81 | <span class='lo'>Hubble ranked first</span>",
+      lp3m:"Hubble chunk returned as top result | <span class='lo'>31-year-older instrument cited first</span>",
+      lp4m:"<span class='lo'>LLM: 'Hubble is NASA's primary…' — wrong in 2024</span>",
+      vp1m:"Schema: <span class='neu'>TELESCOPE, MISSION → IS_PRIMARY, LAUNCHED_BY, SUPERSEDED_BY</span>",
+      vp2m:"Temporal priority: JWST[2021] > Hubble[1990] | RRF: <span class='hi'>JWST rank 1</span>",
+      vp3m:"Hubble[1990] decay: e^−0.08×35=<span class='lo'>0.059</span> | JWST[2021]: <span class='hi'>0.67</span> | <span class='hi'>1 conflict resolved</span>",
+      vp4m:"Hubble ΔH=+0.09 discard | JWST ΔH=−0.25 keep | <span class='hi'>Conf: 77%</span>",
+    },
+    lc: {
+      answer: "The Hubble Space Telescope is NASA's primary space observatory. Launched in 1990, it has provided stunning images of distant galaxies. The James Webb Space Telescope was also mentioned as a newer instrument.",
+      time: "1.1s", chunks: 3, conflicts_missed: 1,
+      wrong: true, warn: "Hubble cited as primary — JWST (2021) not correctly identified as successor",
+      metas: [{cls:"meta-time",t:"1.1s"},{cls:"meta-none",t:"No recency detection"},{cls:"meta-warn",t:"⚠ Hubble cited as current"}],
+    },
+    v5: {
+      answer: "The James Webb Space Telescope (JWST), launched in December 2021, is NASA's current primary space telescope. It superseded Hubble as the flagship observatory and observes in infrared wavelengths, enabling it to see further back in cosmic time than Hubble.",
+      removed: ["✕ Hubble[1990] IS_PRIMARY_TELESCOPE — decay=0.059 (35-yr gap)"],
+      kept:    ["✓ JWST[2021] IS_PRIMARY_TELESCOPE — score: 0.67 — retained"],
+      schema: "TELESCOPE → IS_PRIMARY, SUPERSEDED_BY, LAUNCHED_BY",
+      conf: 77, time: "3.0s", conflicts: 1, stale_removed: 1, correct: true,
+      metas: [{cls:"meta-time",t:"3.0s"},{cls:"meta-conflict",t:"31-yr conflict resolved"},{cls:"meta-conf-high",t:"Conf: 77%"},{cls:"meta-ok",t:"JWST correctly identified"}],
+    }
+  },
+  // 5: Moon water
+  {
+    q: "Which ISRO mission first confirmed water on the Moon?",
+    domain: "Indian Science",
+    conflict_year_gap: 0,
+    pipe: {
+      lp1m:"2 chunks | <span class='neu'>CY-1[2008] and CY-3[2023] both mention Moon</span>",
+      lp2m:"Similarity: CY-3=0.84 (newer, more mentioned) | CY-1=0.79 | <span class='lo'>CY-3 returned first</span>",
+      lp3m:"CY-3 chunk at rank 1 | <span class='lo'>Risk of misattribution</span>",
+      lp4m:"<span class='lo'>LLM: 'Chandrayaan-3 confirmed water…' — factually wrong</span>",
+      vp1m:"Schema: <span class='neu'>MISSION → CONFIRMED_ON, LANDED_ON, LAUNCHED_BY</span>",
+      vp2m:"Relation types differ: CY-1=CONFIRMED_ON, CY-3=LANDED_ON | <span class='hi'>No conflict — different relations</span>",
+      vp3m:"<span class='hi'>Both retained</span>: CY-1[2008] score=0.41, CY-3[2023]=0.69 | Relation-based disambiguation",
+      vp4m:"Both ΔH &lt; 0 | <span class='hi'>Both kept</span> | <span class='hi'>Conf: 42%</span> (older docs, limited support)",
+    },
+    lc: {
+      answer: "Chandrayaan-3, ISRO's latest mission which successfully landed on the lunar south pole in 2023, has contributed to our understanding of water on the Moon.",
+      time: "0.8s", chunks: 2, conflicts_missed: 0,
+      wrong: true, warn: "Misattributor: Chandrayaan-1 (2008) confirmed water — not Chandrayaan-3",
+      metas: [{cls:"meta-time",t:"0.8s"},{cls:"meta-none",t:"Recency bias"},{cls:"meta-warn",t:"⚠ Wrong mission attributed"}],
+    },
+    v5: {
+      answer: "Chandrayaan-1, launched by ISRO in 2008, was the first mission to confirm the presence of water molecules on the Moon's surface using the Moon Mineralogy Mapper. Chandrayaan-3 is a separate achievement — it achieved the first soft landing on the lunar south pole in 2023.",
+      removed: [],
+      kept:    ["✓ Chandrayaan-1[2008] CONFIRMED_ON Moon (water) — score: 0.41","✓ Chandrayaan-3[2023] LANDED_ON south_pole — score: 0.69 — different fact, no conflict"],
+      schema: "MISSION → CONFIRMED_ON, LANDED_ON, LAUNCHED_BY",
+      conf: 42, time: "2.9s", conflicts: 0, stale_removed: 0, correct: true,
+      metas: [{cls:"meta-time",t:"2.9s"},{cls:"meta-ok",t:"No conflict — both kept"},{cls:"meta-conf-low",t:"Conf: 42%"},{cls:"meta-ok",t:"Correct: Chandrayaan-1"}],
+    }
+  },
+  // 6: Diabetes
+  {
+    q: "What is the first-line treatment for Type 2 diabetes?",
+    domain: "Medical",
+    conflict_year_gap: 62,
+    pipe: {
+      lp1m:"4 chunks | <span class='lo'>1960 sulphonylurea guidance + 2006 metformin + 2022 GLP-1</span>",
+      lp2m:"Similarity: 1960-doc=0.82 (longer, more mentions) | <span class='lo'>Oldest doc highest similarity</span>",
+      lp3m:"1960 doc returned rank #1 | <span class='lo'>3 conflicting eras — 62-yr span</span>",
+      lp4m:"<span class='lo'>LLM mixes all three eras without priority</span>",
+      vp1m:"Schema: <span class='neu'>DRUG, CONDITION → FIRST_LINE_FOR, SUPERSEDED_BY, PREFERRED_IN</span>",
+      vp2m:"Temporal cascade: 1960 &lt; 2006 &lt; 2022 | RRF: <span class='hi'>2022 ADA guideline rank 1</span>",
+      vp3m:"Sulph[1960] decay≈<span class='lo'>0.001</span> | Metformin[2006] decay=<span class='lo'>0.23</span>(partial) | GLP-1[2022]: <span class='hi'>0.85</span> | <span class='hi'>2 conflicts resolved</span>",
+      vp4m:"2022 retained | Metformin kept as co-first-line note | <span class='hi'>Conf: 74%</span>",
+    },
+    lc: {
+      answer: "Sulphonylureas, such as glibenclamide, have traditionally been used as first-line treatment for Type 2 diabetes. Metformin is also commonly prescribed and is well tolerated.",
+      time: "1.2s", chunks: 4, conflicts_missed: 2,
+      wrong: true, warn: "1960s treatment cited as primary — two guideline updates missed",
+      metas: [{cls:"meta-time",t:"1.2s"},{cls:"meta-none",t:"No era detection"},{cls:"meta-warn",t:"⚠ 1960s guideline returned"}],
+    },
+    v5: {
+      answer: "Per 2022 ADA/ESC guidelines, Metformin remains first-line for most Type 2 diabetes patients. However, GLP-1 receptor agonists (e.g. semaglutide/Ozempic) are now co-first-line for patients with established cardiovascular disease or high CV risk. Older sulphonylurea-based guidelines are no longer standard of care.",
+      removed: ["✕ Sulphonylureas FIRST_LINE_FOR T2D [1960] — decay ≈ 0.001 (62 years)","✕ Metformin alone [2006] as sole first-line — superseded by 2022 update"],
+      kept:    ["✓ Metformin + GLP-1 co-first-line [2022 ADA/ESC] — retained"],
+      schema: "DRUG → FIRST_LINE_FOR, SUPERSEDED_BY, PREFERRED_IN",
+      conf: 74, time: "3.8s", conflicts: 2, stale_removed: 2, correct: true,
+      metas: [{cls:"meta-time",t:"3.8s"},{cls:"meta-conflict",t:"2 conflicts resolved"},{cls:"meta-conf-mid",t:"Conf: 74%"},{cls:"meta-ok",t:"Current 2022 guidelines"}],
+    }
+  }
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────
+let lcTotal=0, lcConflictsMissed=0, lcTimes=[], lcWrong=0;
+let v5Total=0, v5ConflictsResolved=0, v5Confs=[], v5Correct=0, v5StaleRemoved=0;
+let busy=false;
+
+// Enable inputs
+document.getElementById('lc-input').disabled=false;
+document.getElementById('lc-send').disabled=false;
+
+// ─── PRESET RUNNER ───────────────────────────────────────────────────────
+function runPreset(idx){
+  if(busy) return;
+  document.querySelectorAll('.preset').forEach(b=>b.classList.remove('active-preset'));
+  document.querySelectorAll('.preset')[idx].classList.add('active-preset');
+  const q = QUERIES[idx].q;
+  document.getElementById('lc-input').value = q;
+  processQuery(idx);
+}
+
+function sendQuery(){
+  const val = document.getElementById('lc-input').value.trim();
+  if(!val||busy) return;
+  // match to closest preset
+  const idx = QUERIES.findIndex(q=>q.q.toLowerCase().includes(val.toLowerCase().slice(0,20)));
+  if(idx>=0){ runPreset(idx); return; }
+  runPreset(0); // fallback
+}
+
+// ─── MAIN PROCESSOR ──────────────────────────────────────────────────────
+async function processQuery(idx){
+  busy=true;
+  document.getElementById('lc-send').disabled=true;
+  const Q = QUERIES[idx];
+  const lcEl = document.getElementById('lc-messages');
+  const v5El = document.getElementById('v5-messages');
+
+  // Add user message to both
+  addMsg(lcEl,'user',`<strong>You:</strong> ${Q.q}`);
+  addMsg(v5El,'user',`<strong>You:</strong> ${Q.q}`);
+
+  // Animate pipeline steps
+  animatePipeline(Q.pipe);
+
+  // Show LangChain typing
+  const lcTyping = addTyping(lcEl);
+  await sleep(1200 + Math.random()*400);
+  lcEl.removeChild(lcTyping);
+
+  // LC Response
+  const lcMsg = buildLCResponse(Q.lc);
+  lcEl.appendChild(lcMsg);
+  lcEl.scrollTop=lcEl.scrollHeight;
+
+  // Update LC metrics
+  lcTotal++; 
+  if(Q.lc.conflicts_missed>0) lcConflictsMissed+=Q.lc.conflicts_missed;
+  lcTimes.push(parseFloat(Q.lc.time));
+  if(Q.lc.wrong) lcWrong++;
+  updateLCMetrics();
+
+  // Show v5 typing (longer — it actually processes)
+  const v5Typing = addTyping(v5El);
+  await sleep(parseFloat(Q.v5.time)*1000 - 1200 + 400);
+  v5El.removeChild(v5Typing);
+
+  // v5 Response
+  const v5Msg = buildV5Response(Q.v5, Q.domain);
+  v5El.appendChild(v5Msg);
+  v5El.scrollTop=v5El.scrollHeight;
+
+  // Update v5 metrics
+  v5Total++;
+  v5ConflictsResolved+=Q.v5.conflicts;
+  v5Confs.push(Q.v5.conf);
+  v5StaleRemoved+=Q.v5.stale_removed;
+  if(Q.v5.correct) v5Correct++;
+  updateV5Metrics();
+  updateScoreboard();
+
+  document.getElementById('lc-input').value='';
+  busy=false;
+  document.getElementById('lc-send').disabled=false;
+}
+
+// ─── PIPELINE ANIMATION ──────────────────────────────────────────────────
+async function animatePipeline(pipe){
+  const steps=[['lp1','vp1'],['lp2','vp2'],['lp3','vp3'],['lp4','vp4']];
+  // Reset all
+  steps.flat().forEach(id=>{
+    const el=document.getElementById(id);
+    el.classList.remove('active','done','fail','pass');
+  });
+
+  for(let [lcId,v5Id] of steps){
+    const lcEl=document.getElementById(lcId);
+    const v5El=document.getElementById(v5Id);
+    const lcMEl=document.getElementById(lcId+'m');
+    const v5MEl=document.getElementById(v5Id+'m');
+
+    lcEl.classList.add('active');
+    v5El.classList.add('active');
+    if(lcMEl) lcMEl.innerHTML = pipe[lcId.replace('lp','lp')+'m'] || pipe['lp'+(lcId.slice(2))+'m'] || lcMEl.innerHTML;
+    if(v5MEl) v5MEl.innerHTML = pipe['vp'+(v5Id.slice(2))+'m'] || v5MEl.innerHTML;
+
+    await sleep(650);
+    lcEl.classList.add('done','fail');
+    v5El.classList.add('done','pass');
+    await sleep(200);
+  }
+}
+
+// Fix: correct metric key mapping
+async function animatePipeline2(pipe){
+  const map={lp1:'lp1m',lp2:'lp2m',lp3:'lp3m',lp4:'lp4m',vp1:'vp1m',vp2:'vp2m',vp3:'vp3m',vp4:'vp4m'};
+  ['lp1','lp2','lp3','lp4','vp1','vp2','vp3','vp4'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.remove('active','done','fail','pass');
+  });
+  for(let i=1;i<=4;i++){
+    const lcEl=document.getElementById('lp'+i);
+    const v5El=document.getElementById('vp'+i);
+    const lcMEl=document.getElementById('lp'+i+'m');
+    const v5MEl=document.getElementById('vp'+i+'m');
+    if(lcEl) lcEl.classList.add('active');
+    if(v5El) v5El.classList.add('active');
+    if(lcMEl && pipe['lp'+i+'m']) lcMEl.innerHTML=pipe['lp'+i+'m'];
+    if(v5MEl && pipe['vp'+i+'m']) v5MEl.innerHTML=pipe['vp'+i+'m'];
+    await sleep(600);
+    if(lcEl){ lcEl.classList.add('done','fail'); }
+    if(v5El){ v5El.classList.add('done','pass'); }
+    await sleep(150);
+  }
+}
+
+// override with fixed version
+const origProcess=processQuery;
+async function processQuery(idx){
+  busy=true;
+  document.getElementById('lc-send').disabled=true;
+  const Q=QUERIES[idx];
+  const lcEl=document.getElementById('lc-messages');
+  const v5El=document.getElementById('v5-messages');
+  addMsg(lcEl,'user',`<strong>You:</strong> ${Q.q}`);
+  addMsg(v5El,'user',`<strong>You:</strong> ${Q.q}`);
+  animatePipeline2(Q.pipe);
+  const lcTyping=addTyping(lcEl);
+  await sleep(1300);
+  lcEl.removeChild(lcTyping);
+  lcEl.appendChild(buildLCResponse(Q.lc));
+  lcEl.scrollTop=lcEl.scrollHeight;
+  lcTotal++;
+  if(Q.lc.conflicts_missed>0) lcConflictsMissed+=Q.lc.conflicts_missed;
+  lcTimes.push(parseFloat(Q.lc.time));
+  if(Q.lc.wrong) lcWrong++;
+  updateLCMetrics();
+  const v5Typing=addTyping(v5El);
+  const v5delay=Math.round(parseFloat(Q.v5.time)*1000);
+  await sleep(v5delay);
+  v5El.removeChild(v5Typing);
+  v5El.appendChild(buildV5Response(Q.v5,Q.domain));
+  v5El.scrollTop=v5El.scrollHeight;
+  v5Total++;
+  v5ConflictsResolved+=Q.v5.conflicts;
+  v5Confs.push(Q.v5.conf);
+  v5StaleRemoved+=Q.v5.stale_removed;
+  if(Q.v5.correct) v5Correct++;
+  updateV5Metrics();
+  updateScoreboard();
+  document.getElementById('lc-input').value='';
+  busy=false;
+  document.getElementById('lc-send').disabled=false;
+}
+
+// ─── MESSAGE BUILDERS ────────────────────────────────────────────────────
+function buildLCResponse(lc){
+  const div=document.createElement('div');
+  div.className='msg bot lc-bot fade-in';
+  let html=`<div class="msg-bubble">`;
+  if(lc.warn) html+=`<div class="warn-box">⚠️ ${lc.warn}</div>`;
+  html+=lc.answer;
+  html+=`<div style="margin-top:.5rem;font-size:.68rem;color:var(--muted);">
+    Chunks retrieved: ${lc.chunks} &nbsp;·&nbsp; Conflicts detected: <span style="color:#f87171">0</span> &nbsp;·&nbsp; Confidence: <span style="color:#f87171">None</span>
+  </div>`;
+  html+=`</div>`;
+  html+=`<div class="msg-meta">`;
+  lc.metas.forEach(m=>{ html+=`<span class="mmeta ${m.cls}">${m.t}</span>`; });
+  html+=`</div>`;
+  div.innerHTML=html;
+  return div;
+}
+
+function buildV5Response(v5, domain){
+  const div=document.createElement('div');
+  div.className='msg bot v5-bot fade-in';
+  let html=`<div class="msg-bubble">`;
+  // Schema
+  html+=`<div class="info-schema">🧩 Schema [auto]: ${v5.schema}</div>`;
+  // Warnbox if safety
+  if(v5.warnbox) html+=`<div class="warn-box" style="border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.05);color:#4ade80;">✅ ${v5.warnbox}</div>`;
+  // Removed facts
+  v5.removed.forEach(r=>{ html+=`<div class="removed-fact">${r}</div>`; });
+  // Kept facts
+  v5.kept.forEach(k=>{ html+=`<div class="kept-fact">${k}</div>`; });
+  // Answer
+  html+=`<div style="margin-top:.5rem;">${v5.answer}</div>`;
+  // Confidence bar
+  const confColor = v5.conf>=70?'linear-gradient(90deg,#22c55e,#3b82f6)': v5.conf>=50?'linear-gradient(90deg,#f59e0b,#3b82f6)':'linear-gradient(90deg,#ef4444,#f59e0b)';
+  html+=`<div class="conf-ring-row">
+    <div class="conf-bar-mini"><div class="conf-fill-mini" style="width:${v5.conf}%;background:${confColor};"></div></div>
+    <span class="conf-pct" style="color:${v5.conf>=70?'#4ade80':v5.conf>=50?'#fbbf24':'#f87171'}">${v5.conf}%</span>
+  </div>`;
+  // Stats row
+  html+=`<div style="margin-top:.45rem;font-size:.68rem;color:var(--muted);">
+    Paths retrieved: ${v5.removed.length+v5.kept.length+1} &nbsp;·&nbsp; Conflicts: <span style="color:#c084fc">${v5.conflicts}</span> resolved &nbsp;·&nbsp; Stale removed: <span style="color:#f87171">${v5.stale_removed}</span> &nbsp;·&nbsp; Time: ${v5.time}
+  </div>`;
+  html+=`</div>`;
+  html+=`<div class="msg-meta">`;
+  v5.metas.forEach(m=>{ html+=`<span class="mmeta ${m.cls}">${m.t}</span>`; });
+  html+=`</div>`;
+  div.innerHTML=html;
+  return div;
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────
+function addMsg(container, role, html){
+  const d=document.createElement('div');
+  d.className=`msg ${role} fade-in`;
+  d.innerHTML=`<div class="msg-bubble">${html}</div>`;
+  container.appendChild(d);
+  container.scrollTop=container.scrollHeight;
+}
+function addTyping(container){
+  const d=document.createElement('div');
+  d.className='msg bot';
+  d.innerHTML=`<div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  container.appendChild(d);
+  container.scrollTop=container.scrollHeight;
+  return d;
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms||0)); }
+
+// ─── METRIC UPDATERS ────────────────────────────────────────────────────
+function updateLCMetrics(){
+  document.getElementById('lc-queries').textContent=lcTotal;
+  document.getElementById('lc-conflicts').textContent=lcConflictsMissed;
+  const avg=lcTimes.length?( lcTimes.reduce((a,b)=>a+b,0)/lcTimes.length ).toFixed(1)+'s':'—';
+  document.getElementById('lc-avgtime').textContent=avg;
+  document.getElementById('lc-wrong').textContent=lcWrong;
+}
+function updateV5Metrics(){
+  document.getElementById('v5-queries').textContent=v5Total;
+  document.getElementById('v5-conflicts').textContent=v5ConflictsResolved;
+  const avgc=v5Confs.length?Math.round(v5Confs.reduce((a,b)=>a+b,0)/v5Confs.length)+'%':'—';
+  document.getElementById('v5-avgconf').textContent=avgc;
+  document.getElementById('v5-correct').textContent=v5Correct;
+}
+function updateScoreboard(){
+  const avgc=v5Confs.length?Math.round(v5Confs.reduce((a,b)=>a+b,0)/v5Confs.length)+'%':'—';
+  document.getElementById('sb-conf').textContent=avgc;
+  document.getElementById('sb-conflicts').textContent=v5ConflictsResolved;
+  document.getElementById('sb-stale').textContent=v5StaleRemoved;
+  document.getElementById('sb-correct').textContent=`${v5Correct} / ${lcWrong}`;
+}
+
+// ─── ENTER KEY ──────────────────────────────────────────────────────────
+document.getElementById('lc-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter') sendQuery();
+});
+
+// ─── NAV SMOOTH SCROLL ──────────────────────────────────────────────────
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{
+    e.preventDefault();
+    const t=document.querySelector(a.getAttribute('href'));
+    if(t) t.scrollIntoView({behavior:'smooth'});
+  });
+});
+</script>
+</body>
+</html>

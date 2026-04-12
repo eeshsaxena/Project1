@@ -1,0 +1,41 @@
+\begin{thebibliography}{1}
+
+\bibitem{chase2022langchain}
+Harrison Chase.
+\newblock Langchain, 2022.
+
+\bibitem{edge2024graphrag}
+Darren Edge, Ha~Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody,
+  Steven Truitt, and Jonathan Larson.
+\newblock From local to global: A graph {RAG} approach to query-focused
+  summarization, 2024.
+
+\bibitem{he2024gretriever}
+Xiaoxin He, Yijun Tian, Yifei Sun, Nitesh~V Chawla, Thomas Laurent, Yann LeCun,
+  Xavier Bresson, and Bryan Hooi.
+\newblock G-retriever: Retrieval-augmented generation for textual graph
+  understanding and question answering, 2024.
+
+\bibitem{lacroix2020temporal}
+Timoth\'ee Lacroix, Guillaume Obozinski, and Nicolas Usunier.
+\newblock Tensor decompositions for temporal knowledge base completion.
+\newblock {\em International Conference on Learning Representations}, 2020.
+
+\bibitem{lewis2020rag}
+Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir
+  Karpukhin, Naman Goyal, Heinrich K\"{u}ttler, Mike Lewis, Wen-tau Yih, Tim
+  Rockt\"{a}schel, Sebastian Riedel, and Douwe Kiela.
+\newblock Retrieval-augmented generation for knowledge-intensive {NLP} tasks.
+\newblock {\em Advances in Neural Information Processing Systems},
+  33:9459--9474, 2020.
+
+\bibitem{pagerank1998}
+Lawrence Page, Sergey Brin, Rajeev Motwani, and Terry Winograd.
+\newblock The pagerank citation ranking: Bringing order to the web, 1998.
+
+\bibitem{truthfulrag2024}
+Zhen Wang et~al.
+\newblock Truthfulrag: Improving factual accuracy in rag by resolving knowledge
+  conflicts, 2024.
+
+\end{thebibliography}

@@ -1,0 +1,224 @@
+
+% ================================================================
+% CHAPTER 3: REQUIREMENT ENGINEERING
+% ================================================================
+
+\section{Feasibility Study}
+
+\subsection{Technical Feasibility}
+
+The system is built entirely on mature, open-source libraries that have been
+in active use for years. Neo4j Community Edition handles graph storage, Ollama
+runs the LLM locally, and the sentence-transformers library handles embeddings.
+All of these install via \texttt{pip} and work on standard hardware---a laptop
+with 16\,GB RAM is sufficient. A dedicated GPU would speed things up but is not
+necessary to run the system.
+
+\subsection{Operational and Economic Feasibility}
+
+The pipeline runs through a single command:
+\begin{verbatim}
+python enhanced_main.py --corpus my_documents.json
+\end{verbatim}
+No configuration files need to be written, and no cloud account is needed.
+Every component used---Neo4j, Ollama, Qwen2.5, and all Python packages---is
+free and open-source. There are no per-query costs.
+
+\subsection{Legal Feasibility}
+
+All components are published under OSI-approved licences (GPL v3, MIT, Apache
+2.0) that permit academic use. Since no data leaves the local machine, the
+system is compatible with institutional data-handling policies.
+
+% ----------------------------------------------------------------
+\section{Requirement Elicitation and Analysis}
+
+\subsection{Objective}
+
+The primary objective of the requirements phase was to formally capture what the
+system must do (functional requirements) and what quality properties it must
+exhibit (non-functional requirements), independently of implementation decisions.
+
+\subsection{Methods Used for Elicitation}
+
+Requirements were elicited through the following methods:
+
+\begin{itemize}
+    \item \textbf{Paper analysis}: Detailed reading of arXiv:2511.10375 to
+    extract the algorithm specifications of Modules A, B, and C as implicit
+    requirements.
+    \item \textbf{Gap analysis}: Comparison of TruthfulRAG v4's output against
+    known failure modes of standard RAG to identify missing features.
+    \item \textbf{Prototype evaluation}: An early prototype of the pipeline was
+    run on a test corpus to surface runtime failure modes (JSON parsing errors,
+    entity merge conflicts, encoding issues) which became hardening requirements.
+\end{itemize}
+
+\subsection{Modeling}
+
+Requirements are modelled using a structured numbered list (Section~3.3) and
+summarised in a use-case description (Section~3.4). Data-flow and structural
+models are presented in Chapter~4.
+
+% ----------------------------------------------------------------
+\section{Software Requirement Specification (SRS)}
+
+\subsection{Purpose of the SRS}
+
+This SRS defines the complete behaviour of TruthfulRAG v5. It is the binding
+specification against which the implementation in Chapter~5 and the test results
+in Chapter~6 are evaluated.
+
+\subsection{Functional Requirements}
+
+\begin{enumerate}
+    \item[\textbf{FR1}] The system shall load documents and queries from a JSON
+    corpus file. The JSON schema requires a \texttt{"docs"} list and optionally
+    a \texttt{"queries"} list.
+
+    \item[\textbf{FR2}] The system shall infer entity types and relation types
+    from a configurable-size sample of the input documents using the LLM, without
+    requiring any manual configuration.
+
+    \item[\textbf{FR3}] The system shall extract subject-predicate-object triples
+    from each document using the inferred schema, assigning an integer year to
+    each triple where inferable.
+
+    \item[\textbf{FR4}] The system shall maintain a count of how many distinct
+    source documents assert each triple, storing this count as a property on the
+    corresponding graph edge.
+
+    \item[\textbf{FR5}] The system shall merge entity nodes whose names are at
+    least 85\% similar (Ratcliff/Obershelp metric), using the Neo4j APOC library.
+
+    \item[\textbf{FR6}] The system shall normalise all relation labels to
+    \texttt{UPPER\_SNAKE\_CASE} via an LLM-assisted canonicalisation pass.
+
+    \item[\textbf{FR7}] The system shall apply exponential temporal decay
+    ($ e^{-\lambda t} $, $\lambda=0.08$) to edge scores during retrieval.
+
+    \item[\textbf{FR8}] The system shall fuse BM25 keyword ranking and semantic
+    embedding ranking using Reciprocal Rank Fusion when selecting which documents
+    to focus on.
+
+    \item[\textbf{FR9}] The system shall detect an explicit year in a user query
+    via regular expression and, if found, exclude all graph edges with a year
+    greater than the detected year.
+
+    \item[\textbf{FR10}] The system shall detect contradicting paths (same
+    relation-tail, different head entities), retain the path with the greater
+    year, and discard the other, recording the reason.
+
+    \item[\textbf{FR11}] When contradictions were removed, the system shall
+    produce an explanation chain listing selected and rejected facts with reasons,
+    and use this chain in the final answer prompt.
+
+    \item[\textbf{FR12}] The system shall compute a 0--100\% confidence score
+    per answer, combining entropy resolution signal, source support, and
+    information recency according to configurable weights.
+\end{enumerate}
+
+\subsection{Non-Functional Requirements}
+
+\begin{enumerate}
+    \item[\textbf{NFR1}] \textbf{Privacy}: All computation shall run locally.
+    No user documents shall be transmitted to external servers.
+
+    \item[\textbf{NFR2}] \textbf{Domain Agnosticism}: The system shall function
+    correctly on any text domain without code modification.
+
+    \item[\textbf{NFR3}] \textbf{Robustness}: All LLM JSON outputs shall be
+    parsed after stripping markdown code fences. Invalid JSON shall be handled
+    gracefully without raising an unhandled exception.
+
+    \item[\textbf{NFR4}] \textbf{Configurability}: All numeric hyperparameters
+    shall be overridable via environment variables or the central \texttt{CFG}
+    dictionary.
+
+    \item[\textbf{NFR5}] \textbf{Efficiency}: Repeated identical LLM calls shall
+    be served from an in-memory cache indexed by MD5 hash of (prompt, temperature).
+\end{enumerate}
+
+\subsection{Assumptions and Dependencies}
+
+\begin{itemize}
+    \item Neo4j Community Edition is running on \texttt{bolt://localhost:7687}
+    and the APOC plugin is installed.
+    \item Ollama is running on \texttt{http://localhost:11434} with the
+    configured model already pulled.
+    \item The Python virtual environment contains all packages listed in
+    Table~\ref{tab:deps} (Chapter~3).
+\end{itemize}
+
+\subsection{Constraints}
+
+\begin{itemize}
+    \item Graph queries are limited to 200 nodes and 200 edges per retrieval
+    call to avoid memory overload on large corpora.
+    \item Entropy sampling is fixed at $n=3$ samples to balance accuracy and
+    latency. Increasing $n$ improves entropy estimates but increases inference time.
+    \item Disambiguation uses string similarity only; semantic entity linking
+    (e.g., NEL against Wikidata) is not implemented in this version.
+\end{itemize}
+
+% ----------------------------------------------------------------
+\section{Software Requirement Validation}
+
+\subsection{Review Process}
+
+Each functional requirement was traced to a specific method in
+\texttt{enhanced\_main.py} and verified by running the pipeline and
+observing the relevant terminal output.
+
+\begin{table}[H]
+\centering
+\caption{Requirement-to-implementation traceability}
+\label{tab:req_trace}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Req.} & \textbf{Method in enhanced\_main.py} & \textbf{Verified By} \\
+\hline
+FR1  & \texttt{\_load\_corpus()}          & ``Loaded N docs'' line in terminal \\
+FR2  & \texttt{\_infer\_schema()}         & Entity/relation list printed at start \\
+FR3  & \texttt{\_extract()}               & Triples visible in Neo4j browser \\
+FR4  & \texttt{\_accumulate()}            & Support count shown on graph edges \\
+FR5  & \texttt{\_disambiguate()}          & ``Disambiguated N pairs'' in output \\
+FR6  & \texttt{\_normalize()}             & ``Normalised N relation types'' line \\
+FR7  & \texttt{\_temporal\_decay()}       & Older paths score lower in results \\
+FR8  & \texttt{HybridRetriever}           & ``BM25+Semantic RRF'' in feature table \\
+FR9  & \texttt{\_extract\_query\_year}   & Snapshot year logged when detected \\
+FR10 & \texttt{\_detect\_contradictions}  & ``Contradictions removed: N'' line \\
+FR11 & \texttt{\_build\_chain()}          & Explanation text appears in answer \\
+FR12 & \texttt{\_confidence()}            & ``Confidence: XX\%'' printed at end \\
+\hline
+\end{tabular}}
+\end{table}
+
+\subsection{Validation Approach}
+
+Validation was done by inspection of terminal output during live pipeline runs
+and by checking that no unhandled exceptions were raised. All 12 functional
+requirements produced observable evidence of correct behaviour during the test
+runs documented in Chapter~6.
+
+\subsection{Completeness and Consistency}
+
+All 12 functional requirements and 5 non-functional requirements have
+corresponding implementation methods in the codebase. The corroboration weight,
+temporal decay factor, and confidence weights are all combined in a single
+path-scoring expression, so there is no double-counting between the different
+scoring signals. The entropy-based path selection follows the algorithm
+described in arXiv:2511.10375 \cite{truthfulrag2024}, with the six extensions
+added on top.
+
+% ----------------------------------------------------------------
+\section{Software Requirement Management}
+
+\subsection{Version Control}
+
+All source code, corpus data, LaTeX report files, and generated charts are
+version-controlled in a private Git repository hosted on GitHub. Each
+significant change is committed with a descriptive message. The repository
+maintains a linear history of all development milestones from the initial
+TruthfulRAG v4 baseline to the final v5 implementation.

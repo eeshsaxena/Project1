@@ -1,0 +1,113 @@
+
+% ================================================================
+% CHAPTER 2: LITERATURE SURVEY
+% ================================================================
+
+\section{Existing Solution Introduction}
+
+Retrieval-Augmented Generation was formalised by Lewis et al.\ \cite{lewis2020rag}
+as a method to overcome the static knowledge limitations of parametric LLMs. The
+original implementation combined a Dense Passage Retriever with a BART generative
+model, demonstrating measurable improvements on knowledge-intensive NLP tasks
+such as open-domain question answering and fact verification.
+
+LangChain \cite{chase2022langchain}, launched in 2022, standardised RAG into a
+composable Python toolkit. Its \texttt{RetrievalQA} chain encapsulates the full
+pipeline: document loading, text splitting, embedding, vector store indexing,
+similarity retrieval, and prompted answer generation. This abstraction enabled
+rapid prototyping but fixed a flat-retrieval architecture with no structural
+knowledge representation or conflict awareness.
+
+% ----------------------------------------------------------------
+\section{Relevant Theories and Models}
+
+\subsection{Knowledge Graphs for QA}
+
+Knowledge Graphs represent information as typed triples $(h, r, t)$, enabling
+structural multi-hop reasoning that flat text retrieval cannot support. Early KG-QA
+systems such as KGQA \cite{pagerank1998} traversed Freebase to answer factoid
+questions. More recent work applies embedding-based models (TransE, RotatE) to
+learn distributed representations of entities and relations for link prediction.
+
+G-Retriever \cite{he2024gretriever} demonstrated that graph-based retrieval
+combined with LLM generation outperforms vanilla RAG on multi-hop textual graph
+QA tasks. Microsoft GraphRAG \cite{edge2024graphrag} further showed that
+community-hierarchical graph construction enables high-quality global summaries
+of large corpora.
+
+\subsection{Temporal Knowledge Graphs}
+
+Lacroix et al.\ \cite{lacroix2020temporal} extended tensor factorisation models
+to temporal KGs, where each triple carries a timestamp. CronKGQA introduced a
+benchmark for temporal question answering over evolving KGs. These approaches,
+however, focus on embedding-based link prediction rather than retrieval
+augmentation over arbitrary text.
+
+\subsection{Entropy and Uncertainty in LLMs}
+
+Shannon entropy has been applied to measure LLM calibration: a well-calibrated
+model's confidence should correlate with its accuracy. Kadavath et al.\ (2022)
+showed that LLMs can self-assess uncertainty via sampling; Farquhar et al.\
+(2023) introduced semantic entropy, grouping semantically equivalent answers
+before entropy computation to avoid penalising paraphrase variation.
+
+TruthfulRAG v4 \cite{truthfulrag2024} operationalised this into a retrieval
+decision rule: a path is corrective only if providing it as context reduces the
+LLM's sampling entropy by at least a learned threshold $\tau$.
+
+% ----------------------------------------------------------------
+\section{Comparison of Similar Projects}
+
+\begin{table}[H]
+\centering
+\caption{Comparison of knowledge-graph RAG systems}
+\label{tab:lit_compare}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Feature} & \textbf{LangChain} & \textbf{GraphRAG} & \textbf{TruthfulRAG v4} & \textbf{v5 (Ours)} \\
+\hline
+Knowledge Graph storage      & No      & Yes & Yes & Yes \\
+Conflict detection           & No      & No  & Yes & Yes \\
+Temporal decay               & No      & No  & No  & Yes \\
+Cross-document corroboration & No      & No  & No  & Yes \\
+Historical snapshot queries  & No      & No  & No  & Yes \\
+Explanation audit trail      & No      & No  & No  & Yes \\
+Calibrated confidence score  & No      & No  & No  & Yes \\
+Auto schema inference        & No      & No  & No  & Yes \\
+Open source / local inference& Partial & Yes & Yes & Yes \\
+\hline
+\end{tabular}}
+\end{table}
+
+% ----------------------------------------------------------------
+\section{Identified Gaps in the Literature}
+
+Based on the survey above, the following gaps exist in current open-source
+KG-RAG research:
+
+\begin{enumerate}
+    \item \textbf{No temporal scoring}: Existing systems do not penalise older
+    facts during retrieval. A 2010 fact and a 2024 fact compete equally.
+    \item \textbf{No corroboration weighting}: No system rewards facts attested
+    by multiple independent sources with a higher retrieval score.
+    \item \textbf{No automatic schema discovery}: All KG construction pipelines
+    require manual entity-type and relation-type specification.
+    \item \textbf{No calibrated output confidence}: Systems always answer at
+    maximum stated confidence, giving no warning when evidence quality is poor.
+    \item \textbf{No structured conflict explanation}: When contradictions are
+    resolved, no system communicates the resolution rationale to the user.
+\end{enumerate}
+
+TruthfulRAG v5 addresses all five gaps simultaneously.
+
+% ----------------------------------------------------------------
+\section{Conclusion of Survey}
+
+The literature demonstrates clear progress from flat-chunk RAG (LangChain) to
+graph-structured retrieval (GraphRAG, LlamaIndex Property Graph) to
+entropy-guided conflict resolution (TruthfulRAG v4). However, no system in the
+literature combines temporal decay, cross-document corroboration, hybrid
+retrieval, historical snapshots, explanation chains, and calibrated confidence
+under a single, domain-agnostic, fully open-source pipeline. TruthfulRAG v5
+fills this gap and is the primary contribution of this project.

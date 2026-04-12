@@ -1,0 +1,95 @@
+
+% ================================================================
+% CHAPTER 7: CONCLUSION
+% ================================================================
+
+\section{Contributions to the Field}
+
+This project makes the following contributions:
+
+\begin{enumerate}
+    \item \textbf{Faithful implementation of TruthfulRAG v4}: The three-module
+    architecture (Graph Construction, Graph Retrieval, Conflict Resolution) of
+    arXiv:2511.10375 is implemented faithfully in Python using open-source tools,
+    providing a reproducible reference implementation for the academic community.
+
+    \item \textbf{Six novel algorithmic extensions}:
+    \begin{itemize}
+        \item \textbf{[N1] Cross-document corroboration scoring}: Retrieval score
+        now reflects the number of independent sources attesting a fact, via
+        logarithmic weighting.
+        \item \textbf{[N2] Exponential temporal decay}: Facts are penalised by
+        age using $e^{-\lambda t}$ with $\lambda = 0.08$, encoding an 8.7-year
+        half-life for general knowledge.
+        \item \textbf{[N3] Hybrid BM25 + Semantic retrieval}: Keyword and
+        semantic rankings are fused via Reciprocal Rank Fusion for more robust
+        document selection.
+        \item \textbf{[N4] Temporal graph snapshots}: Historical queries trigger
+        a year-based filter that hides post-query-year facts, enabling accurate
+        what-was-true-then reasoning.
+        \item \textbf{[N6] Explanation chain}: When contradictions are resolved,
+        the system generates a structured audit trail visible in the final answer.
+        \item \textbf{[N7] Calibrated confidence score}: A three-component
+        (entropy, support, recency) score gives users a calibrated uncertainty
+        estimate rather than false certainty.
+    \end{itemize}
+
+    \item \textbf{Automatic schema inference [A4+]}: A pre-pipeline LLM call
+    discovers the entity and relation vocabulary from the corpus itself,
+    eliminating the only remaining configuration requirement of TruthfulRAG v4
+    and making the system fully domain-agnostic.
+
+    \item \textbf{Robustness hardening}: JSON parsing, Windows encoding, prompt
+    template formatting, and APOC availability failure modes are all handled
+    gracefully, making the codebase suitable for deployment in environments
+    beyond the original research prototype.
+\end{enumerate}
+
+% ----------------------------------------------------------------
+\section{Future Enhancements}
+
+\begin{itemize}
+    \item \textbf{Multi-hop graph reasoning}: Current retrieval operates on
+    single edges. Future work should implement path-following retrieval (BFS or
+    PPR on paths) to answer complex multi-relation queries such as ``Who founded
+    the company that acquired Twitter?''
+
+    \item \textbf{Persistent, accumulative knowledge base}: Rather than clearing
+    and rebuilding the Neo4j graph on each run, future versions should maintain
+    a persistent graph. New documents add facts; contradictions update (not delete)
+    old facts with a validity end timestamp.
+
+    \item \textbf{LangGraph agentic loop}: Wrapping the pipeline as a LangGraph
+    node would enable an agent to retry retrieval with a broadened query if
+    confidence falls below a configurable threshold.
+
+    \item \textbf{Cross-encoder re-ranking}: After PPR scoring, a cross-encoder
+    model (e.g., \texttt{ms-marco-MiniLM-L-12-v2}) could be used as a final
+    re-ranking step to push the most precisely relevant path to the top.
+
+    \item \textbf{Multilingual corpus support}: Replacing
+    \texttt{all-MiniLM-L6-v2} with \texttt{paraphrase-multilingual-MiniLM-L12-v2}
+    and a multilingual LLM (e.g.\ Aya-23) would extend the system to Hindi,
+    Tamil, Meitei, and other regional languages.
+
+    \item \textbf{Web user interface}: A Streamlit or Flask frontend would expose
+    the pipeline to non-technical users with visual displays of the knowledge graph,
+    confidence gauges, and explanation chains.
+\end{itemize}
+
+% ----------------------------------------------------------------
+\section{Final Thoughts}
+
+TruthfulRAG v5 demonstrates that academically rigorous, conflict-aware RAG is
+achievable using entirely open-source components on consumer hardware. The
+combination of structured knowledge representation (Neo4j), entropy-guided
+conflict resolution (adapted from arXiv:2511.10375), and calibrated uncertainty
+quantification produces a system that is not only more accurate than standard
+RAG on temporally-conflicted corpora, but also more transparent and honest about
+the limits of its own knowledge.
+
+The most important design insight of this project is that \emph{honesty is a
+feature, not a limitation}. A system that reports ``42\% confidence'' when its
+internal certainty is low is more valuable in a high-stakes setting than a
+system that confidently outputs a stale or incorrect answer. TruthfulRAG v5
+is a step towards AI systems that know when they do not know.

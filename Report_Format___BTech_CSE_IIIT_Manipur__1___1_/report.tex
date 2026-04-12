@@ -1,0 +1,202 @@
+\documentclass[a4paper, 11pt, oneside]{report}
+
+\newcommand{\plogo}{\fbox{$\mathcal{PL}$}}
+\usepackage{graphicx}
+\usepackage{graphics}
+\usepackage{float}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fouriernc}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{longtable}
+\usepackage[nottoc]{tocbibind}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{verbatim}
+\pgfplotsset{compat=1.18}
+
+\begin{document}
+
+% ── TITLE PAGE ────────────────────────────────────────────────────
+\begin{titlepage}
+    \centering
+    \vspace*{\baselineskip}
+    \vspace{0.75\baselineskip}
+
+    {\LARGE \textbf{TruthfulRAG v5: A Dynamic, Domain-Agnostic Knowledge-Graph\\[0.4em]
+    Retrieval-Augmented Generation Pipeline with Conflict Resolution}}
+
+    \vspace{0.75\baselineskip}
+    \vspace{2\baselineskip}
+
+    A report submitted for the course named Project - I (CS3201)
+
+    \vspace*{7\baselineskip}
+
+    Submitted By
+
+    \vspace{0.5\baselineskip}
+
+    {\scshape\Large Eesh Saxena \\ SEMESTER - VI \\ 220101021}
+
+    \vspace{0.5\baselineskip}
+
+    Supervised By
+
+    \vspace{0.5\baselineskip}
+
+    {\scshape\Large Dr.\ [Supervisor Name]}
+
+    \vspace{0.5\baselineskip}
+
+    \vfill
+
+    \begin{center}
+        \includegraphics[width=5cm]{report_file/iiit manipur.png}
+    \end{center}
+
+    {\scshape\small Department of Computer Science and Engineering\\
+    Indian Institute of Information Technology Senapati, Manipur \\ April, 2026}
+
+\end{titlepage}
+
+% ── DECLARATION ───────────────────────────────────────────────────
+\begin{center}
+    {\LARGE \textbf{Declaration}}
+\end{center}
+
+In this submission, I have expressed my idea in my own words, and I have adequately cited
+and referenced any ideas or words that were taken from another source. I also declare that
+I adhere to all principles of academic honesty and integrity and that I have not
+misrepresented or falsified any ideas, data, facts, or sources in this submission. If any
+violation of the above is made, I understand that the institute may take disciplinary
+action. Such a violation may also engender disciplinary action from the sources which were
+not properly cited or permission not taken when needed.
+
+\vspace{1cm}\hspace{8.35cm} Eesh Saxena \\
+\vspace{1cm}\hspace{9cm} 220101021 \\
+\vspace{1cm} DATE: \today
+
+\newpage
+
+% ── CERTIFICATE ───────────────────────────────────────────────────
+\begin{center}
+    \thispagestyle{empty}
+
+    \begin{table}[H]
+        \centering
+        \includegraphics[scale=0.2]{report_file/iiit manipur.png}
+        \begin{tabular}{l}
+            Department of Computer Science and Engineering \\
+            Indian Institute of Information Technology Senapati, Manipur \\
+        \end{tabular}
+    \end{table}
+    \par\noindent\rule{\textwidth}{0.4pt}
+    [Supervisor Name]
+    \hspace*{\fill} Email: \href{mailto:supervisor@iiitmanipur.ac.in}{supervisor@iiitmanipur.ac.in}\\
+    Associate Professor
+    \hspace*{0pt}\hfill Contact No: +91 XXXXXXXXXX\\[2cm]
+
+    {\Huge \textbf{\emph{To Whom It May Concern}}}\\[2cm]
+    \linespread{1.13}
+    \large{This is to certify that the project report entitled
+    \textbf{``TruthfulRAG v5: A Dynamic, Domain-Agnostic Knowledge-Graph
+    Retrieval-Augmented Generation Pipeline with Conflict Resolution,''}
+    submitted to the Department of Computer Science and Engineering, Indian Institute of
+    Information Technology Senapati, Manipur in partial fulfilment for the award of the
+    degree of Bachelor of Technology in Computer Science and Engineering is a record of
+    bonafide work carried out by \textbf{Eesh Saxena} bearing roll number
+    220101021.}\\[2.0cm]
+
+    \hspace*{2.6in}\large{Signature of Supervisor}\\[0.3cm]
+    \hspace*{2.5in}\textbf{([Supervisor Name])}\\[0.5cm]
+
+\end{center}
+\vspace{0.5cm}
+Signature of the Examiner 1 ............................\\\\
+Signature of the Examiner 2 ............................\\\\
+Signature of the Examiner 3 ............................\\\\
+Signature of the Examiner 4 ............................\\\\
+\newpage
+
+% ── ABSTRACT ──────────────────────────────────────────────────────
+\begin{abstract}
+Large Language Models (LLMs) suffer from hallucination when their parametric knowledge
+conflicts with user-provided documents—a problem that standard Retrieval-Augmented
+Generation (RAG) pipelines do not address. This project implements and extends
+TruthfulRAG v5, a Knowledge-Graph (KG) based RAG pipeline that explicitly detects and
+resolves knowledge conflicts. Building upon the three-module architecture (Module A: Graph
+Construction; Module B: Graph Retrieval; Module C: Conflict Resolution) of TruthfulRAG
+v4 (arXiv:2511.10375), v5 introduces six novel improvements: \textbf{[N1]}
+cross-document corroboration scoring, \textbf{[N2]} exponential temporal decay on edge
+weights, \textbf{[N3]} hybrid BM25 + semantic retrieval with Reciprocal Rank Fusion,
+\textbf{[N4]} temporal graph snapshots for historical queries, \textbf{[N6]}
+human-readable explanation-chain generation, and \textbf{[N7]} a calibrated three-factor
+confidence score. A pre-pipeline schema inference step \textbf{[A4+]} makes the system
+fully domain-agnostic, automatically discovering entity and relation types from the input
+corpus. The pipeline runs entirely locally using the Qwen2.5-7B-Instruct LLM via Ollama
+and Neo4j as the graph database. Experimental evaluation on a political-corporate corpus
+demonstrates correct contradiction resolution, a 35\% LLM cache hit rate, and calibrated
+confidence scores of 42\% and 71\% for two evaluation queries—accurately reflecting the
+degree of parametric memory conflict.
+\end{abstract}
+
+\pagebreak
+
+% ── ACKNOWLEDGEMENT ───────────────────────────────────────────────
+\begin{center}
+    {\LARGE \textbf{Acknowledgement}}
+\end{center}
+\vspace{2cm}
+
+I would like to express my sincere gratitude to my supervisor, [Supervisor Name], for
+their invaluable guidance and support throughout this project. I thank the Department of
+Computer Science and Engineering at IIIT Senapati, Manipur for providing the computational
+resources and academic environment necessary to complete this work. I am grateful to the
+open-source communities behind LangChain, Neo4j, Ollama, and the sentence-transformers
+library, whose tools formed the technical foundation of this project. Finally, I
+acknowledge the authors of TruthfulRAG v4 (arXiv:2511.10375), whose research inspired
+the design of this system.
+
+\vspace{1cm}
+
+\hspace{7cm} Eesh Saxena\\
+\hspace{7cm} 220101021
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+% ── CHAPTERS ──────────────────────────────────────────────────────
+\chapter{Introduction}
+\input{chapters/1_Introduction}
+
+\chapter{Literature Survey}
+\input{chapters/2_Literature_Survey}
+
+\chapter{Requirement Engineering}
+\input{chapters/3_Requirement}
+
+\chapter{System Design}
+\input{chapters/4_System_Design}
+
+\chapter{Implementation}
+\input{chapters/5_Implementation}
+
+\chapter{Results}
+\input{chapters/6_Results}
+
+\chapter{Conclusion}
+\input{chapters/7_Conclusion}
+
+\bibliography{report}
+\bibliographystyle{plain}
+
+\end{document}

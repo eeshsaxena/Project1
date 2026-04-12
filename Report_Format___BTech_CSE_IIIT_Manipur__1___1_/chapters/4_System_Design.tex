@@ -1,0 +1,241 @@
+
+% ================================================================
+% CHAPTER 4: SYSTEM DESIGN
+% ================================================================
+
+\section{System Architecture}
+
+TruthfulRAG v5 follows a layered pipeline architecture. The layers are
+intentionally decoupled so that each module communicates only through its
+defined input and output contracts:
+
+\begin{itemize}
+    \item \textbf{Layer 0 --- Data Layer}: \texttt{corpus.json} containing raw
+    document strings and query strings.
+    \item \textbf{Layer 1 --- Schema Layer}: \texttt{\_infer\_schema()} produces
+    the entity/relation vocabulary written to the shared \texttt{CFG} dictionary.
+    \item \textbf{Layer 2 --- Graph Layer}: Neo4j property graph storing nodes
+    (entities) and typed edges (relations) with year and support metadata.
+    \item \textbf{Layer 3 --- Retrieval Layer}: \texttt{EnhancedGraphRetriever}
+    produces an ordered list of \texttt{KnowledgePath} objects.
+    \item \textbf{Layer 4 --- Resolution Layer}: \texttt{EnhancedConflictResolver}
+    consumes \texttt{KnowledgePath} objects and produces a final answer string
+    plus a \texttt{meta} dictionary.
+    \item \textbf{Layer 5 --- Presentation Layer}: \texttt{run\_comparison()}
+    formats and prints results to the terminal.
+\end{itemize}
+
+% ----------------------------------------------------------------
+\section{Data Flow Diagrams (DFD)}
+
+\subsection{Level 0 Data Flow Diagram (Context Diagram)}
+
+At the highest level, TruthfulRAG v5 has two external entities:
+
+\begin{itemize}
+    \item \textbf{User}: Provides a corpus file (documents + queries) and reads
+    the answer output.
+    \item \textbf{Ollama (LLM Runtime)}: An external process on localhost
+    providing LLM inference via HTTP on port 11434.
+    \item \textbf{Neo4j (Database)}: An external process on localhost providing
+    graph storage and query via Bolt on port 7687.
+\end{itemize}
+
+Data flow (Level 0):
+\begin{enumerate}
+    \item User $\rightarrow$ System: \texttt{corpus.json} (documents + queries)
+    \item System $\rightarrow$ Ollama: Prompts (schema inference, triple extraction,
+    entropy sampling, answer generation)
+    \item Ollama $\rightarrow$ System: LLM text responses
+    \item System $\rightarrow$ Neo4j: Cypher write queries (MERGE node/edge)
+    \item Neo4j $\rightarrow$ System: Cypher read results (paths, node IDs)
+    \item System $\rightarrow$ User: Answer text + confidence score
+\end{enumerate}
+
+% ----------------------------------------------------------------
+\section{Class Diagrams}
+
+The main classes and their relationships in \texttt{enhanced\_main.py}:
+
+\begin{table}[H]
+\centering
+\caption{Class overview and key attributes}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|p{5.5cm}|l|}
+\hline
+\textbf{Class} & \textbf{Key Attributes} & \textbf{Key Methods} \\
+\hline
+\texttt{LLMCache}                 & \texttt{\_s: Dict}, hits, misses            & \texttt{get, set, stats} \\
+\texttt{HybridRetriever}          & bm25, embedder, doc\_vecs                   & \texttt{retrieve} \\
+\texttt{TripleRecord}             & head, relation, tail, year, support\_count  & dataclass only \\
+\texttt{EnhancedGraphConstructor} & llm, graph, cfg, \_triple\_bank             & \texttt{build, \_infer\_schema, \_extract} \\
+\texttt{KnowledgePath}            & context, score, max\_year, delta\_h         & dataclass only \\
+\texttt{EnhancedGraphRetriever}   & llm, graph, embedder, cfg, \_deg            & \texttt{retrieve, \_ppr, \_filter\_edges} \\
+\texttt{EnhancedConflictResolver} & llm, llm\_s, emb, cfg                      & \texttt{resolve, \_entropy, \_confidence} \\
+\texttt{EnhancedPipeline}         & cfg, constructor, retriever, resolver       & \texttt{ingest, query} \\
+\hline
+\end{tabular}}
+\end{table}
+
+Relationships:
+\begin{itemize}
+    \item \texttt{EnhancedPipeline} \emph{composes} one each of Constructor,
+    Retriever, and Resolver.
+    \item Constructor and Retriever both hold a reference to the same
+    \texttt{Neo4jGraph} instance.
+    \item Retriever and Resolver both hold a reference to the same
+    \texttt{SentenceTransformer} embedder (shared to avoid loading the model twice).
+    \item All classes read from the shared \texttt{CFG} dictionary.
+\end{itemize}
+
+% ----------------------------------------------------------------
+\section{Module Design}
+
+\subsection{Module: Pre-Pipeline Schema Inference [A4+]}
+
+\textbf{Input}: List of document strings, \texttt{cfg["schema\_infer\_sample"]} (default 5)\\
+\textbf{Process}: Sample first $n$ documents, concatenate with separators, call LLM
+with \texttt{SCHEMA\_INFER\_PROMPT}, parse JSON response, strip markdown fences,
+write entity types and relation types to \texttt{cfg}.\\
+\textbf{Output}: Updated \texttt{cfg["schema\_entity\_types"]} and
+\texttt{cfg["schema\_relation\_types"]}
+
+\subsection{Module: Knowledge Graph Construction (Module A)}
+
+\textbf{Input}: All document strings, updated \texttt{cfg} (schema populated)\\
+\textbf{Sub-steps}:
+\begin{enumerate}
+    \item Clear Neo4j graph.
+    \item Run LangChain's \texttt{LLMGraphTransformer} for broad entity-relation
+    extraction (first pass).
+    \item Run custom \texttt{\_extract()} + \texttt{\_accumulate()} for schema-guided,
+    year-annotated, corroboration-counted extraction (second pass).
+    \item \texttt{\_store\_all()}: Cypher MERGE writes all accumulated triples.
+    \item \texttt{\_disambiguate()}: APOC merge of 85\%-similar entity names.
+    \item \texttt{\_normalize()}: LLM-assisted relation label canonicalisation.
+\end{enumerate}
+\textbf{Output}: Neo4j property graph with $N$ nodes and $E$ edges
+
+\subsection{Module: Graph Retrieval (Module B)}
+
+\textbf{Input}: User query string, Neo4j graph\\
+\textbf{Sub-steps}:
+\begin{enumerate}
+    \item \texttt{\_keys()}: LLM extracts seed entities $E$ and relation keywords $R_{kw}$.
+    \item \texttt{detect\_intent()}: LLM classifies query intent; sets $\tau$.
+    \item \texttt{\_extract\_query\_year()}: Regex extracts year if present.
+    \item \texttt{\_edges(snapshot\_year)}: Fetch all edges; filter by year if snapshot active.
+    \item \texttt{\_filter\_edges()}: Cosine similarity filter on relation types.
+    \item \texttt{\_ppr()}: 20-iteration power-method PPR from seed entities.
+    \item Score every surviving edge with Eq.~\eqref{eq:score}.
+    \item Return top-$k$ \texttt{KnowledgePath} objects.
+\end{enumerate}
+\textbf{Output}: Ordered list of \texttt{KnowledgePath} objects
+
+\subsection{Module: Conflict Resolution and Answer Generation (Module C)}
+
+\textbf{Input}: User query, list of \texttt{KnowledgePath} objects, detected intent\\
+\textbf{Sub-steps}:
+\begin{enumerate}
+    \item \texttt{\_detect\_contradictions()}: Year-based supersession; mark losers.
+    \item \texttt{\_entropy(query, context=None)}: Sample LLM $n$ times, compute $H_{\text{param}}$.
+    \item Select strategy: ``conflict'' or ``grounding'' based on $H_{\text{param}}$ vs $H_{\max}$.
+    \item For each surviving path: compute $\Delta H$; select paths where $\Delta H > \tau$.
+    \item \texttt{\_build\_chain()}: Format selected / rejected paths as audit trail.
+    \item Generate final answer via \texttt{EXPLAIN\_PROMPT} (if contradictions) or
+    \texttt{RAG\_PROMPT}.
+    \item \texttt{\_confidence()}: Compute three-factor confidence score.
+\end{enumerate}
+\textbf{Output}: Answer string, \texttt{meta} dictionary with confidence and diagnostics
+
+% ----------------------------------------------------------------
+\section{Database Design}
+
+\subsection{Neo4j Graph Schema}
+
+The knowledge graph uses a single node label and multiple edge labels:
+
+\begin{itemize}
+    \item \textbf{Node}: \texttt{:Entity \{id: String\}}
+    \item \textbf{Edge}: \texttt{:RELATION\_TYPE \{year: Integer, support: Integer\}}
+\end{itemize}
+
+Relation type names are dynamic (inferred per-corpus). Representative examples:
+\texttt{CEO\_OF}, \texttt{PM\_OF}, \texttt{ACQUIRED}, \texttt{SWORN\_IN\_AS}.
+
+\subsection{Corpus JSON Schema}
+
+\begin{verbatim}
+{
+  "docs":    ["string", ...],
+  "queries": ["string", ...]
+}
+\end{verbatim}
+
+Both keys are optional at load time; the system prints a warning if
+\texttt{"queries"} is absent and runs ingestion only.
+
+% ----------------------------------------------------------------
+\section{Sequence Diagrams}
+
+The end-to-end sequence for a single query follows these steps:
+
+\begin{enumerate}
+    \item User calls \texttt{python enhanced\_main.py --corpus corpus.json}
+    \item \texttt{\_load\_corpus()} reads JSON.
+    \item \texttt{EnhancedPipeline.ingest(docs)} is called:
+    \begin{enumerate}
+        \item \texttt{\_infer\_schema()} $\rightarrow$ Ollama $\rightarrow$ CFG updated
+        \item \texttt{graph.query("DETACH DELETE")} $\rightarrow$ Neo4j cleared
+        \item \texttt{LLMGraphTransformer} $\rightarrow$ Ollama $\rightarrow$ Neo4j
+        \item \texttt{\_extract()} loop $\rightarrow$ Ollama $\rightarrow$ \texttt{\_accumulate()}
+        \item \texttt{\_store\_all()} $\rightarrow$ Neo4j (MERGE writes)
+        \item \texttt{\_disambiguate()} $\rightarrow$ Neo4j (APOC merge)
+        \item \texttt{\_normalize()} $\rightarrow$ Ollama $\rightarrow$ Neo4j (APOC setType)
+    \end{enumerate}
+    \item \texttt{EnhancedPipeline.query(q)} is called:
+    \begin{enumerate}
+        \item \texttt{\_keys()} $\rightarrow$ Ollama
+        \item \texttt{detect\_intent()} $\rightarrow$ Ollama
+        \item \texttt{\_edges()} $\rightarrow$ Neo4j
+        \item \texttt{\_ppr()} (local NumPy computation)
+        \item \texttt{\_detect\_contradictions()} (local)
+        \item \texttt{\_entropy()} $\times$ (1 + N\_paths) $\rightarrow$ Ollama
+        \item \texttt{\_build\_chain()} (local)
+        \item Final answer prompt $\rightarrow$ Ollama $\rightarrow$ Answer string
+        \item \texttt{\_confidence()} (local)
+    \end{enumerate}
+    \item Answer + confidence printed to terminal.
+\end{enumerate}
+
+% ----------------------------------------------------------------
+\section{User Interface Design}
+
+\subsection{Overview}
+
+TruthfulRAG v5 is a command-line application. The user interface is the
+terminal, presenting structured output divided by horizontal separators.
+
+\subsection{Main Menu (Input Modes)}
+
+The system supports four operating modes selectable at launch:
+
+\begin{verbatim}
+python enhanced_main.py --corpus corpus.json    # from file
+python enhanced_main.py --docs "D1" "D2"       # inline docs
+python enhanced_main.py --interactive          # terminal input
+python enhanced_main.py                        # demo / auto-gen
+\end{verbatim}
+
+\subsection{Workflows}
+
+\textbf{Normal workflow}: User provides corpus file $\rightarrow$ ingestion runs
+$\rightarrow$ each query runs $\rightarrow$ answers printed with confidence.\\
+\textbf{No-corpus workflow}: System generates a blank \texttt{corpus.json} template
+and explains how to fill it.
+
+\subsection{Design Note}
+
+All separator widths are dynamically adapted to the terminal width via
+\texttt{os.get\_terminal\_size()}, falling back to 72 characters on non-interactive
+terminals such as CI/CD pipelines and redirected output streams.

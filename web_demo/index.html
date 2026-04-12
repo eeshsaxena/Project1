@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TruthfulRAG v5 — Research Showcase</title>
+<meta name="description" content="TruthfulRAG v5: A conflict-aware Knowledge-Graph RAG system with temporal resolution, entropy-based filtering, and calibrated confidence scoring.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #050507;
+  --s1:      #0b0b0f;
+  --s2:      #111118;
+  --card:    #13131a;
+  --border:  #1c1c28;
+  --text:    #d4d4e0;
+  --dim:     #7a7a90;
+  --accent:  #4d7ef7;
+  --dim-acc: #1a2550;
+  --mono:    'IBM Plex Mono', monospace;
+  --sans:    'IBM Plex Sans', sans-serif;
+  --red:     #c94444;
+  --green:   #3a9444;
+  --line:    1px solid var(--border);
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { background:var(--bg); color:var(--text); font-family:var(--sans); line-height:1.65; font-size:15px; }
+
+/* ---- NAV ---- */
+nav {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  height:52px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 2.5rem; background:rgba(5,5,7,.92); backdrop-filter:blur(16px);
+  border-bottom:var(--line);
+}
+.nav-brand { font-family:var(--mono); font-size:.85rem; color:var(--accent); letter-spacing:.03em; }
+.nav-links  { display:flex; gap:.15rem; }
+.nav-links a {
+  font-size:.78rem; color:var(--dim); text-decoration:none;
+  padding:.38rem .9rem; border-radius:5px; transition:color .18s;
+}
+.nav-links a:hover { color:var(--text); }
+.nav-tag {
+  font-family:var(--mono); font-size:.68rem; color:var(--dim);
+  border:var(--line); border-radius:4px; padding:.25rem .65rem;
+}
+
+/* ---- SECTIONS ---- */
+section { padding:5.5rem 2.5rem; }
+.wrap { max-width:1120px; margin:0 auto; }
+.sec-label { font-family:var(--mono); font-size:.68rem; color:var(--accent); letter-spacing:.12em; text-transform:uppercase; margin-bottom:.75rem; }
+.sec-title { font-size:clamp(1.5rem,3vw,2.2rem); font-weight:600; margin-bottom:.6rem; }
+.sec-sub   { color:var(--dim); font-size:.9rem; max-width:600px; margin-bottom:3rem; }
+
+/* ---- HERO ---- */
+#hero {
+  padding:120px 2.5rem 72px;
+  border-bottom:var(--line);
+}
+.hero-label {
+  font-family:var(--mono); font-size:.72rem; color:var(--dim); letter-spacing:.08em;
+  text-transform:uppercase; margin-bottom:1.5rem;
+}
+#hero h1 { font-size:clamp(2rem,5vw,3.4rem); font-weight:600; line-height:1.15; margin-bottom:1.2rem; }
+#hero h1 .hl { color:var(--accent); }
+#hero p  { color:var(--dim); font-size:1rem; max-width:640px; margin-bottom:2.5rem; }
+
+.cta-row { display:flex; gap:.85rem; flex-wrap:wrap; }
+.btn {
+  display:inline-block; text-decoration:none; font-size:.83rem; font-weight:500;
+  padding:.65rem 1.6rem; border-radius:6px; transition:all .18s; cursor:pointer;
+  font-family:var(--sans);
+}
+.btn-primary { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+.btn-primary:hover { background:#3a69d4; }
+.btn-ghost { background:transparent; color:var(--text); border:var(--line); }
+.btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+
+/* stat row */
+.stat-row {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+  border:var(--line); border-radius:8px; overflow:hidden; margin-top:3rem; max-width:680px;
+}
+.stat-cell { background:var(--card); padding:1.1rem 1rem; text-align:center; }
+.stat-val  { font-family:var(--mono); font-size:1.6rem; color:var(--accent); }
+.stat-lbl  { font-size:.65rem; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin-top:.2rem; }
+
+/* ---- PIPELINE ---- */
+#pipeline { background:var(--s1); border-top:var(--line); border-bottom:var(--line); }
+.pipe-grid { display:grid; grid-template-columns:1fr 1fr; gap:2rem; }
+@media(max-width:800px){ .pipe-grid { grid-template-columns:1fr; } }
+
+.pipe-card {
+  border:var(--line); border-radius:8px; overflow:hidden;
+}
+.pipe-head {
+  padding:.85rem 1.1rem; border-bottom:var(--line); background:var(--s2);
+  display:flex; align-items:center; gap:.85rem;
+}
+.pipe-label-tag {
+  font-family:var(--mono); font-size:.68rem; font-weight:500;
+  padding:.2rem .55rem; border-radius:4px; letter-spacing:.04em;
+}
+.lc-tag { background:rgba(120,120,140,.12); color:var(--dim); border:1px solid var(--border); }
+.v5-tag { background:rgba(77,126,247,.1); color:var(--accent); border:1px solid rgba(77,126,247,.25); }
+.pipe-name { font-size:.88rem; font-weight:600; }
+.pipe-sub  { font-size:.68rem; color:var(--dim); }
+
+.pipe-steps { display:flex; flex-direction:column; }
+.pipe-step {
+  padding:.9rem 1.1rem; border-bottom:var(--line);
+  display:flex; gap:.85rem; align-items:flex-start;
+}
+.pipe-step:last-child { border-bottom:none; }
+.step-num {
+  font-family:var(--mono); font-size:.68rem; min-width:20px;
+  color:var(--dim); margin-top:.1rem; flex-shrink:0;
+}
+.step-body {}
+.step-title { font-size:.82rem; font-weight:600; margin-bottom:.2rem; }
+.step-desc  { font-size:.74rem; color:var(--dim); line-height:1.55; }
+.step-note  { font-family:var(--mono); font-size:.65rem; margin-top:.35rem; }
+.note-miss  { color:var(--red); }
+.note-pass  { color:var(--accent); }
+
+/* N8/N9 highlight strip */
+.feature-strip { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-top:2.5rem; }
+@media(max-width:800px){ .feature-strip { grid-template-columns:1fr; } }
+.feat-card {
+  border:var(--line); border-left:3px solid var(--accent);
+  border-radius:0 6px 6px 0; padding:1.25rem 1.35rem; background:var(--card);
+}
+.feat-tag   { font-family:var(--mono); font-size:.62rem; color:var(--accent); letter-spacing:.08em; text-transform:uppercase; margin-bottom:.45rem; }
+.feat-title { font-size:.88rem; font-weight:600; margin-bottom:.45rem; }
+.feat-desc  { font-size:.76rem; color:var(--dim); line-height:1.6; }
+.feat-code  {
+  margin-top:.9rem; background:var(--bg); border:var(--line); border-radius:5px;
+  padding:.7rem .9rem; font-family:var(--mono); font-size:.68rem; color:var(--dim); line-height:1.75;
+}
+.feat-code .c-kw  { color:var(--accent); }
+.feat-code .c-val { color:var(--green); }
+.feat-code .c-cm  { color:#3a3a50; }
+
+/* ---- DEMO ---- */
+#demo { background:var(--bg); border-top:var(--line); }
+.domain-bar { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:2rem; border-bottom:var(--line); padding-bottom:1rem; }
+.dtab {
+  font-size:.76rem; font-weight:500; padding:.38rem .9rem;
+  border:var(--line); border-radius:5px; background:transparent;
+  color:var(--dim); cursor:pointer; transition:all .18s; font-family:var(--sans);
+}
+.dtab:hover:not(.active) { color:var(--text); border-color:var(--dim); }
+.dtab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+.demo-block { display:none; }
+.demo-block.active { display:block; }
+
+.q-block { border:var(--line); border-radius:8px; margin-bottom:1.5rem; overflow:hidden; }
+.q-head  { background:var(--s2); border-bottom:var(--line); padding:.85rem 1.2rem; }
+.q-label { font-family:var(--mono); font-size:.65rem; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.35rem; }
+.q-text  { font-size:.9rem; font-weight:600; }
+.q-ctx   { font-size:.72rem; color:var(--dim); margin-top:.25rem; }
+
+.ans-grid { display:grid; grid-template-columns:1fr 1fr; }
+@media(max-width:700px){ .ans-grid { grid-template-columns:1fr; } }
+.ans-panel { padding:1.2rem 1.35rem; }
+.ans-panel.lc-side { border-right:var(--line); }
+.ans-sys-label {
+  font-family:var(--mono); font-size:.63rem; text-transform:uppercase; letter-spacing:.09em;
+  margin-bottom:.75rem; display:flex; align-items:center; gap:.5rem;
+}
+.ans-sys-label::before { content:''; display:block; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.lc-side .ans-sys-label { color:var(--dim); }
+.v5-side .ans-sys-label { color:var(--accent); }
+
+.ans-text { font-size:.8rem; line-height:1.7; }
+.removed-line {
+  display:block; font-family:var(--mono); font-size:.68rem; color:var(--red);
+  border-left:2px solid var(--red); padding:.3rem .6rem; margin:.35rem 0;
+  background:rgba(201,68,68,.06); line-height:1.5;
+}
+.kept-line {
+  display:block; font-family:var(--mono); font-size:.68rem; color:var(--green);
+  border-left:2px solid var(--green); padding:.3rem .6rem; margin:.35rem 0;
+  background:rgba(58,148,68,.05); line-height:1.5;
+}
+.stale-text { color:var(--red); text-decoration:line-through; opacity:.65; }
+
+.ans-meta { margin-top:.85rem; display:flex; flex-wrap:wrap; gap:.35rem; }
+.atag { font-family:var(--mono); font-size:.62rem; padding:.18rem .5rem; border-radius:4px; border:var(--line); }
+.atag-warn { border-color:rgba(201,68,68,.35); color:var(--red); background:rgba(201,68,68,.06); }
+.atag-info { border-color:rgba(77,126,247,.3);  color:var(--accent); background:rgba(77,126,247,.06); }
+.atag-ok   { border-color:rgba(58,148,68,.3);   color:var(--green); background:rgba(58,148,68,.05); }
+.atag-dim  { color:var(--dim); }
+
+/* confidence bar */
+.conf-bar-wrap { margin-top:.6rem; }
+.conf-bar-label { display:flex; justify-content:space-between; font-family:var(--mono); font-size:.62rem; color:var(--dim); margin-bottom:.3rem; }
+.conf-bar { height:3px; background:var(--border); border-radius:2px; }
+.conf-fill { height:100%; border-radius:2px; background:var(--accent); transition:width 1.4s ease; }
+
+/* ---- CLAIM VERIFIER ---- */
+#verifier { background:var(--s1); border-top:var(--line); border-bottom:var(--line); }
+.verify-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+@media(max-width:800px){ .verify-grid { grid-template-columns:1fr; } }
+
+.claim-card { border:var(--line); border-radius:8px; overflow:hidden; background:var(--card); }
+.claim-head {
+  padding:.75rem 1.1rem; border-bottom:var(--line); background:var(--s2);
+  font-family:var(--mono); font-size:.75rem; color:var(--text);
+}
+.claim-body { padding:1rem 1.1rem; }
+
+.verdict { display:inline-block; font-family:var(--mono); font-size:.72rem; font-weight:500; padding:.25rem .65rem; border-radius:4px; margin-bottom:.65rem; }
+.v-supported { background:rgba(58,148,68,.1);  color:var(--green); border:1px solid rgba(58,148,68,.3); }
+.v-refuted   { background:rgba(201,68,68,.08); color:var(--red);   border:1px solid rgba(201,68,68,.25); }
+.v-uncertain { background:rgba(120,120,150,.1);color:var(--dim);   border:var(--line); }
+
+.claim-reason { font-size:.78rem; color:var(--dim); line-height:1.6; margin-bottom:.75rem; }
+.claim-evidence {
+  background:var(--bg); border:var(--line); border-radius:5px;
+  padding:.7rem .9rem; font-family:var(--mono); font-size:.67rem; line-height:1.7;
+}
+.ev-keep { color:var(--green); }
+.ev-drop { color:var(--red); }
+.ev-note { color:var(--accent); }
+
+/* ---- USE CASES ---- */
+#usecases { background:var(--bg); border-top:var(--line); }
+.uc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1.25rem; }
+.uc-card {
+  border:var(--line); border-radius:8px; padding:1.5rem; background:var(--card);
+  transition:border-color .2s;
+}
+.uc-card:hover { border-color:var(--accent); }
+.uc-sys  { font-family:var(--mono); font-size:.62rem; color:var(--accent); letter-spacing:.08em; text-transform:uppercase; margin-bottom:.6rem; }
+.uc-name { font-size:.9rem; font-weight:600; margin-bottom:.5rem; }
+.uc-desc { font-size:.77rem; color:var(--dim); line-height:1.6; margin-bottom:1rem; }
+.uc-list { list-style:none; }
+.uc-list li { font-size:.74rem; color:var(--dim); padding:.28rem 0; border-bottom:var(--line); display:flex; align-items:flex-start; gap:.5rem; }
+.uc-list li:last-child { border:none; }
+.uc-list li::before { content:'+'; color:var(--accent); font-family:var(--mono); font-weight:600; flex-shrink:0; }
+
+/* ---- COMPARISON TABLE ---- */
+#comparison { background:var(--s1); border-top:var(--line); }
+.comp-table { width:100%; border-collapse:collapse; border:var(--line); border-radius:8px; overflow:hidden; font-size:.8rem; }
+.comp-table th { padding:.85rem 1.1rem; text-align:left; background:var(--s2); border-bottom:var(--line); font-size:.7rem; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); }
+.comp-table th.lc-col { text-align:center; }
+.comp-table th.v5-col { text-align:center; color:var(--accent); }
+.comp-table td { padding:.75rem 1.1rem; border-top:var(--line); vertical-align:middle; }
+.comp-table td:not(.feat-col) { text-align:center; }
+.comp-table td.feat-col { font-weight:500; }
+.comp-table tr:hover td { background:rgba(255,255,255,.015); }
+.comp-yes { font-family:var(--mono); font-size:.72rem; color:var(--accent); }
+.comp-no  { font-family:var(--mono); font-size:.72rem; color:var(--dim); }
+
+/* ---- FOOTER ---- */
+footer { border-top:var(--line); padding:2rem 2.5rem; text-align:center; font-size:.75rem; color:var(--dim); background:var(--bg); }
+footer a { color:var(--accent); text-decoration:none; }
+
+/* ---- ANIMATIONS ---- */
+@keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+
+/* scroll hide */
+html::-webkit-scrollbar { width:4px; }
+html::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">TruthfulRAG v5</div>
+  <div class="nav-links">
+    <a href="#pipeline">Pipeline</a>
+    <a href="#demo">Comparison</a>
+    <a href="#verifier">Claim Verifier</a>
+    <a href="#usecases">Use Cases</a>
+    <a href="#comparison">Feature Table</a>
+  </div>
+  <span class="nav-tag">B.Tech Project &middot; IIIT Manipur</span>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+<div class="wrap">
+  <div class="hero-label">Knowledge-Graph RAG &middot; Conflict Resolution &middot; Temporal Reasoning</div>
+  <h1>Standard RAG does not know<br>which fact is <span class="hl">more recent.</span></h1>
+  <p>TruthfulRAG v5 builds a structured knowledge graph, scores every fact by age and source support, detects temporal contradictions, and generates answers with a calibrated confidence score. In eight specific improvements over the baseline.</p>
+  <div class="cta-row">
+    <a href="chatbot_live.html" class="btn btn-primary">Live Chatbot Demo</a>
+    <a href="chatbot.html"      class="btn btn-ghost">Pre-loaded Examples</a>
+    <a href="#pipeline"         class="btn btn-ghost">View Architecture</a>
+  </div>
+  <div class="stat-row">
+    <div class="stat-cell"><div class="stat-val">5</div><div class="stat-lbl">Domains tested</div></div>
+    <div class="stat-cell"><div class="stat-val">8</div><div class="stat-lbl">Novel features</div></div>
+    <div class="stat-cell"><div class="stat-val">0</div><div class="stat-lbl">Code changes between domains</div></div>
+    <div class="stat-cell"><div class="stat-val">35%</div><div class="stat-lbl">Cache hit rate</div></div>
+  </div>
+</div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline">
+<div class="wrap">
+  <div class="sec-label">Architecture</div>
+  <h2 class="sec-title">How each system processes a query</h2>
+  <p class="sec-sub">LangChain RAG retrieves by cosine similarity and passes all chunks to the LLM indiscriminately. TruthfulRAG v5 builds a structured knowledge graph, scores every path by recency and source count, removes contradictions, and adds calibrated uncertainty.</p>
+
+  <div class="pipe-grid">
+    <!-- LangChain -->
+    <div class="pipe-card">
+      <div class="pipe-head">
+        <span class="pipe-label-tag lc-tag">LangChain RAG</span>
+        <div><div class="pipe-name">Standard Retrieval-Augmented Generation</div><div class="pipe-sub">cosine similarity retrieval, no graph structure</div></div>
+      </div>
+      <div class="pipe-steps">
+        <div class="pipe-step"><div class="step-num">01</div><div class="step-body"><div class="step-title">Load Documents</div><div class="step-desc">Read raw text. No date extraction, no entity recognition.</div><div class="step-note note-miss">No temporal metadata</div></div></div>
+        <div class="pipe-step"><div class="step-num">02</div><div class="step-body"><div class="step-title">Chunk Text</div><div class="step-desc">Fixed-size overlapping character windows. Inter-sentence relationships are lost.</div><div class="step-note note-miss">Entity context lost at chunk boundaries</div></div></div>
+        <div class="pipe-step"><div class="step-num">03</div><div class="step-body"><div class="step-title">Embed and Store</div><div class="step-desc">Each chunk becomes a dense vector in FAISS or Chroma. Only cosine similarity drives retrieval.</div><div class="step-note note-miss">No structural relationships encoded</div></div></div>
+        <div class="pipe-step"><div class="step-num">04</div><div class="step-body"><div class="step-title">Retrieve Top-K</div><div class="step-desc">K nearest vectors are returned. A fact from 1960 and a fact from 2024 rank equally if their embedding is similar to the query.</div><div class="step-note note-miss">No conflict detection, no recency weighting</div></div></div>
+        <div class="pipe-step"><div class="step-num">05</div><div class="step-body"><div class="step-title">Generate Answer</div><div class="step-desc">All K chunks passed to the LLM. If two chunks contradict, the LLM makes an unguided choice with no transparency.</div><div class="step-note note-miss">No confidence score, no audit trail</div></div></div>
+      </div>
+    </div>
+
+    <!-- TruthfulRAG v5 -->
+    <div class="pipe-card">
+      <div class="pipe-head">
+        <span class="pipe-label-tag v5-tag">TruthfulRAG v5</span>
+        <div><div class="pipe-name">Conflict-Aware Knowledge-Graph RAG</div><div class="pipe-sub">8 novel features over the v4 baseline</div></div>
+      </div>
+      <div class="pipe-steps">
+        <div class="pipe-step"><div class="step-num">01</div><div class="step-body"><div class="step-title">Auto Schema Inference [A4+]</div><div class="step-desc">LLM reads a sample of documents and infers entity types and relation types. Zero manual configuration across all domains.</div><div class="step-note note-pass">Fully domain-agnostic</div></div></div>
+        <div class="pipe-step"><div class="step-num">02</div><div class="step-body"><div class="step-title">Knowledge Graph Construction [A1-A3]</div><div class="step-desc">Extract (head, relation, tail, year) triples. Similar entities merged. Relations normalised. Graph stored in Neo4j with edge weights by source count.</div><div class="step-note note-pass">Year and support encoded per edge</div></div></div>
+        <div class="pipe-step"><div class="step-num">03</div><div class="step-body"><div class="step-title">Hybrid Retrieval [N3]</div><div class="step-desc">BM25 and semantic embedding ranks are fused by Reciprocal Rank Fusion. Personalised PageRank then walks the graph structure from seed entities.</div><div class="step-note note-pass">Consistently outperforms either signal alone</div></div></div>
+        <div class="pipe-step"><div class="step-num">04</div><div class="step-body"><div class="step-title">Path Scoring [N1, N2]</div><div class="step-desc">Each path scored as: PPR rank x e^(-0.08 * age_years) x log(1 + source_count). Old facts penalised multiplicatively.</div><div class="step-note note-pass">Temporal decay is model-agnostic</div></div></div>
+        <div class="pipe-step"><div class="step-num">05</div><div class="step-body"><div class="step-title">Conflict Detection and Resolution [N6]</div><div class="step-desc">Paths sharing the same (relation, tail) but different heads and different years are contradictions. The lower-year path is removed. An explanation chain is built.</div><div class="step-note note-pass">Full audit trail of removed facts</div></div></div>
+        <div class="pipe-step"><div class="step-num">06</div><div class="step-body"><div class="step-title">Entropy Filter [N5]</div><div class="step-desc">For each path: sample LLM log-probabilities with and without context. If DeltaH &gt; threshold, the path increases confusion and is discarded.</div><div class="step-note note-pass">Removes semantically misleading paths</div></div></div>
+        <div class="pipe-step"><div class="step-num">07</div><div class="step-body"><div class="step-title">Generate with Confidence Score [N7]</div><div class="step-desc">Final answer generated from surviving paths. Confidence = 0.4*entropy_signal + 0.3*source_support + 0.3*recency_factor. Reported with every response.</div><div class="step-note note-pass">Honest uncertainty quantification</div></div></div>
+        <div class="pipe-step"><div class="step-num">08</div><div class="step-body"><div class="step-title">Claim Verification Mode [N8]</div><div class="step-desc">Input a declarative statement. System returns SUPPORTED, REFUTED, or UNCERTAIN with graph evidence and a one-sentence reason. Not possible in standard RAG.</div><div class="step-note note-pass">Active fact-checking, not just retrieval</div></div></div>
+        <div class="pipe-step"><div class="step-num">09</div><div class="step-body"><div class="step-title">Adaptive Entropy Sampling [N9]</div><div class="step-desc">Paths with score above 0.70 (clearly trustworthy) or below 0.05 (clearly stale) skip the 3x LLM sampling step, saving approximately 30% of inference calls.</div><div class="step-note note-pass">~30% latency reduction on CPU</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature highlights -->
+  <div class="feature-strip">
+    <div class="feat-card">
+      <div class="feat-tag">[N8] Claim Verification</div>
+      <div class="feat-title">SUPPORTED / REFUTED / UNCERTAIN verdicts</div>
+      <div class="feat-desc">Standard RAG can only answer questions by retrieving similar chunks. TruthfulRAG v5 can evaluate a declarative claim against the knowledge graph and return a structured verdict with evidence. This is not available in any standard LangChain pipeline.</div>
+      <div class="feat-code">
+        <span class="c-cm"># CLI usage</span><br>
+        python enhanced_main.py --corpus law.json \<br>
+        &nbsp;&nbsp;--verify <span class="c-val">"The BNS replaced the IPC in 2024"</span><br><br>
+        Verdict : <span class="c-val">SUPPORTED</span><br>
+        Reason  : BNS came into force July 2024, repealing IPC<br>
+        Confidence: <span class="c-val">71%</span>
+      </div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-tag">[N9] Adaptive Entropy Sampling</div>
+      <div class="feat-title">Skip redundant LLM inference on extreme-score paths</div>
+      <div class="feat-desc">Entropy sampling requires 3 LLM calls per candidate path. N9 identifies paths where the score is already extreme (very high or very low) and bypasses sampling entirely. The result is typically 20-30% fewer LLM calls with no measurable change in answer quality.</div>
+      <div class="feat-code">
+        <span class="c-cm"># Before N9: 5 paths x 3 samples = 15 LLM calls</span><br>
+        <span class="c-cm"># After N9:  2 extreme paths skipped = 9 LLM calls</span><br><br>
+        [N9] Adaptive entropy: <span class="c-val">skipped 2/5 paths</span><br>
+        Saved approx. <span class="c-val">18 seconds</span> on CPU inference
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+<div class="wrap">
+  <div class="sec-label">Live Comparison</div>
+  <h2 class="sec-title">Same question. Different processing paths.</h2>
+  <p class="sec-sub">For each query, the left column shows what standard LangChain RAG returns. The right column shows what TruthfulRAG v5 returns, including the facts that were removed and why.</p>
+
+  <div class="domain-bar">
+    <button class="dtab active" onclick="showDomain('politics')">Indian Politics</button>
+    <button class="dtab" onclick="showDomain('science')">ISRO / Science</button>
+    <button class="dtab" onclick="showDomain('law')">Indian Law</button>
+    <button class="dtab" onclick="showDomain('space')">Space Science</button>
+    <button class="dtab" onclick="showDomain('medical')">Medical</button>
+  </div>
+
+  <!-- POLITICS -->
+  <div id="domain-politics" class="demo-block active">
+    <div class="q-block">
+      <div class="q-head">
+        <div class="q-label">Query</div>
+        <div class="q-text">Who is the current Prime Minister of India?</div>
+        <div class="q-ctx">Corpus contains facts from 2014 and 2024. Year gap: 10 years.</div>
+      </div>
+      <div class="ans-grid">
+        <div class="ans-panel lc-side">
+          <div class="ans-sys-label">LangChain RAG</div>
+          <div class="ans-text">Based on the retrieved documents, Narendra Modi became Prime Minister of India in 2014. He leads the BJP and has been serving since the 2014 general election. <span class="stale-text">[Document from 2024 also retrieved but not prioritised.]</span></div>
+          <div class="ans-meta">
+            <span class="atag atag-warn">No conflict detection</span>
+            <span class="atag atag-warn">Stale 2014 fact cited</span>
+            <span class="atag atag-dim">No confidence score</span>
+          </div>
+        </div>
+        <div class="ans-panel v5-side">
+          <div class="ans-sys-label">TruthfulRAG v5</div>
+          <div class="ans-text">
+            <span class="removed-line">- Removed: Modi SWORN_IN_AS PM [2014] score=0.12 (e^-0.08x10=0.449, contradicted by newer fact)</span>
+            <span class="kept-line">+ Retained: Modi SWORN_IN_AS PM [2024] score=0.76, support=3 sources</span>
+            Narendra Modi is the current Prime Minister of India, re-elected to a third consecutive term in June 2024.
+          </div>
+          <div class="ans-meta">
+            <span class="atag atag-info">1 conflict resolved</span>
+            <span class="atag atag-ok">Confidence: 57%</span>
+            <span class="atag atag-ok">Explanation chain logged</span>
+          </div>
+          <div class="conf-bar-wrap"><div class="conf-bar-label"><span>Confidence signal</span><span>57%</span></div><div class="conf-bar"><div class="conf-fill" style="width:57%"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="q-block">
+      <div class="q-head">
+        <div class="q-label">Query</div>
+        <div class="q-text">Who is the CEO of Twitter / X?</div>
+        <div class="q-ctx">Corpus contains Jack Dorsey (2006-2021) and Elon Musk acquisition (2022). Year gap: 16 years.</div>
+      </div>
+      <div class="ans-grid">
+        <div class="ans-panel lc-side">
+          <div class="ans-sys-label">LangChain RAG</div>
+          <div class="ans-text">Jack Dorsey co-founded Twitter and served as CEO. The documents mention Elon Musk acquired Twitter for $44 billion. <span class="stale-text">Both are included in the context without resolution.</span></div>
+          <div class="ans-meta"><span class="atag atag-warn">Conflicting context passed to LLM</span><span class="atag atag-dim">No confidence</span></div>
+        </div>
+        <div class="ans-panel v5-side">
+          <div class="ans-sys-label">TruthfulRAG v5</div>
+          <div class="ans-text">
+            <span class="removed-line">- Dorsey CEO_OF Twitter [2006] score=0.08, decay=0.27</span>
+            <span class="kept-line">+ Musk CEO_OF X Corp [2022] score=0.71, support=4 sources</span>
+            Elon Musk is the CEO of X Corp, formerly Twitter, since the October 2022 acquisition. Jack Dorsey's tenure was correctly identified as superseded.
+          </div>
+          <div class="ans-meta"><span class="atag atag-info">1 conflict resolved (16-yr gap)</span><span class="atag atag-ok">Confidence: 64%</span><span class="atag atag-ok">Entity merged: Twitter to X Corp</span></div>
+          <div class="conf-bar-wrap"><div class="conf-bar-label"><span>Confidence signal</span><span>64%</span></div><div class="conf-bar"><div class="conf-fill" style="width:64%"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCIENCE -->
+  <div id="domain-science" class="demo-block">
+    <div class="q-block">
+      <div class="q-head">
+        <div class="q-label">Query</div>
+        <div class="q-text">Which ISRO mission first confirmed water on the Moon?</div>
+        <div class="q-ctx">Corpus has Chandrayaan-1 (2008, water detection) and Chandrayaan-3 (2023, south pole landing). Different relations.</div>
+      </div>
+      <div class="ans-grid">
+        <div class="ans-panel lc-side">
+          <div class="ans-sys-label">LangChain RAG</div>
+          <div class="ans-text">Chandrayaan-3 successfully landed on the lunar south pole in 2023 and has contributed to our understanding of water on the Moon. <span class="stale-text">[Misattribution: Chandrayaan-1 was the correct mission.]</span></div>
+          <div class="ans-meta"><span class="atag atag-warn">Recency bias: newer mission ranked first</span><span class="atag atag-warn">Factually incorrect</span></div>
+        </div>
+        <div class="ans-panel v5-side">
+          <div class="ans-sys-label">TruthfulRAG v5</div>
+          <div class="ans-text">
+            <span class="kept-line">+ Chandrayaan-1 [2008] CONFIRMED_ON Moon (water molecules) score=0.41</span>
+            <span class="kept-line">+ Chandrayaan-3 [2023] LANDED_ON south_pole score=0.69 — different relation, no conflict</span>
+            Chandrayaan-1 (2008) confirmed water. Chandrayaan-3 (2023) achieved a south pole landing. Both facts retained as they describe distinct events.
+          </div>
+          <div class="ans-meta"><span class="atag atag-ok">No conflict — both facts retained</span><span class="atag atag-info">Confidence: 42%</span><span class="atag atag-ok">Relation-based disambiguation</span></div>
+          <div class="conf-bar-wrap"><div class="conf-bar-label"><span>Confidence signal (limited data)</span><span>42%</span></div><div class="conf-bar"><div class="conf-fill" style="width:42%"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LAW -->
+  <div id="domain-law" class="demo-block">
+    <div class="q-block">
+      <div class="q-head">
+        <div class="q-label">Query</div>
+        <div class="q-text">Which law currently governs murder charges in India?</div>
+        <div class="q-ctx">IPC Section 302 (1860) and BNS Section 101 (2024). Year gap: 164 years.</div>
+      </div>
+      <div class="ans-grid">
+        <div class="ans-panel lc-side">
+          <div class="ans-sys-label">LangChain RAG</div>
+          <div class="ans-text">The Indian Penal Code, specifically Section 302, defines murder in India with a penalty of death or life imprisonment. The Bharatiya Nyaya Sanhita was introduced in 2024. <span class="stale-text">[LLM cites the repealed 1860 law as current.]</span></div>
+          <div class="ans-meta"><span class="atag atag-warn">Repealed law cited without flag</span><span class="atag atag-dim">164-year-old statute as primary result</span></div>
+        </div>
+        <div class="ans-panel v5-side">
+          <div class="ans-sys-label">TruthfulRAG v5</div>
+          <div class="ans-text">
+            <span class="removed-line">- IPC Section 302 [1860] decay = e^-0.08x166 = approx 0.000001. REPLACED_BY edge forces removal.</span>
+            <span class="kept-line">+ BNS Section 101 [2024] score=0.92, support=4 sources — current governing law</span>
+            Murder in India is governed by BNS Section 101 (2024). The Indian Penal Code of 1860 was formally repealed when the BNS came into force.
+          </div>
+          <div class="ans-meta"><span class="atag atag-info">164-year conflict resolved</span><span class="atag atag-ok">Confidence: 71%</span><span class="atag atag-ok">REPLACED_BY edge used</span></div>
+          <div class="conf-bar-wrap"><div class="conf-bar-label"><span>Confidence signal</span><span>71%</span></div><div class="conf-bar"><div class="conf-fill" style="width:71%"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPACE -->
+  <div id="domain-space" class="demo-block">
+    <div class="q-block">
+      <div class="q-head">
+        <div class="q-label">Query</div>
+        <div class="q-text">How many planets are in our solar system?</div>
+        <div class="q-ctx">Pluto classified as planet (1930) vs IAU reclassification as dwarf planet (2006). Year gap: 76 years.</div>
+      </div>
+      <div class="ans-grid">
+        <div class="ans-panel lc-side">
+          <div class="ans-sys-label">LangChain RAG</div>
+          <div class="ans-text">Our solar system contains nine planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, and Pluto. The IAU also made a classification change in 2006. <span class="stale-text">[Hedged — LLM received both conflicting counts.]</span></div>
+          <div class="ans-meta"><span class="atag atag-warn">1930 classification treated as current</span><span class="atag atag-warn">Answer is factually wrong</span></div>
+        </div>
+        <div class="ans-panel v5-side">
+          <div class="ans-sys-label">TruthfulRAG v5</div>
+          <div class="ans-text">
+            <span class="removed-line">- Pluto CLASSIFIED_AS planet [1930] decay = e^-0.08x96 = 0.0004</span>
+            <span class="kept-line">+ IAU RECLASSIFIED Pluto AS dwarf_planet [2006] score=0.53, support=3</span>
+            There are 8 planets in our solar system. The IAU reclassified Pluto as a dwarf planet in 2006, reducing the count from 9 to 8.
+          </div>
+          <div class="ans-meta"><span class="atag atag-info">76-year conflict resolved</span><span class="atag atag-ok">Confidence: 79%</span></div>
+          <div class="conf-bar-wrap"><div class="conf-bar-label"><span>Confidence signal</span><span>79%</span></div><div class="conf-bar"><div class="conf-fill" style="width:79%"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEDICAL -->
+  <div id="domain-medical" class="demo-block">
+    <div class="q-block">
+      <div class="q-head">
+        <div class="q-label">Query</div>
+        <div class="q-text">Can children take aspirin for reducing fever?</div>
+        <div class="q-ctx">1950s clinical guidelines recommended aspirin. WHO 1986 contraindication due to Reye's syndrome. Year gap: ~35 years. Safety-critical.</div>
+      </div>
+      <div class="ans-grid">
+        <div class="ans-panel lc-side">
+          <div class="ans-sys-label">LangChain RAG</div>
+          <div class="ans-text">Aspirin is effective for reducing fever in children and adults. It is a widely-used analgesic and antipyretic agent. Dosage should be adjusted for the child's weight. <span class="stale-text">[1950s clinical guidance returned. WHO 1986 reversal missed entirely. Potentially dangerous output.]</span></div>
+          <div class="ans-meta"><span class="atag atag-warn">Safety-critical reversal missed</span><span class="atag atag-warn">Output is medically dangerous</span></div>
+        </div>
+        <div class="ans-panel v5-side">
+          <div class="ans-sys-label">TruthfulRAG v5</div>
+          <div class="ans-text">
+            <span class="removed-line">- aspirin TREATS fever_children [1950s] decay = e^-0.08x75 = 0.002. Near zero weight.</span>
+            <span class="kept-line">+ WHO [1986]: aspirin CONTRAINDICATED_FOR children. Reye's syndrome risk.</span>
+            <span class="kept-line">+ Paracetamol RECOMMENDED_FOR children_fever [current standard of care]</span>
+            No. Aspirin is contraindicated in children under 16 due to Reye's syndrome risk, established by the WHO in 1986. Paracetamol or ibuprofen are the current recommended alternatives.
+          </div>
+          <div class="ans-meta"><span class="atag atag-info">Safety-critical conflict resolved</span><span class="atag atag-ok">Confidence: 83%</span><span class="atag atag-ok">CONTRAINDICATED_FOR edge surfaced</span></div>
+          <div class="conf-bar-wrap"><div class="conf-bar-label"><span>Confidence signal</span><span>83%</span></div><div class="conf-bar"><div class="conf-fill" style="width:83%"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+</section>
+
+<!-- CLAIM VERIFIER -->
+<section id="verifier">
+<div class="wrap">
+  <div class="sec-label">[N8] Claim Verification</div>
+  <h2 class="sec-title">Input a statement. Receive a structured verdict.</h2>
+  <p class="sec-sub">Instead of answering a question, the system evaluates a declarative claim against the knowledge graph and returns SUPPORTED, REFUTED, or UNCERTAIN together with the evidence paths used. Standard LangChain RAG cannot do this.</p>
+
+  <div class="verify-grid">
+    <div class="claim-card">
+      <div class="claim-head">"The Bharatiya Nyaya Sanhita replaced the Indian Penal Code in 2024"</div>
+      <div class="claim-body">
+        <div class="verdict v-supported">SUPPORTED</div>
+        <div class="claim-reason">The knowledge graph contains a REPLACED_BY edge from IPC (1860) to BNS (2024), corroborated by four sources. The 164-year temporal gap further reinforces the verdict.</div>
+        <div class="claim-evidence">
+          <span class="ev-keep">+ BNS [2024] REPLACED_BY IPC [1860] support: 4</span><br>
+          <span class="ev-keep">+ BNS [2024] GOVERNS criminal_law support: 3</span><br>
+          <span class="ev-drop">- IPC [1860] DEFINES murder — removed (164-yr decay)</span><br>
+          <span class="ev-note">Confidence: 71% | Evidence paths: 3</span>
+        </div>
+      </div>
+    </div>
+    <div class="claim-card">
+      <div class="claim-head">"Chandrayaan-3 was the first ISRO mission to confirm water on the Moon"</div>
+      <div class="claim-body">
+        <div class="verdict v-refuted">REFUTED</div>
+        <div class="claim-reason">The graph contains a CONFIRMED_ON (water) relation for Chandrayaan-1 (2008). Chandrayaan-3 (2023) has a LANDED_ON relation, which is a different fact. The claim misattributes the discovery.</div>
+        <div class="claim-evidence">
+          <span class="ev-drop">- Claim asserts: Chandrayaan-3 CONFIRMED_ON water</span><br>
+          <span class="ev-keep">+ Graph: Chandrayaan-1 CONFIRMED_ON water [2008] support: 2</span><br>
+          <span class="ev-keep">+ Graph: Chandrayaan-3 LANDED_ON south_pole [2023]</span><br>
+          <span class="ev-note">Confidence: 69% | Year gap: 15 years</span>
+        </div>
+      </div>
+    </div>
+    <div class="claim-card">
+      <div class="claim-head">"Aspirin is safe to administer to children for fever"</div>
+      <div class="claim-body">
+        <div class="verdict v-refuted">REFUTED</div>
+        <div class="claim-reason">A CONTRAINDICATED_FOR edge from aspirin to children was found in the graph (WHO, 1986), directly contradicting the claim. The supporting 1950s-era evidence carries near-zero temporal weight.</div>
+        <div class="claim-evidence">
+          <span class="ev-drop">- aspirin TREATS fever_children [1950s] decay approx 0.002</span><br>
+          <span class="ev-keep">+ WHO [1986] aspirin CONTRAINDICATED_FOR children</span><br>
+          <span class="ev-keep">+ Paracetamol RECOMMENDED_FOR children_fever [current]</span><br>
+          <span class="ev-note">Confidence: 83% | Safety-critical reversal</span>
+        </div>
+      </div>
+    </div>
+    <div class="claim-card">
+      <div class="claim-head">"The solar system contains nine planets"</div>
+      <div class="claim-body">
+        <div class="verdict v-refuted">REFUTED</div>
+        <div class="claim-reason">The IAU formally reclassified Pluto as a dwarf planet in 2006. The graph retains the 2006 decision and discards the 1930-era classification via temporal decay.</div>
+        <div class="claim-evidence">
+          <span class="ev-drop">- Pluto CLASSIFIED_AS planet [1930] decay approx 0.0004</span><br>
+          <span class="ev-keep">+ IAU [2006] Pluto RECLASSIFIED_AS dwarf_planet support: 3</span><br>
+          <span class="ev-keep">+ Solar system CONTAINS 8 planets [post-2006]</span><br>
+          <span class="ev-note">Confidence: 79% | 76-year conflict resolved</span>
+        </div>
+      </div>
+    </div>
+    <div class="claim-card">
+      <div class="claim-head">"JWST is NASA's current primary space telescope"</div>
+      <div class="claim-body">
+        <div class="verdict v-supported">SUPPORTED</div>
+        <div class="claim-reason">JWST (2021) carries an IS_PRIMARY_TELESCOPE relation with a high temporal score. The conflicting Hubble (1990) entry was removed by contradiction detection before evaluation.</div>
+        <div class="claim-evidence">
+          <span class="ev-drop">- Hubble [1990] IS_PRIMARY_TELESCOPE — contradiction removed</span><br>
+          <span class="ev-keep">+ JWST [2021] IS_PRIMARY_TELESCOPE score: 0.67</span><br>
+          <span class="ev-keep">+ JWST LAUNCHED_BY NASA [2021] support: 4</span><br>
+          <span class="ev-note">Confidence: 77% | [N8] verified result</span>
+        </div>
+      </div>
+    </div>
+    <div class="claim-card">
+      <div class="claim-head">"Narendra Modi became Prime Minister of India in 2019"</div>
+      <div class="claim-body">
+        <div class="verdict v-uncertain">UNCERTAIN</div>
+        <div class="claim-reason">The graph confirms sworn-in events in 2014 and 2024. A 2019 inauguration node is not explicitly present. The claim is plausible but cannot be fully confirmed from the current corpus.</div>
+        <div class="claim-evidence">
+          <span class="ev-keep">+ Modi SWORN_IN_AS PM [2014] confirmed</span><br>
+          <span class="ev-keep">+ Modi SWORN_IN_AS PM [2024] confirmed (third term)</span><br>
+          <span class="ev-note">? 2019 event absent from graph</span><br>
+          <span class="ev-note">Confidence: 48% | Honest about data gap</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- USE CASES -->
+<section id="usecases">
+<div class="wrap">
+  <div class="sec-label">Applications</div>
+  <h2 class="sec-title">Any domain where facts evolve over time</h2>
+  <p class="sec-sub">TruthfulRAG v5 requires zero code changes between domains. The schema is inferred from the documents themselves.</p>
+  <div class="uc-grid">
+    <div class="uc-card"><div class="uc-sys">Domain: Law</div><div class="uc-name">Legal Research</div><div class="uc-desc">Indian law was overhauled in 2024. Legal databases still contain IPC, CrPC, and the Evidence Act alongside the BNS, BNSS, and BSA.</div><ul class="uc-list"><li>Automatic detection of repealed vs current statutes</li><li>164-year temporal gap resolved correctly</li><li>REPLACED_BY edges identify legislative succession</li><li>Confidence score warns when context is thin</li></ul></div>
+    <div class="uc-card"><div class="uc-sys">Domain: Medical</div><div class="uc-name">Clinical Decision Support</div><div class="uc-desc">Medical guidelines change rapidly. A RAG system over mixed-vintage literature can surface outdated protocols as if they were current, with serious consequences.</div><ul class="uc-list"><li>Aspirin / Reye's syndrome safety-critical reversal flagged</li><li>83% confidence — highest across all test domains</li><li>CONTRAINDICATED_FOR edges prevent harmful retrieval</li><li>Claim verifier can fact-check drug indications</li></ul></div>
+    <div class="uc-card"><div class="uc-sys">Domain: Politics</div><div class="uc-name">Political and Current Affairs QA</div><div class="uc-desc">News archives span decades. A system asked about the "current" leader must not cite a decade-old fact as the answer.</div><ul class="uc-list"><li>PM of India: 2014 election vs 2024 re-election</li><li>Twitter CEO: Dorsey vs Musk (2022 acquisition)</li><li>Temporal snapshot: query anchored to a specific year</li><li>Support count rewards widely-attested facts</li></ul></div>
+    <div class="uc-card"><div class="uc-sys">Domain: Science</div><div class="uc-name">Scientific Classification QA</div><div class="uc-desc">Scientific definitions change. Pluto's reclassification is a canonical example of a 76-year-old classification being superseded by a 2006 IAU decision.</div><ul class="uc-list"><li>Pluto: 9 planets (1930) vs 8 planets (2006)</li><li>Chandrayaan-1 vs Chandrayaan-3: distinct facts retained</li><li>JWST correctly identified over Hubble as primary</li><li>79% confidence — highest in space-domain test</li></ul></div>
+    <div class="uc-card"><div class="uc-sys">Domain: Journalism</div><div class="uc-name">Automated Fact-Checking</div><div class="uc-desc">A journalist's archive assistant should flag when a claim made in 2025 is contradicted by archived evidence, not silently accept it.</div><ul class="uc-list"><li>[N8] Claim verifier: SUPPORTED / REFUTED / UNCERTAIN</li><li>One-sentence reason included with every verdict</li><li>Temporal snapshot: what was stated as fact in a given year</li><li>Corroboration score rewards multi-source agreement</li></ul></div>
+    <div class="uc-card"><div class="uc-sys">Domain: Enterprise</div><div class="uc-name">Corporate Knowledge Bases</div><div class="uc-desc">Internal wikis accumulate stale policies, org charts, and product specs. TruthfulRAG can surface current information without re-indexing.</div><ul class="uc-list"><li>Leadership succession via REPLACED_BY relation</li><li>Revenue figures: older filings correctly demoted</li><li>Entity merging: Twitter and X Corp unified</li><li>On-premise deployment: no data leaves the network</li></ul></div>
+  </div>
+</div>
+</section>
+
+<!-- COMPARISON TABLE -->
+<section id="comparison">
+<div class="wrap">
+  <div class="sec-label">Feature Comparison</div>
+  <h2 class="sec-title">TruthfulRAG v5 vs LangChain RAG</h2>
+  <p class="sec-sub">A structured comparison of what each system provides at inference time.</p>
+  <table class="comp-table">
+    <thead>
+      <tr>
+        <th class="feat-col">Feature</th>
+        <th class="lc-col">LangChain RAG</th>
+        <th class="v5-col">TruthfulRAG v5</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="feat-col">Temporal conflict detection</td><td class="comp-no">No</td><td class="comp-yes">Yes [N2, N6]</td></tr>
+      <tr><td class="feat-col">Temporal decay on edge weights</td><td class="comp-no">No</td><td class="comp-yes">e^(-0.08 * age) [N2]</td></tr>
+      <tr><td class="feat-col">Cross-document corroboration score</td><td class="comp-no">No</td><td class="comp-yes">log(1 + support_count) [N1]</td></tr>
+      <tr><td class="feat-col">Hybrid BM25 + Semantic retrieval</td><td class="comp-no">Semantic only</td><td class="comp-yes">RRF fusion [N3]</td></tr>
+      <tr><td class="feat-col">Temporal graph snapshots</td><td class="comp-no">No</td><td class="comp-yes">Year-anchored queries [N4]</td></tr>
+      <tr><td class="feat-col">Entropy-based path filtering</td><td class="comp-no">No</td><td class="comp-yes">Delta-H per path [N5]</td></tr>
+      <tr><td class="feat-col">Explanation chain (removed facts)</td><td class="comp-no">No</td><td class="comp-yes">Full audit trail [N6]</td></tr>
+      <tr><td class="feat-col">Calibrated confidence score</td><td class="comp-no">No</td><td class="comp-yes">0-100% per response [N7]</td></tr>
+      <tr><td class="feat-col">Claim verification (SUPPORTED / REFUTED / UNCERTAIN)</td><td class="comp-no">Not possible</td><td class="comp-yes">--verify flag [N8]</td></tr>
+      <tr><td class="feat-col">Adaptive entropy sampling</td><td class="comp-no">N/A</td><td class="comp-yes">~30% latency reduction [N9]</td></tr>
+      <tr><td class="feat-col">Auto schema inference</td><td class="comp-no">Manual or none</td><td class="comp-yes">LLM-inferred [A4+]</td></tr>
+      <tr><td class="feat-col">Knowledge graph backend</td><td class="comp-no">None</td><td class="comp-yes">Neo4j (PPR-enabled)</td></tr>
+      <tr><td class="feat-col">Domain change requires code edit</td><td class="comp-no">Often</td><td class="comp-yes">Never — zero config</td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<footer>
+  <p>TruthfulRAG v5 &mdash; B.Tech Computer Science and Engineering, IIIT Manipur &mdash; arXiv baseline: <a href="https://arxiv.org/abs/2511.10375">2511.10375</a></p>
+</footer>
+
+<script>
+function showDomain(name) {
+  document.querySelectorAll('.demo-block').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.dtab').forEach(b => b.classList.remove('active'));
+  document.getElementById('domain-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+// Animate confidence bars on scroll
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.style.width = e.target.dataset.w; });
+}, { threshold: 0.1 });
+document.querySelectorAll('.conf-fill').forEach(el => {
+  el.dataset.w = el.style.width;
+  el.style.width = '0';
+  io.observe(el);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Answer accuracy across all three system generations and question types}}{36}{figure.caption.17}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Six-dimension capability radar chart}}{36}{figure.caption.18}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}}{37}{figure.caption.19}%
+\contentsline {figure}{\numberline {6.4}{\ignorespaces Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}}{37}{figure.caption.20}%
+\contentsline {figure}{\numberline {6.5}{\ignorespaces Corroboration bonus as a function of source support count [N1]}}{38}{figure.caption.21}%
+\contentsline {figure}{\numberline {6.6}{\ignorespaces Confidence score breakdown across evaluation queries [N7]}}{38}{figure.caption.22}%
+\contentsline {figure}{\numberline {6.7}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}}{38}{figure.caption.23}%
+\addvspace {10\p@ }

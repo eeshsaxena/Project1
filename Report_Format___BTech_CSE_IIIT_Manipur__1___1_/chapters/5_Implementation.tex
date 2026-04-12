@@ -1,0 +1,356 @@
+
+% ================================================================
+% CHAPTER 5: IMPLEMENTATION
+% ================================================================
+
+\section{Development Environment}
+
+\subsection{Programming Language: Python 3.11}
+
+The project is implemented entirely in Python 3.11. The choice of Python was
+not arbitrary. Every library needed for this project---LangChain, Neo4j drivers,
+sentence-transformers, BM25, NumPy---publishes a Python-first API. Attempting
+to replicate this stack in Java or Go would mean either writing driver wrappers
+from scratch or forgoing the LangChain abstractions entirely, which would
+significantly increase development time without any algorithmic benefit. Python
+3.11 specifically was chosen over 3.12 because the version of LangChain used
+(0.3.x) had a known compatibility issue with Python 3.12's stricter type
+annotations at the time of development.
+
+\subsection{IDE: Visual Studio Code}
+
+Visual Studio Code was used over alternatives such as PyCharm because it is
+free, starts fast, and integrates with the Neo4j browser extension directly.
+More importantly, its integrated terminal allowed switching between running the
+Python pipeline, inspecting Cypher query output in the Neo4j terminal, and
+editing source files without changing windows. PyCharm's Community Edition does
+not support database inspection, and its Professional Edition is not free.
+
+\subsection{Version Control: Git and GitHub}
+
+Git was used because it is the standard for academic and industry software
+development and because GitHub provides free private repositories for students.
+Every significant change was committed with a descriptive message. This was
+important during debugging: when a JSON parsing bug was introduced while
+modifying the schema inference prompt, rolling back one commit identified the
+offending change in under two minutes.
+
+\subsection{Libraries and Frameworks}
+
+\begin{table}[H]
+\centering
+\caption{Software stack and version details}
+\label{tab:deps}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Component} & \textbf{Package} & \textbf{Purpose} \\
+\hline
+LLM Framework       & \texttt{langchain-neo4j}, \texttt{langchain-ollama}    & Pipeline integration \\
+Graph Extraction    & \texttt{langchain-experimental}                        & LLMGraphTransformer \\
+Graph Database      & Neo4j Community Edition + APOC plugin                  & Knowledge graph storage \\
+Embedding Model     & \texttt{sentence-transformers} (all-MiniLM-L6-v2)      & Semantic similarity \\
+Keyword Retrieval   & \texttt{rank-bm25}                                     & BM25 document ranking \\
+Numerical Math      & \texttt{numpy}                                         & PPR computation \\
+Environment Loader  & \texttt{python-dotenv}                                 & Credential management \\
+\hline
+\end{tabular}}
+\end{table}
+
+\textbf{Why LangChain?}
+LangChain provides two features that would otherwise require significant
+custom code: the \texttt{Neo4jGraph} Bolt connection wrapper and the
+\texttt{LLMGraphTransformer} class that translates raw text into graph triples.
+Writing a Neo4j Bolt client and an LLM-powered triple extractor from scratch is
+feasible but would add approximately 400--600 lines of boilerplate. LangChain's
+abstractions reduced this to roughly 20 lines of configuration.
+
+\textbf{Why Neo4j over a Vector Store (such as Chroma or FAISS)?}
+Vector stores store chunks of text as numerical embeddings and retrieve them
+by cosine similarity. This approach has one fundamental limitation: it cannot
+represent \emph{relationships} between facts. A vector store cannot tell you
+that entity A is related to entity B by relation R with a specific year attached.
+Neo4j's property graph model stores exactly this structure natively. The ability
+to attach \texttt{year} and \texttt{support} as properties on an edge---and then
+query them with Cypher---is what makes temporal decay and corroboration scoring
+possible at all. No vector store supports this without external bookkeeping.
+
+\textbf{Why Neo4j Community Edition specifically?}
+Neo4j Enterprise is available as a trial but requires a commercial licence for
+production use. Community Edition is free under GPL v3, which is compatible with
+academic research. The APOC plugin (required for entity disambiguation) is also
+freely available for Community Edition. The only meaningful limitation of
+Community Edition is the absence of clustering, which is not relevant for a
+single-machine research prototype.
+
+\textbf{Why \texttt{sentence-transformers} (all-MiniLM-L6-v2)?}
+Sentence embedding is needed in two places: filtering retrieved graph edges by
+semantic relevance to the query, and computing semantic entropy ($H_{\text{sem}}$)
+during conflict resolution. The \texttt{all-MiniLM-L6-v2} model produces 384-dimensional
+embeddings in under 50\,ms per sentence on CPU, which is fast enough that its
+contribution to total latency is negligible compared to LLM inference. Larger
+models (e.g., \texttt{all-mpnet-base-v2}) produce marginally better embeddings
+but take 3--4 times longer to load and run. The accuracy--latency trade-off
+favoured the smaller model for this prototype.
+
+\textbf{Why BM25 in addition to semantic embeddings?}
+BM25 and semantic retrieval have complementary failure modes. BM25 fails on
+paraphrases (``sworn in'' vs.\ ``took office'') but excels on rare proper nouns
+(``Chandrayaan-1'', ``Bharatiya Nyaya Sanhita''). Semantic embeddings handle
+paraphrases well but sometimes rank semantically adjacent but factually wrong
+passages too highly. Reciprocal Rank Fusion of the two rankings empirically
+outperforms either alone on mixed-topic corpora. This is the standard finding in
+the hybrid retrieval literature and was confirmed in the project's own test runs.
+
+\textbf{Why Ollama and Qwen2.5-7B-Instruct?}
+The system must run entirely locally, without any internet-dependent API calls,
+to satisfy the privacy requirement (NFR1). Ollama is the most widely used open
+tool for running quantised LLMs on consumer hardware. Qwen2.5-7B-Instruct was
+selected over Llama-3-8B-Instruct and Mistral-7B-Instruct because preliminary
+testing showed it to be more consistent at producing valid JSON output, which is
+critical for schema inference and triple extraction. Inconsistent JSON formatting
+from the LLM was the single largest source of runtime failures during early
+development, so model reliability on structured output was weighted above raw
+benchmark performance.
+
+\textbf{Why \texttt{python-dotenv}?}
+Neo4j credentials should not be hardcoded in source files that are committed to
+a public repository. \texttt{python-dotenv} reads a \texttt{.env} file at
+runtime and injects its values as environment variables. This is a standard,
+well-understood pattern. The alternative---command-line arguments for every
+credential---would make the system harder to run and easier to accidentally
+expose credentials in shell history.
+
+% ----------------------------------------------------------------
+\section{System Architecture Implementation}
+
+\subsection{Why a Layered Pipeline Architecture?}
+
+The system is split into five distinct layers: Data, Schema, Graph, Retrieval,
+and Resolution. This separation was a conscious design choice, not an accident.
+It means that each layer can be changed without breaking the others. For example,
+replacing Neo4j with a different graph database would only require changing the
+Graph layer; the Retrieval and Resolution layers would be unaffected because they
+communicate through the defined \texttt{KnowledgePath} intermediate format. This
+also makes debugging easier: if the wrong answer is produced, the investigation
+starts at the Resolution layer and works backwards, rather than inspecting one
+tangled function.
+
+\subsection{Why a Single Python File?}
+
+The entire implementation is in one file (\texttt{enhanced\_main.py}, approximately
+880 lines) rather than split into multiple modules. This was a deliberate choice
+for a research prototype. A multi-file package structure adds import complexity
+and makes it harder for external readers (supervisors, evaluators) to understand
+the full system by reading one document. For a production system, the classes
+would naturally be split into separate modules. For a B.Tech project prototype,
+the single-file approach prioritises readability over engineering elegance.
+
+\subsection{Why Share the Embedding Model Across Classes?}
+
+The \texttt{SentenceTransformer} model (\texttt{all-MiniLM-L6-v2}) takes
+2--3 seconds to load from disk into memory. Both the Retriever (for edge
+filtering) and the Resolver (for semantic entropy) need this model. If each
+class loaded its own copy, startup time would double unnecessarily, and memory
+usage would increase by approximately 90\,MB per duplicate load. The model is
+therefore instantiated once in \texttt{EnhancedPipeline.\_\_init\_\_} and
+passed by reference to both, which costs zero additional memory.
+
+\subsection{Why an In-Memory LLM Cache?}
+
+Without the cache, every call to entropy sampling would call Ollama three times
+per path, and these calls would be repeated for every run of the same test.
+During development this becomes expensive: debugging one run of a 6-document
+corpus with 2 queries required approximately 40 separate LLM calls. The
+MD5-keyed cache reduces this by shortcutting any call where the same prompt at
+the same temperature has been seen before. In the final validation run, the
+cache achieved a 35\% hit rate, saving roughly 14 LLM calls and approximately
+40 seconds of wall-clock time.
+
+\subsection{Why PPR (Personalised PageRank) for Graph Retrieval?}
+
+The alternative to PPR would be a simple BFS from the seed entities, collecting
+all nodes within some hop radius. BFS has no way to rank paths by importance.
+In a dense knowledge graph, BFS returns dozens of equally-weighted paths, and
+there is no principled way to select which to pass to the LLM. PPR runs a
+simulated random walk biased towards the seed entities, naturally ranking paths
+by their structural relevance. Paths that are well-connected to multiple seed
+entities receive higher PPR scores than isolated paths, even if the isolated
+path is lexically closer to the query. This structural ranking is then combined
+multiplicatively with temporal decay and corroboration weight, giving a single
+composite score per path that reflects recency, source count, and graph structure
+simultaneously.
+
+\subsection{Why Entropy as the Conflict Resolution Signal?}
+
+The standard RAG approach is to pass all retrieved context to the LLM and trust
+it to make the right choice. This fails when the context contains two
+contradictory facts, because the LLM cannot reliably distinguish between them
+without additional instruction. The entropy approach, taken from arXiv:2511.10375,
+instead measures whether a given piece of context \emph{reduces the LLM's
+uncertainty} about the query. If $\Delta H = H_{\text{context}} - H_{\text{param}}
+< 0$, the context made the LLM less confused, so it is useful. If $\Delta H > 0$,
+the context made the LLM more confused, so it is likely contradictory or
+irrelevant. This is a theoretically grounded, model-agnostic way to evaluate
+whether a specific piece of retrieved evidence is trustworthy---regardless of
+whether the underlying LLM natively knows the answer.
+
+% ----------------------------------------------------------------
+\section{Code Implementation}
+
+The source code is organised into ten logical sections within
+\texttt{enhanced\_main.py}:
+
+\begin{enumerate}
+    \item Imports and global configuration (\texttt{CFG})
+    \item \texttt{LLMCache} class and \texttt{cached\_invoke()} wrapper
+    \item Prompt templates (6 constants)
+    \item \texttt{HybridRetriever} class [N3]
+    \item \texttt{TripleRecord} dataclass and \texttt{EnhancedGraphConstructor}
+    \item \texttt{KnowledgePath} dataclass and \texttt{EnhancedGraphRetriever}
+    \item Entropy helper functions and \texttt{EnhancedConflictResolver}
+    \item \texttt{EnhancedPipeline} coordinator
+    \item \texttt{run\_comparison()} orchestrator
+    \item \texttt{\_load\_corpus()}, \texttt{\_interactive\_input()}, and
+    \texttt{if \_\_name\_\_ ==} entry point
+\end{enumerate}
+
+\subsection{Key Code Snippets}
+
+\subsubsection{Temporal Decay [N2]}
+The exponential decay function reduces the retrieval score of older facts:
+\begin{verbatim}
+def _temporal_decay(self, year):
+    if not self.cfg["use_temporal_decay"] or not year:
+        return 1.0
+    lam = self.cfg["temporal_decay_lambda"]  # 0.08
+    return math.exp(-lam * max(0, CURRENT_YEAR - year))
+\end{verbatim}
+
+\subsubsection{Combined Path Scoring}
+All five scoring components are multiplied in a single expression:
+\begin{verbatim}
+corroborate = math.log(1 + sc) * self.cfg["corroboration_weight"]
+decay       = self._temporal_decay(yr)
+combined    = (ref_p * hub_pen) * (1 + ppr_avg) * decay * (1 + corroborate)
+\end{verbatim}
+
+\subsubsection{Shannon Entropy Calculation}
+\begin{verbatim}
+def _H_str(answers):
+    c = Counter(answers); n = len(answers); h = 0.0
+    for v in c.values():
+        p = v / n; h -= p * math.log(p + 1e-9)
+    return h
+\end{verbatim}
+
+\subsubsection{Calibrated Confidence Score [N7]}
+\begin{verbatim}
+def _confidence(self, delta_h, tau, support, year_gap):
+    w      = self.cfg["confidence_weights"]
+    h_sig  = min(abs(delta_h) / (tau + 1e-9), 2.0) / 2.0
+    sup_s  = min(math.log(1 + support) / math.log(6), 1.0)
+    rec_s  = math.exp(-0.05 * max(0, year_gap))
+    return round(min(w["h"]*h_sig + w["sup"]*sup_s + w["rec"]*rec_s, 1.0), 3)
+\end{verbatim}
+
+\subsubsection{Schema Inference JSON Parsing [A4+]}
+LLM output may include markdown code fences; stripping them is mandatory:
+\begin{verbatim}
+raw   = cached_invoke(self.llm, SCHEMA_INFER_PROMPT.format(...))
+clean = re.sub(r'```(?:json)?\s*', '', raw).strip()
+m     = re.search(r'\{.*\}', clean, re.DOTALL)
+data  = json.loads(m.group(0) if m else clean)
+\end{verbatim}
+
+% ----------------------------------------------------------------
+\section{Testing}
+
+\subsection{Unit Testing}
+
+Each major method was tested in isolation using direct Python calls before the
+full pipeline was assembled. Key unit-level verifications:
+
+\begin{itemize}
+    \item \texttt{\_temporal\_decay(2014)}: Expected $\approx 0.38$; verified
+    against manual calculation $e^{-0.08 \times 12} = 0.382$.
+    \item \texttt{\_H\_str(["A","A","B"])}: Expected $\approx 0.636$; verified
+    against Shannon entropy formula.
+    \item \texttt{\_confidence(delta\_h=0, tau=0.25, support=1, year\_gap=2)}:
+    Expected $\approx 0.35$.
+    \item LLM cache: Repeated call with identical prompt and temperature returns
+    cached result in $< 1$\,ms.
+\end{itemize}
+
+\subsection{Integration Testing}
+
+Integration tests verified the interaction between the LLM (Ollama), the
+graph database (Neo4j), and the Python layer:
+
+\begin{itemize}
+    \item Schema inference: Verified that \texttt{cfg["schema\_entity\_types"]}
+    is non-empty after \texttt{\_infer\_schema()}.
+    \item Triple storage: Verified that \texttt{MATCH ()-[r]->() RETURN count(r)}
+    returns a non-zero count after \texttt{\_store\_all()}.
+    \item Disambiguation: Verified that nodes with 85\%+ similar names are
+    reduced to a single node (confirmed via \texttt{MATCH (n) RETURN count(n)}).
+\end{itemize}
+
+\subsection{System Testing}
+
+A full end-to-end run on the 6-document political corpus with 2 queries
+served as the system test. Pass criteria:
+\begin{itemize}
+    \item Exit code 0.
+    \item At least one contradiction detected and removed.
+    \item Confidence score printed for each query.
+    \item Answer text non-empty for each query.
+\end{itemize}
+All criteria were met in the validation run (see Chapter~6).
+
+\subsection{User Testing}
+
+The CLI was tested with all four input modes:
+\begin{itemize}
+    \item \texttt{--corpus}: Verified JSON loading from file.
+    \item \texttt{--docs / --queries}: Verified inline string injection.
+    \item \texttt{--interactive}: Verified terminal input prompts function correctly.
+    \item No arguments: Verified auto-generation of \texttt{corpus.json} template.
+\end{itemize}
+
+% ----------------------------------------------------------------
+\section{Challenges and Solutions}
+
+\subsection{Challenges}
+
+\begin{enumerate}
+    \item \textbf{LLM JSON formatting}: The LLM frequently wraps JSON output in
+    markdown code fences (\texttt{```json...```}), causing \texttt{json.loads()}
+    to raise \texttt{JSONDecodeError}.
+    \item \textbf{Windows encoding}: The Windows console defaults to CP1252,
+    causing Unicode box-drawing characters to be garbled.
+    \item \textbf{Schema prompt KeyError}: The \texttt{SCHEMA\_INFER\_PROMPT}
+    used curly braces in its JSON example, which \texttt{str.format()} interpreted
+    as format placeholders.
+    \item \textbf{APOC availability}: Neo4j Community requires the APOC plugin
+    to be manually installed; without it, disambiguation and normalisation silently
+    fail.
+    \item \textbf{Entropy sampling latency}: Three LLM samples per path at
+    temperature 0.7 on CPU-only hardware adds 10--20 seconds per query.
+\end{enumerate}
+
+\subsection{Solutions}
+
+\begin{enumerate}
+    \item Applied \texttt{re.sub(r'\`\`\`(?:json)?\\s*', '', raw)} before all
+    \texttt{json.loads()} calls throughout the codebase.
+    \item Added \texttt{sys.stdout.reconfigure(encoding='utf-8', errors='replace')}
+    at module load time.
+    \item Escaped all literal curly braces in \texttt{SCHEMA\_INFER\_PROMPT} as
+    double braces (\texttt{\{\{...\}\}}).
+    \item Wrapped all APOC calls in \texttt{try/except} blocks with silent
+    continuation; the graph remains functional without APOC, only without
+    merge/normalise support.
+    \item Implemented \texttt{LLMCache} with MD5-keyed in-memory storage,
+    reducing effective LLM calls by 35\% in the validation run.
+\end{enumerate}
