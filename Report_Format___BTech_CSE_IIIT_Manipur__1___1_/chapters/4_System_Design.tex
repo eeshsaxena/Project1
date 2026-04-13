@@ -127,7 +127,7 @@ write entity types and relation types to \texttt{cfg}.\\
     \item \texttt{\_edges(snapshot\_year)}: Fetch all edges; filter by year if snapshot active.
     \item \texttt{\_filter\_edges()}: Cosine similarity filter on relation types.
     \item \texttt{\_ppr()}: 20-iteration power-method PPR from seed entities.
-    \item Score every surviving edge with Eq.~\eqref{eq:score}.
+    \item Score every surviving edge with $s = e^{-\lambda t} \cdot \log(1 + \text{support})$.
     \item Return top-$k$ \texttt{KnowledgePath} objects.
 \end{enumerate}
 \textbf{Output}: Ordered list of \texttt{KnowledgePath} objects

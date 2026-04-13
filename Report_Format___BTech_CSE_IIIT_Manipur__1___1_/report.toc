@@ -104,5 +104,5 @@
 \contentsline {chapter}{\numberline {7}Conclusion}{41}{chapter.7}%
 \contentsline {section}{\numberline {7.1}Contributions to the Field}{41}{section.7.1}%
 \contentsline {section}{\numberline {7.2}Future Enhancements}{42}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Final Thoughts}{42}{section.7.3}%
+\contentsline {section}{\numberline {7.3}Final Thoughts}{43}{section.7.3}%
 \contentsline {chapter}{Bibliography}{44}{chapter*.24}%

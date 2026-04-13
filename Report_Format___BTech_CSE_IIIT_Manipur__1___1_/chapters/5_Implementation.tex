@@ -342,7 +342,7 @@ The CLI was tested with all four input modes:
 \subsection{Solutions}
 
 \begin{enumerate}
-    \item Applied \texttt{re.sub(r'\`\`\`(?:json)?\\s*', '', raw)} before all
+    \item Applied \verb|re.sub(r'```(?:json)?\s*', '', raw)| before all
     \texttt{json.loads()} calls throughout the codebase.
     \item Added \texttt{sys.stdout.reconfigure(encoding='utf-8', errors='replace')}
     at module load time.
