@@ -1,4 +1,4 @@
-
+﻿
 % ================================================================
 % CHAPTER 4: SYSTEM DESIGN
 % ================================================================
@@ -33,12 +33,12 @@ others.
     time, with visual confidence bars and knowledge-path displays.
 \end{itemize}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.7\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: TruthfulRAG v5 --- Six-Layer Architecture Diagram]}\\
 \textit{Layers 0--5 shown as horizontal bands with data-flow arrows between them.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Six-layer system architecture of TruthfulRAG v5}
 \label{fig:arch}
 \end{figure}
@@ -71,12 +71,12 @@ Data flows at Level 0:
     and knowledge-path audit trail
 \end{enumerate}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.7\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Level-0 Context DFD]}\\
 \textit{Central process bubble with data flows to/from User, Ollama, and Neo4j.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Level-0 Context DFD for TruthfulRAG v5}
 \label{fig:dfd0}
 \end{figure}
@@ -87,12 +87,12 @@ The Level 1 DFD decomposes the central system into four sub-processes:
 \textbf{P1 Schema Inference}, \textbf{P2 Graph Construction}, \textbf{P3 Graph
 Retrieval}, and \textbf{P4 Conflict Resolution}.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.7\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Level-1 DFD]}\\
 \textit{Four process bubbles (P1--P4) with data stores: Neo4j Graph and CFG Dictionary.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Level-1 DFD showing the four internal sub-processes}
 \label{fig:dfd1}
 \end{figure}
@@ -124,13 +124,13 @@ summarised in Table~\ref{tab:classes}.
 \end{tabular}}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.7\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: UML Class Diagram]}\\
 \textit{EnhancedPipeline composes Constructor, Retriever, and Resolver.}\\
 \textit{Shared Neo4jGraph and SentenceTransformer embedder shown as associations.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{UML class diagram for \texttt{enhanced\_main.py}}
 \label{fig:class}
 \end{figure}
@@ -223,13 +223,13 @@ Relation types: ["APPROVED_BY", "REPLACED_BY", "RECOMMENDED_FOR"]
 \textbf{Output}: Answer string, \texttt{meta} dictionary with confidence, conflict count,
 and the explanation chain.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.7\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Module C --- Conflict Resolution Flowchart]}\\
 \textit{Decision diamond: contradictions found? Yes \textrightarrow{} EXPLAIN\_PROMPT.}\\
 \textit{No \textrightarrow{} Entropy check \textrightarrow{} RAG\_PROMPT.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Conflict resolution decision flowchart (Module C)}
 \label{fig:conflict}
 \end{figure}
@@ -308,13 +308,13 @@ The end-to-end interaction for a single user query proceeds as follows:
     \item JSON response returns to browser; confidence bar and path display rendered.
 \end{enumerate}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.7\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: End-to-End Sequence Diagram]}\\
 \textit{Lifelines: Browser, Flask Server, EnhancedPipeline, Ollama, Neo4j.}\\
 \textit{Ingest sequence followed by query sequence with return messages.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{End-to-end sequence diagram for corpus load and query}
 \label{fig:seq}
 \end{figure}
@@ -348,13 +348,13 @@ The interface is divided into five horizontal zones:
     and conflicts removed.
 \end{enumerate}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Live Chatbot Screenshot --- Both Pipelines Running]}\\
 \textit{Left panel: LangChain RAG. Right panel: TruthfulRAG v5 with confidence bar.}\\
 \textit{Same query, different answers, visible conflict resolution.}
-\vspace{3cm}}}
+\vspace{1.0cm}}}
 \caption{TruthfulRAG v5 live chatbot --- dual-panel comparison interface}
 \label{fig:ui}
 \end{figure}

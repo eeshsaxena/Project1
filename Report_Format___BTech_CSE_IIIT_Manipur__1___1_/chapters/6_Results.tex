@@ -47,49 +47,49 @@ FR12 & Confidence percentage printed after every query in all domains & Pass \\
 Figure~\ref{fig:gantt} shows the project schedule from inception to
 final submission, broken into six development phases.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{ganttchart}[
   hgrid, vgrid,
   title height=1,
   bar height=0.5,
   bar top shift=0.25,
-  x unit=0.72cm,
+  x unit=0.75cm,
   y unit title=0.55cm,
-  y unit chart=0.60cm,
-  title label font=\footnotesize,
-  bar label font=\footnotesize,
-  group label font=\footnotesize\bfseries,
-  milestone label font=\footnotesize,
-  bar/.append style={fill=black!70, rounded corners=2pt},
-  bar incomplete/.append style={fill=black!20},
-  group/.append style={fill=black!85},
-  title/.append style={fill=black!10},
+  y unit chart=0.65cm,
+  title label font=\small,
+  bar label font=\small,
+  group label font=\small\bfseries,
+  bar/.append style={fill=black!65, rounded corners=2pt},
+  bar incomplete/.append style={fill=black!15},
+  group/.append style={fill=black!80},
+  title/.append style={fill=black!08},
 ]{1}{16}
-  \gantttitle{Jan}{4}
-  \gantttitle{Feb}{4}
-  \gantttitle{Mar}{4}
-  \gantttitle{Apr}{4} \\
+  \gantttitle{January 2026}{4}
+  \gantttitle{February 2026}{4}
+  \gantttitle{March 2026}{4}
+  \gantttitle{April 2026}{4} \\
   \ganttgroup{Phase 1: Literature Review}{1}{3} \\
-  \ganttbar{Read arXiv:2511.10375}{1}{3} \\
+  \ganttbar{Read arXiv:2511.10375 (TruthfulRAG v4)}{1}{3} \\
   \ganttgroup{Phase 2: Baseline v4 Implementation}{4}{6} \\
-  \ganttbar{Graph Constructor (Module A)}{4}{5} \\
-  \ganttbar{Retriever + Conflict Resolver (B, C)}{5}{6} \\
-  \ganttgroup{Phase 3: v5 Novel Extensions}{6}{10} \\
-  \ganttbar{N1/N2: Corroboration + Decay}{6}{7} \\
-  \ganttbar{N3: Hybrid BM25/Semantic RRF}{7}{8} \\
-  \ganttbar{N4/N5: Explanation + Confidence}{8}{9} \\
+  \ganttbar{Graph Constructor --- Module A}{4}{5} \\
+  \ganttbar{Retriever + Conflict Resolver --- B, C}{5}{6} \\
+  \ganttgroup{Phase 3: Novel v5 Extensions (N1--N6)}{6}{10} \\
+  \ganttbar{N1/N2: Corroboration Scoring + Temporal Decay}{6}{7} \\
+  \ganttbar{N3: Hybrid BM25 + Semantic RRF Retrieval}{7}{8} \\
+  \ganttbar{N4/N5: Explanation Chain + Confidence Score}{8}{9} \\
   \ganttbar{N6: Claim Verification Mode}{9}{10} \\
   \ganttgroup{Phase 4: Web Interface}{10}{13} \\
-  \ganttbar{Flask API Server}{10}{11} \\
-  \ganttbar{Dual-panel Live Chatbot}{11}{13} \\
-  \ganttgroup{Phase 5: Testing \& Debugging}{12}{14} \\
-  \ganttbar{Multi-corpus validation}{12}{13} \\
-  \ganttbar{Bug fixes (Cypher, serializer)}{13}{14} \\
-  \ganttgroup{Phase 6: Report \& Submission}{14}{16} \\
-  \ganttbar{LaTeX report writing}{14}{15} \\
-  \ganttbar{GitHub push + final review}{15}{16}
-\end{ganttchart}
+  \ganttbar{Flask REST API Server}{10}{11} \\
+  \ganttbar{Dual-panel Live Chatbot Interface}{11}{13} \\
+  \ganttgroup{Phase 5: Testing and Debugging}{12}{14} \\
+  \ganttbar{Multi-corpus Validation (4 domains)}{12}{13} \\
+  \ganttbar{Bug Fixes --- Cypher, Serializer, UI State}{13}{14} \\
+  \ganttgroup{Phase 6: Report and Submission}{14}{16} \\
+  \ganttbar{LaTeX Report Writing}{14}{15} \\
+  \ganttbar{GitHub Push and Final Review}{15}{16}
+\end{ganttchart}}
 \caption{Project development Gantt chart (January--April 2026)}
 \label{fig:gantt}
 \end{figure}
@@ -174,13 +174,13 @@ missions that both involve the Moon---a nuanced retrieval task.
 
 \subsection{Key System Output Charts}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.85\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Grouped Bar Chart]}\\
 \textit{Answer accuracy across all three system generations (LC RAG, v4, v5)}\\
 \textit{for stable facts, temporally-conflicted facts, and claim verification.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Answer accuracy across all three system generations and question types}
 \label{fig:bar}
 \end{figure}
@@ -190,25 +190,25 @@ The grouped bar chart above shows the clearest story. For stable facts
 facts, the gap opens up sharply: standard LangChain RAG answers correctly about
 half the time, while TruthfulRAG v5 handles them reliably.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.72\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Six-Dimension Capability Radar Chart]}\\
 \textit{Axes: Conflict Detection, Temporal Awareness, Confidence,}\\
 \textit{Claim Verification, Explanation, Domain Agnosticism.}\\
 \textit{LC RAG vs.\ TruthfulRAG v5 overlaid.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}
 \label{fig:radar}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.80\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Temporal Decay Curve]}\\
 \textit{X-axis: Fact age in years (0--30). Y-axis: Retrieval weight (0--1.0).}\\
 \textit{$\lambda = 0.08$; half-life at approximately 8.7 years marked.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}
 \label{fig:decay}
 \end{figure}
@@ -218,70 +218,70 @@ The temporal decay chart shows something intuitive: a scientific discovery from
 retrieval weight by 2026. This naturally pushes older superseded facts to the
 bottom of the ranking before any conflict detection even runs.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.78\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Score Gap Bar Chart]}\\
 \textit{Side-by-side bars showing retrieval scores of the conflicting pair.}\\
 \textit{v4 (scores tied) vs.\ v5 (clear gap created by decay and corroboration).}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}
 \label{fig:gap}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.75\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Corroboration Bonus Curve]}\\
 \textit{X-axis: Number of agreeing sources (1--10).}\\
 \textit{Y-axis: $\log(1 + \text{support})$ score multiplier.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Corroboration bonus as a function of source support count [N1]}
 \label{fig:corr}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.78\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Confidence Score Breakdown Bar Chart]}\\
 \textit{Four queries shown. Each bar split into entropy, support, and recency components.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Confidence score breakdown across evaluation queries [N5]}
 \label{fig:confidence}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.80\textwidth}{\centering\vspace{2.5cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Accuracy Gain Bar Chart]}\\
 \textit{Percentage accuracy gain of TruthfulRAG v5 over LangChain RAG baseline}\\
 \textit{across four domains: Medical, Legal, Indian Science, Space Science.}
-\vspace{2.5cm}}}
+\vspace{1.0cm}}}
 \caption{Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}
 \label{fig:gains}
 \end{figure}
 
 \subsection{Web Interface Screenshots}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Chatbot Screenshot --- Medical Corpus Loaded]}\\
 \textit{Query: ``Can children take aspirin for fever?''}\\
 \textit{LC panel: no conflict detected, returns old recommendation.}\\
 \textit{v5 panel: conflict removed, correct 2023 guideline returned, 42\,\% conf.}
-\vspace{3cm}}}
+\vspace{1.0cm}}}
 \caption{Side-by-side comparison: LC RAG vs.\ TruthfulRAG v5 on conflicted medical query}
 \label{fig:ss1}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}
+\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
 \textit{[Figure: Claim Verify Screenshot]}\\
 \textit{Claim: ``Aspirin is safe for children with fever.''}\\
 \textit{v5 verdict: REFUTED --- with evidence and confidence shown.}
-\vspace{3cm}}}
+\vspace{1.0cm}}}
 \caption{Claim Verification Mode [N6] --- REFUTED verdict with graph evidence}
 \label{fig:ss2}
 \end{figure}
