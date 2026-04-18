@@ -42,6 +42,59 @@ FR12 & Confidence percentage printed after every query in all domains & Pass \\
 \end{table}
 
 % ----------------------------------------------------------------
+\section{Project Development Timeline}
+
+Figure~\ref{fig:gantt} shows the project schedule from inception to
+final submission, broken into six development phases.
+
+\begin{figure}[H]
+\centering
+\begin{ganttchart}[
+  hgrid, vgrid,
+  title height=1,
+  bar height=0.5,
+  bar top shift=0.25,
+  x unit=0.72cm,
+  y unit title=0.55cm,
+  y unit chart=0.60cm,
+  title label font=\footnotesize,
+  bar label font=\footnotesize,
+  group label font=\footnotesize\bfseries,
+  milestone label font=\footnotesize,
+  bar/.append style={fill=black!70, rounded corners=2pt},
+  bar incomplete/.append style={fill=black!20},
+  group/.append style={fill=black!85},
+  title/.append style={fill=black!10},
+]{1}{16}
+  \gantttitle{Jan}{4}
+  \gantttitle{Feb}{4}
+  \gantttitle{Mar}{4}
+  \gantttitle{Apr}{4} \\
+  \ganttgroup{Phase 1: Literature Review}{1}{3} \\
+  \ganttbar{Read arXiv:2511.10375}{1}{3} \\
+  \ganttgroup{Phase 2: Baseline v4 Implementation}{4}{6} \\
+  \ganttbar{Graph Constructor (Module A)}{4}{5} \\
+  \ganttbar{Retriever + Conflict Resolver (B, C)}{5}{6} \\
+  \ganttgroup{Phase 3: v5 Novel Extensions}{6}{10} \\
+  \ganttbar{N1/N2: Corroboration + Decay}{6}{7} \\
+  \ganttbar{N3: Hybrid BM25/Semantic RRF}{7}{8} \\
+  \ganttbar{N4/N5: Explanation + Confidence}{8}{9} \\
+  \ganttbar{N6: Claim Verification Mode}{9}{10} \\
+  \ganttgroup{Phase 4: Web Interface}{10}{13} \\
+  \ganttbar{Flask API Server}{10}{11} \\
+  \ganttbar{Dual-panel Live Chatbot}{11}{13} \\
+  \ganttgroup{Phase 5: Testing \& Debugging}{12}{14} \\
+  \ganttbar{Multi-corpus validation}{12}{13} \\
+  \ganttbar{Bug fixes (Cypher, serializer)}{13}{14} \\
+  \ganttgroup{Phase 6: Report \& Submission}{14}{16} \\
+  \ganttbar{LaTeX report writing}{14}{15} \\
+  \ganttbar{GitHub push + final review}{15}{16}
+\end{ganttchart}
+\caption{Project development Gantt chart (January--April 2026)}
+\label{fig:gantt}
+\end{figure}
+
+% ----------------------------------------------------------------
 \section{Performance Metrics}
 
 Average runtimes measured across the four domain runs on CPU-only hardware

@@ -92,17 +92,18 @@
 \contentsline {chapter}{\numberline {6}Results}{33}{chapter.6}%
 \contentsline {section}{\numberline {6.1}System Output Evaluation}{33}{section.6.1}%
 \contentsline {subsection}{\numberline {6.1.1}Functional Evaluation}{33}{subsection.6.1.1}%
-\contentsline {section}{\numberline {6.2}Performance Metrics}{34}{section.6.2}%
-\contentsline {section}{\numberline {6.3}Screenshots and System Interface}{35}{section.6.3}%
-\contentsline {subsection}{\numberline {6.3.1}Indian Science Domain Results}{35}{subsection.6.3.1}%
-\contentsline {subsection}{\numberline {6.3.2}Key System Output Charts}{36}{subsection.6.3.2}%
-\contentsline {subsection}{\numberline {6.3.3}The Space Telescope Query: A Notable Result}{38}{subsection.6.3.3}%
-\contentsline {section}{\numberline {6.4}Comparison Against Requirements}{39}{section.6.4}%
-\contentsline {subsection}{\numberline {6.4.1}Functional Requirements Fulfillment}{39}{subsection.6.4.1}%
-\contentsline {subsection}{\numberline {6.4.2}Non-Functional Requirements Fulfillment}{39}{subsection.6.4.2}%
-\contentsline {section}{\numberline {6.5}Future Enhancements}{39}{section.6.5}%
-\contentsline {chapter}{\numberline {7}Conclusion}{41}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Contributions to the Field}{41}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Future Enhancements}{42}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Final Thoughts}{43}{section.7.3}%
-\contentsline {chapter}{Bibliography}{44}{chapter*.24}%
+\contentsline {section}{\numberline {6.2}Project Development Timeline}{34}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Performance Metrics}{35}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Screenshots and System Interface}{36}{section.6.4}%
+\contentsline {subsection}{\numberline {6.4.1}Indian Science Domain Results}{36}{subsection.6.4.1}%
+\contentsline {subsection}{\numberline {6.4.2}Key System Output Charts}{37}{subsection.6.4.2}%
+\contentsline {subsection}{\numberline {6.4.3}The Space Telescope Query: A Notable Result}{39}{subsection.6.4.3}%
+\contentsline {section}{\numberline {6.5}Comparison Against Requirements}{40}{section.6.5}%
+\contentsline {subsection}{\numberline {6.5.1}Functional Requirements Fulfillment}{40}{subsection.6.5.1}%
+\contentsline {subsection}{\numberline {6.5.2}Non-Functional Requirements Fulfillment}{40}{subsection.6.5.2}%
+\contentsline {section}{\numberline {6.6}Future Enhancements}{40}{section.6.6}%
+\contentsline {chapter}{\numberline {7}Conclusion}{42}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Contributions to the Field}{42}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Future Enhancements}{43}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Final Thoughts}{44}{section.7.3}%
+\contentsline {chapter}{Bibliography}{45}{chapter*.25}%

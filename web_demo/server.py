@@ -199,6 +199,7 @@ def api_status():
         "doc_count":  len(S.docs),
         "query_count": len(S.queries),
         "sample_queries": S.queries[:5],
+        "doc_previews":  [d[:90].replace('\n',' ')+'…' if len(d)>90 else d for d in S.docs],
         "ollama":     check_ollama(),
         "neo4j":      check_neo4j(),
         "lc_ready":   S.lc  is not None,
@@ -219,6 +220,8 @@ def api_corpora():
                     "path":    p,
                     "docs":    len(d.get("docs",    [])),
                     "queries": len(d.get("queries", [])),
+                    "query_list": d.get("queries", []),
+                    "doc_previews": [s[:90].replace('\n',' ')+'…' if len(s)>90 else s for s in d.get("docs",[])],
                 })
             except: pass
     return jsonify(result)

@@ -13,43 +13,37 @@ This project makes the following contributions:
     arXiv:2511.10375 is implemented faithfully in Python using open-source tools,
     providing a reproducible reference implementation for the academic community.
 
-    \item \textbf{Eight novel algorithmic extensions}:
+    \item \textbf{Six novel algorithmic extensions}:
     \begin{itemize}
         \item \textbf{[N1] Cross-document corroboration scoring}: Retrieval score
         reflects the number of independent sources attesting a fact, via
         logarithmic weighting stored as a \texttt{support} property on each graph edge.
+        Facts agreed upon by multiple documents score proportionally higher.
 
         \item \textbf{[N2] Exponential temporal decay}: Facts are penalised by
         age using $e^{-\lambda t}$ with $\lambda = 0.08$, encoding an 8.7-year
-        half-life for general knowledge. The decay is applied at query time, not
-        at ingestion, so the graph remains revision-free.
+        half-life for general knowledge. The decay is applied at query time so
+        the graph remains revision-free.
 
         \item \textbf{[N3] Hybrid BM25 + Semantic retrieval (RRF)}: Keyword and
         semantic rankings are fused via Reciprocal Rank Fusion for more robust
-        retrieval, replacing single-modality cosine-only search.
+        retrieval, replacing single-modality cosine-only search and capturing
+        queries that dense embeddings alone miss.
 
-        \item \textbf{[N4] Temporal graph snapshots}: Historical queries trigger
-        a year-based filter that hides post-query-year facts, enabling accurate
-        what-was-true-then reasoning.
+        \item \textbf{[N4] Explanation chain answer generation}: When contradictions
+        are resolved, the system produces a structured audit trail of which knowledge
+        paths were kept and which were removed, rendered visibly in the web interface
+        alongside every answer.
 
-        \item \textbf{[N6] Explanation chain answer generation}: When contradictions
-        are resolved, the system produces a structured audit trail of which paths
-        were kept and removed, rendered visibly in the web interface.
-
-        \item \textbf{[N7] Calibrated confidence score}: A three-component
+        \item \textbf{[N5] Calibrated confidence score}: A three-component
         (entropy change, corroboration support, temporal recency) score gives users
-        a calibrated uncertainty estimate rather than false certainty.
+        a calibrated uncertainty estimate as a percentage rather than false certainty.
 
-        \item \textbf{[N8] Claim Verification Mode}: Given a declarative claim,
+        \item \textbf{[N6] Claim Verification Mode}: Given a declarative claim,
         the system queries its knowledge graph and returns a structured verdict
         of \texttt{SUPPORTED}, \texttt{REFUTED}, or \texttt{UNCERTAIN}, together
-        with a confidence score and the specific graph evidence used to reach the
-        decision. This is not possible in standard LangChain RAG.
-
-        \item \textbf{[N9] Adaptive Entropy Sampling}: Paths that score
-        clearly above or below the entropy threshold skip the per-path LLM
-        sampling call entirely. This reduces average inference time without
-        degrading answer quality.
+        with a confidence score and the specific graph evidence used. This is
+        not possible in standard LangChain RAG.
     \end{itemize}
 
     \item \textbf{Automatic schema inference [A4+]}: A pre-pipeline LLM call

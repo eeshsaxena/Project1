@@ -119,6 +119,14 @@ nav{height:50px;display:flex;align-items:center;justify-content:space-between;
 .mt-info{color:var(--accent);border-color:rgba(77,126,247,.3);background:rgba(77,126,247,.05);}
 .mt-dim{color:var(--dim);}
 
+/* CORPUS PREVIEW PANEL */
+#corpus-preview{display:none;padding:.5rem 1.5rem;background:var(--s2);border-bottom:var(--line);flex-shrink:0;}
+#corpus-preview.show{display:block;}
+.cp-title{font-family:var(--mono);font-size:.58rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;}
+.cp-docs{display:flex;flex-wrap:wrap;gap:.4rem;}
+.cp-doc{font-family:var(--mono);font-size:.62rem;color:var(--dim);background:var(--card);border:var(--line);border-radius:4px;padding:.2rem .5rem;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
+.cp-doc:hover{color:var(--text);border-color:rgba(77,126,247,.3);}
+
 /* typing */
 .typing{display:flex;gap:4px;align-items:center;padding:.5rem .7rem;}
 .typing i{display:block;width:5px;height:5px;border-radius:50%;background:var(--dim);animation:bounce .8s infinite;}
@@ -185,11 +193,15 @@ nav{height:50px;display:flex;align-items:center;justify-content:space-between;
 <!-- SETUP BAR -->
 <div id="setup">
   <span class="sl">Corpus:</span>
-  <select id="corpus-sel" class="corpus-sel" onchange="onSel()">
-    <option value="">Loading available corpora...</option>
-  </select>
+  <select id="corpus-sel" class="corpus-sel" onchange="onSel()"><option value="">Loading available corpora...</option></select>
   <button id="load-btn" class="load-btn" onclick="loadCorpus()" disabled>Load and Build Graph</button>
   <div id="setup-msg">Start server.py first, then select a corpus.</div>
+</div>
+
+<!-- CORPUS PREVIEW -->
+<div id="corpus-preview">
+  <div class="cp-title">Corpus Documents</div>
+  <div class="cp-docs" id="cp-docs"></div>
 </div>
 
 <!-- SAMPLE QUERIES -->
@@ -333,6 +345,9 @@ function renderStatus(d){
   if(!corpusLoaded) loadList();
 }
 let corpusLoaded=false;
+let corpusRegistry={}; // path -> {query_list, doc_previews}
+let samplesInjected=false;
+
 async function loadList(){
   corpusLoaded=true;
   try{
@@ -340,6 +355,7 @@ async function loadList(){
     const sel=document.getElementById('corpus-sel');
     sel.innerHTML='<option value="">-- select a corpus --</option>';
     list.forEach(c=>{
+      corpusRegistry[c.path]={query_list:c.query_list||[],doc_previews:c.doc_previews||[]};
       const o=document.createElement('option');
       o.value=c.path;
       o.textContent=`${c.name} (${c.docs} docs, ${c.queries} queries)`;
@@ -348,22 +364,47 @@ async function loadList(){
     document.getElementById('load-btn').disabled=false;
   } catch(e){ document.getElementById('setup-msg').textContent='Could not load corpus list.'; }
 }
-function onSel(){ document.getElementById('load-btn').disabled=!document.getElementById('corpus-sel').value; }
+function onSel(){
+  const path=document.getElementById('corpus-sel').value;
+  document.getElementById('load-btn').disabled=!path;
+  if(path && corpusRegistry[path]) showCorpusPreview(corpusRegistry[path]);
+  else document.getElementById('corpus-preview').classList.remove('show');
+}
 async function loadCorpus(){
   const path=document.getElementById('corpus-sel').value;
   if(!path) return;
   document.getElementById('load-btn').disabled=true;
   document.getElementById('setup-msg').textContent='Ingesting — LC is fast, v5 graph build takes 1-3 min...';
+  samplesInjected=false; // reset so new corpus queries inject fresh
+  clearSamples();
   await fetch(`${API}/api/load`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({corpus_path:path})});
 }
-let samplesInjected=false;
+function showCorpusPreview(data){
+  const preview=document.getElementById('corpus-preview');
+  const docsEl=document.getElementById('cp-docs');
+  docsEl.innerHTML='';
+  if(!data.doc_previews?.length){ preview.classList.remove('show'); return; }
+  data.doc_previews.forEach(d=>{
+    const el=document.createElement('div');
+    el.className='cp-doc'; el.textContent=d; el.title=d;
+    docsEl.appendChild(el);
+  });
+  preview.classList.add('show');
+}
+function clearSamples(){
+  const row=document.getElementById('sample-row');
+  row.classList.remove('show');
+  // remove all sq-btn children
+  [...row.querySelectorAll('.sq-btn')].forEach(b=>b.remove());
+}
 function injectSamples(qs){
   if(samplesInjected) return; samplesInjected=true;
+  clearSamples();
   const row=document.getElementById('sample-row');
   row.classList.add('show');
   qs.forEach(q=>{
     const b=document.createElement('button');
-    b.className='sq-btn'; b.textContent=q.length>55?q.slice(0,53)+'...':q;
+    b.className='sq-btn'; b.textContent=q.length>60?q.slice(0,58)+'...':q;
     b.onclick=()=>{ document.getElementById('q-input').value=q; send(); };
     row.appendChild(b);
   });
