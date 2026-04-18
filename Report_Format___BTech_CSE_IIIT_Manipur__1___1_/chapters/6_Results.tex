@@ -44,53 +44,98 @@ FR12 & Confidence percentage printed after every query in all domains & Pass \\
 % ----------------------------------------------------------------
 \section{Project Development Timeline}
 
-Figure~\ref{fig:gantt} shows the project schedule from inception to
-final submission, broken into six development phases.
+Table~\ref{tab:timeline} and Figure~\ref{fig:gantt} show the full project
+schedule from \textbf{15 January 2026} to \textbf{24 April 2026}, spanning
+14 weeks across six development phases.
 
+\begin{table}[htbp]
+\centering
+\caption{Project phase calendar (Jan 15 -- Apr 24, 2026)}
+\label{tab:timeline}
+\begin{tabular}{|c|l|l|l|}
+\hline
+\textbf{Phase} & \textbf{Name} & \textbf{Start} & \textbf{End} \\
+\hline
+1 & Literature Review                    & 15 Jan 2026 & 31 Jan 2026 \\
+2 & Baseline v4 Implementation           & 01 Feb 2026 & 14 Feb 2026 \\
+3 & Novel v5 Extensions (N1--N6)         & 15 Feb 2026 & 14 Mar 2026 \\
+4 & Web Interface Development            & 15 Mar 2026 & 31 Mar 2026 \\
+5 & Testing, Debugging \& Validation     & 01 Apr 2026 & 14 Apr 2026 \\
+6 & Report Writing \& Final Submission   & 15 Apr 2026 & 24 Apr 2026 \\
+\hline
+\end{tabular}
+\end{table}
+
+% 14 columns = 14 weeks (W1=Jan15-21 ... W14=Apr18-24)
+% Month spans: Jan15-31=W1-W2, Feb=W3-W6, Mar=W7-W11, Apr1-24=W12-W14
 \begin{figure}[htbp]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{ganttchart}[
-  hgrid, vgrid,
+  hgrid,
+  vgrid={*{1}{dotted}},
   title height=1,
-  bar height=0.5,
-  bar top shift=0.25,
-  x unit=0.75cm,
-  y unit title=0.55cm,
-  y unit chart=0.65cm,
-  title label font=\small,
-  bar label font=\small,
-  group label font=\small\bfseries,
-  bar/.append style={fill=black!65, rounded corners=2pt},
+  title top shift=0,
+  bar height=0.55,
+  bar top shift=0.225,
+  x unit=0.88cm,
+  y unit title=0.60cm,
+  y unit chart=0.70cm,
+  title label font=\footnotesize\bfseries,
+  bar label font=\footnotesize,
+  group label font=\footnotesize\bfseries,
+  bar/.append style={fill=black!60, rounded corners=2pt},
   bar incomplete/.append style={fill=black!15},
-  group/.append style={fill=black!80},
-  title/.append style={fill=black!08},
-]{1}{16}
-  \gantttitle{January 2026}{4}
+  group/.append style={fill=black!82, rounded corners=2pt},
+  title/.append style={fill=black!07, draw=black!30},
+  group peaks tip position=0,
+  group left peak tip={coordinate[xshift=-5pt]},
+  group right peak tip={coordinate[xshift=5pt]},
+]{1}{14}
+  %% ROW 1: month labels
+  \gantttitle{Jan 15--31}{2}
   \gantttitle{February 2026}{4}
-  \gantttitle{March 2026}{4}
-  \gantttitle{April 2026}{4} \\
-  \ganttgroup{Phase 1: Literature Review}{1}{3} \\
-  \ganttbar{Read arXiv:2511.10375 (TruthfulRAG v4)}{1}{3} \\
-  \ganttgroup{Phase 2: Baseline v4 Implementation}{4}{6} \\
-  \ganttbar{Graph Constructor --- Module A}{4}{5} \\
-  \ganttbar{Retriever + Conflict Resolver --- B, C}{5}{6} \\
-  \ganttgroup{Phase 3: Novel v5 Extensions (N1--N6)}{6}{10} \\
-  \ganttbar{N1/N2: Corroboration Scoring + Temporal Decay}{6}{7} \\
-  \ganttbar{N3: Hybrid BM25 + Semantic RRF Retrieval}{7}{8} \\
-  \ganttbar{N4/N5: Explanation Chain + Confidence Score}{8}{9} \\
-  \ganttbar{N6: Claim Verification Mode}{9}{10} \\
-  \ganttgroup{Phase 4: Web Interface}{10}{13} \\
-  \ganttbar{Flask REST API Server}{10}{11} \\
-  \ganttbar{Dual-panel Live Chatbot Interface}{11}{13} \\
-  \ganttgroup{Phase 5: Testing and Debugging}{12}{14} \\
-  \ganttbar{Multi-corpus Validation (4 domains)}{12}{13} \\
-  \ganttbar{Bug Fixes --- Cypher, Serializer, UI State}{13}{14} \\
-  \ganttgroup{Phase 6: Report and Submission}{14}{16} \\
-  \ganttbar{LaTeX Report Writing}{14}{15} \\
-  \ganttbar{GitHub Push and Final Review}{15}{16}
+  \gantttitle{March 2026}{5}
+  \gantttitle{Apr 1--24}{3} \\
+  %% ROW 2: week numbers
+  \gantttitle{W1}{1}\gantttitle{W2}{1}%
+  \gantttitle{W3}{1}\gantttitle{W4}{1}\gantttitle{W5}{1}\gantttitle{W6}{1}%
+  \gantttitle{W7}{1}\gantttitle{W8}{1}\gantttitle{W9}{1}\gantttitle{W10}{1}\gantttitle{W11}{1}%
+  \gantttitle{W12}{1}\gantttitle{W13}{1}\gantttitle{W14}{1} \\
+  %%
+  %% PHASE 1 — Literature Review (Jan 15 – Jan 31 = W1-W2)
+  \ganttgroup{Phase 1: Literature Review}{1}{2} \\
+  \ganttbar{Read TruthfulRAG v4 (arXiv:2511.10375)}{1}{1} \\
+  \ganttbar{Study LangChain, Neo4j, Ollama docs}{1}{2} \\
+  %%
+  %% PHASE 2 — Baseline Implementation (Feb 1 – Feb 14 = W3-W4)
+  \ganttgroup{Phase 2: Baseline v4 Implementation}{3}{4} \\
+  \ganttbar{Graph Constructor --- Module A}{3}{3} \\
+  \ganttbar{Retriever + Conflict Resolver --- B, C}{3}{4} \\
+  %%
+  %% PHASE 3 — v5 Extensions (Feb 15 – Mar 14 = W5-W8)
+  \ganttgroup{Phase 3: Novel v5 Extensions (N1--N6)}{5}{8} \\
+  \ganttbar{N1/N2: Corroboration Scoring + Temporal Decay}{5}{5} \\
+  \ganttbar{N3: Hybrid BM25 + Semantic RRF Retrieval}{5}{6} \\
+  \ganttbar{N4/N5: Explanation Chain + Confidence Score}{6}{7} \\
+  \ganttbar{N6: Claim Verification Endpoint}{7}{8} \\
+  %%
+  %% PHASE 4 — Web Interface (Mar 15 – Mar 31 = W9-W11)
+  \ganttgroup{Phase 4: Web Interface Development}{9}{11} \\
+  \ganttbar{Flask REST API Server}{9}{9} \\
+  \ganttbar{Dual-panel Live Chatbot Interface}{9}{11} \\
+  %%
+  %% PHASE 5 — Testing (Apr 1 – Apr 14 = W12-W13)
+  \ganttgroup{Phase 5: Testing and Debugging}{12}{13} \\
+  \ganttbar{Multi-corpus Validation (4 domains)}{12}{12} \\
+  \ganttbar{Bug Fixes --- Cypher, Serializer, UI State}{12}{13} \\
+  %%
+  %% PHASE 6 — Report + Submission (Apr 15 – Apr 24 = W13-W14)
+  \ganttgroup{Phase 6: Report and Final Submission}{13}{14} \\
+  \ganttbar{LaTeX Report Writing and Editing}{13}{14} \\
+  \ganttbar{GitHub Push + Final Review}{14}{14}
 \end{ganttchart}}
-\caption{Project development Gantt chart (January--April 2026)}
+\caption{Project development Gantt chart: 15 January 2026 to 24 April 2026 (14 weeks)}
 \label{fig:gantt}
 \end{figure}
 

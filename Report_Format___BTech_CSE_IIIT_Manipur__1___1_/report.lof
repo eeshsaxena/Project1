@@ -11,14 +11,14 @@
 \contentsline {figure}{\numberline {4.7}{\ignorespaces TruthfulRAG v5 live chatbot --- dual-panel comparison interface}}{22}{figure.caption.15}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {6.1}{\ignorespaces Project development Gantt chart (January--April 2026)}}{32}{figure.caption.23}%
-\contentsline {figure}{\numberline {6.2}{\ignorespaces Answer accuracy across all three system generations and question types}}{33}{figure.caption.26}%
-\contentsline {figure}{\numberline {6.3}{\ignorespaces Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}}{33}{figure.caption.27}%
-\contentsline {figure}{\numberline {6.4}{\ignorespaces How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}}{34}{figure.caption.28}%
-\contentsline {figure}{\numberline {6.5}{\ignorespaces Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}}{34}{figure.caption.29}%
-\contentsline {figure}{\numberline {6.6}{\ignorespaces Corroboration bonus as a function of source support count [N1]}}{34}{figure.caption.30}%
-\contentsline {figure}{\numberline {6.7}{\ignorespaces Confidence score breakdown across evaluation queries [N5]}}{34}{figure.caption.31}%
-\contentsline {figure}{\numberline {6.8}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}}{34}{figure.caption.32}%
-\contentsline {figure}{\numberline {6.9}{\ignorespaces Side-by-side comparison: LC RAG vs.\ TruthfulRAG v5 on conflicted medical query}}{35}{figure.caption.33}%
-\contentsline {figure}{\numberline {6.10}{\ignorespaces Claim Verification Mode [N6] --- REFUTED verdict with graph evidence}}{35}{figure.caption.34}%
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Project development Gantt chart: 15 January 2026 to 24 April 2026 (14 weeks)}}{32}{figure.caption.24}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Answer accuracy across all three system generations and question types}}{34}{figure.caption.27}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}}{34}{figure.caption.28}%
+\contentsline {figure}{\numberline {6.4}{\ignorespaces How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}}{34}{figure.caption.29}%
+\contentsline {figure}{\numberline {6.5}{\ignorespaces Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}}{35}{figure.caption.30}%
+\contentsline {figure}{\numberline {6.6}{\ignorespaces Corroboration bonus as a function of source support count [N1]}}{35}{figure.caption.31}%
+\contentsline {figure}{\numberline {6.7}{\ignorespaces Confidence score breakdown across evaluation queries [N5]}}{35}{figure.caption.32}%
+\contentsline {figure}{\numberline {6.8}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}}{35}{figure.caption.33}%
+\contentsline {figure}{\numberline {6.9}{\ignorespaces Side-by-side comparison: LC RAG vs.\ TruthfulRAG v5 on conflicted medical query}}{35}{figure.caption.34}%
+\contentsline {figure}{\numberline {6.10}{\ignorespaces Claim Verification Mode [N6] --- REFUTED verdict with graph evidence}}{36}{figure.caption.35}%
 \addvspace {10\p@ }
