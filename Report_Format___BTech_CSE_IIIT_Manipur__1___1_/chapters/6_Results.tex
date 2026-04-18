@@ -218,39 +218,26 @@ missions that both involve the Moon---a nuanced retrieval task.
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Grouped Bar Chart]}\\
-\textit{Answer accuracy across all three system generations (LC RAG, v4, v5)}\\
-\textit{for stable facts, temporally-conflicted facts, and claim verification.}
-\vspace{1.0cm}}}
+\includegraphics[width=0.88\textwidth]{report_file/chart1_grouped_bar.png}
 \caption{Answer accuracy across all three system generations and question types}
 \label{fig:bar}
 \end{figure}
 
-The grouped bar chart above shows the clearest story. For stable facts
-(non-conflicted), all three systems perform similarly. For temporally-conflicted
-facts, the gap opens up sharply: standard LangChain RAG answers correctly about
-half the time, while TruthfulRAG v5 handles them reliably.
+The grouped bar chart shows the clearest story. For stable facts (non-conflicted),
+all three systems perform similarly. For temporally-conflicted facts the gap opens
+sharply: LangChain RAG answers correctly about half the time, while TruthfulRAG v5
+handles them reliably. Claim verification is unavailable in both LangChain RAG and v4.
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Six-Dimension Capability Radar Chart]}\\
-\textit{Axes: Conflict Detection, Temporal Awareness, Confidence,}\\
-\textit{Claim Verification, Explanation, Domain Agnosticism.}\\
-\textit{LC RAG vs.\ TruthfulRAG v5 overlaid.}
-\vspace{1.0cm}}}
+\includegraphics[width=0.72\textwidth]{report_file/chart2_radar.png}
 \caption{Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}
 \label{fig:radar}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Temporal Decay Curve]}\\
-\textit{X-axis: Fact age in years (0--30). Y-axis: Retrieval weight (0--1.0).}\\
-\textit{$\lambda = 0.08$; half-life at approximately 8.7 years marked.}
-\vspace{1.0cm}}}
+\includegraphics[width=0.82\textwidth]{report_file/chart4_temporal_decay.png}
 \caption{How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}
 \label{fig:decay}
 \end{figure}
@@ -258,48 +245,33 @@ half the time, while TruthfulRAG v5 handles them reliably.
 The temporal decay chart shows something intuitive: a scientific discovery from
 2006 (like Pluto's reclassification) retains about 20\,\% of its original
 retrieval weight by 2026. This naturally pushes older superseded facts to the
-bottom of the ranking before any conflict detection even runs.
+bottom of the ranking before any explicit conflict detection runs.
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Score Gap Bar Chart]}\\
-\textit{Side-by-side bars showing retrieval scores of the conflicting pair.}\\
-\textit{v4 (scores tied) vs.\ v5 (clear gap created by decay and corroboration).}
-\vspace{1.0cm}}}
-\caption{Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}
+\includegraphics[width=0.82\textwidth]{report_file/chart3_score_gap.png}
+\caption{Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created by decay)}
 \label{fig:gap}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Corroboration Bonus Curve]}\\
-\textit{X-axis: Number of agreeing sources (1--10).}\\
-\textit{Y-axis: $\log(1 + \text{support})$ score multiplier.}
-\vspace{1.0cm}}}
+\includegraphics[width=0.78\textwidth]{report_file/chart6_corroboration.png}
 \caption{Corroboration bonus as a function of source support count [N1]}
 \label{fig:corr}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Confidence Score Breakdown Bar Chart]}\\
-\textit{Four queries shown. Each bar split into entropy, support, and recency components.}
-\vspace{1.0cm}}}
-\caption{Confidence score breakdown across evaluation queries [N5]}
+\includegraphics[width=0.88\textwidth]{report_file/chart7_confidence.png}
+\caption{[N5] Calibrated confidence score breakdown across four evaluation queries}
 \label{fig:confidence}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Accuracy Gain Bar Chart]}\\
-\textit{Percentage accuracy gain of TruthfulRAG v5 over LangChain RAG baseline}\\
-\textit{across four domains: Medical, Legal, Indian Science, Space Science.}
-\vspace{1.0cm}}}
-\caption{Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}
+\includegraphics[width=0.88\textwidth]{report_file/chart8_gains_over_langchain.png}
+\caption{Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline across all domains}
 \label{fig:gains}
 \end{figure}
 
