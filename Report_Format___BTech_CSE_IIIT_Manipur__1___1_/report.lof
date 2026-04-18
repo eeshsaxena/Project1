@@ -2,14 +2,23 @@
 \addvspace {10\p@ }
 \addvspace {10\p@ }
 \addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Six-layer system architecture of TruthfulRAG v5}}{20}{figure.caption.7}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Level-0 Context DFD for TruthfulRAG v5}}{21}{figure.caption.8}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces Level-1 DFD showing the four internal sub-processes}}{21}{figure.caption.9}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces UML class diagram for \texttt {enhanced\_main.py}}}{22}{figure.caption.11}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces Conflict resolution decision flowchart (Module C)}}{25}{figure.caption.12}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces End-to-end sequence diagram for corpus load and query}}{27}{figure.caption.14}%
+\contentsline {figure}{\numberline {4.7}{\ignorespaces TruthfulRAG v5 live chatbot --- dual-panel comparison interface}}{28}{figure.caption.15}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {6.1}{\ignorespaces Project development Gantt chart (January--April 2026)}}{35}{figure.caption.15}%
-\contentsline {figure}{\numberline {6.2}{\ignorespaces Answer accuracy across all three system generations and question types}}{37}{figure.caption.18}%
-\contentsline {figure}{\numberline {6.3}{\ignorespaces Six-dimension capability radar chart}}{37}{figure.caption.19}%
-\contentsline {figure}{\numberline {6.4}{\ignorespaces How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}}{38}{figure.caption.20}%
-\contentsline {figure}{\numberline {6.5}{\ignorespaces Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}}{38}{figure.caption.21}%
-\contentsline {figure}{\numberline {6.6}{\ignorespaces Corroboration bonus as a function of source support count [N1]}}{39}{figure.caption.22}%
-\contentsline {figure}{\numberline {6.7}{\ignorespaces Confidence score breakdown across evaluation queries [N7]}}{39}{figure.caption.23}%
-\contentsline {figure}{\numberline {6.8}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}}{39}{figure.caption.24}%
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Project development Gantt chart (January--April 2026)}}{39}{figure.caption.23}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Answer accuracy across all three system generations and question types}}{41}{figure.caption.26}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}}{42}{figure.caption.27}%
+\contentsline {figure}{\numberline {6.4}{\ignorespaces How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}}{42}{figure.caption.28}%
+\contentsline {figure}{\numberline {6.5}{\ignorespaces Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}}{43}{figure.caption.29}%
+\contentsline {figure}{\numberline {6.6}{\ignorespaces Corroboration bonus as a function of source support count [N1]}}{43}{figure.caption.30}%
+\contentsline {figure}{\numberline {6.7}{\ignorespaces Confidence score breakdown across evaluation queries [N5]}}{44}{figure.caption.31}%
+\contentsline {figure}{\numberline {6.8}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}}{44}{figure.caption.32}%
+\contentsline {figure}{\numberline {6.9}{\ignorespaces Side-by-side comparison: LC RAG vs.\ TruthfulRAG v5 on conflicted medical query}}{45}{figure.caption.33}%
+\contentsline {figure}{\numberline {6.10}{\ignorespaces Claim Verification Mode [N6] --- REFUTED verdict with graph evidence}}{45}{figure.caption.34}%
 \addvspace {10\p@ }

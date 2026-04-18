@@ -45,7 +45,7 @@
 
     \vspace{0.5\baselineskip}
 
-    {\scshape\Large Eesh Saxena \\ SEMESTER - VI \\ 220101021}
+    {\scshape\Large Eesh Saxena \\ SEMESTER - VI \\ 230101032}
 
     \vspace{0.5\baselineskip}
 
@@ -53,7 +53,7 @@
 
     \vspace{0.5\baselineskip}
 
-    {\scshape\Large Dr.\ [Supervisor Name]}
+    {\scshape\Large Ms.\ Jennyl Thiam}
 
     \vspace{0.5\baselineskip}
 
@@ -82,7 +82,7 @@ action. Such a violation may also engender disciplinary action from the sources 
 not properly cited or permission not taken when needed.
 
 \vspace{1cm}\hspace{8.35cm} Eesh Saxena \\
-\vspace{1cm}\hspace{9cm} 220101021 \\
+\vspace{1cm}\hspace{9cm} 230101032 \\
 \vspace{1cm} DATE: \today
 
 \newpage
@@ -100,10 +100,10 @@ not properly cited or permission not taken when needed.
         \end{tabular}
     \end{table}
     \par\noindent\rule{\textwidth}{0.4pt}
-    [Supervisor Name]
-    \hspace*{\fill} Email: \href{mailto:supervisor@iiitmanipur.ac.in}{supervisor@iiitmanipur.ac.in}\\
-    Associate Professor
-    \hspace*{0pt}\hfill Contact No: +91 XXXXXXXXXX\\[2cm]
+    Ms.\ Jennyl Thiam
+    \hspace*{\fill} Email: \href{mailto:jennyl@iiitmanipur.ac.in}{jennyl@iiitmanipur.ac.in}\\
+    Assistant Professor
+    \hspace*{0pt}\hfill Department of Computer Science and Engineering\\[2cm]
 
     {\Huge \textbf{\emph{To Whom It May Concern}}}\\[2cm]
     \linespread{1.13}
@@ -114,10 +114,10 @@ not properly cited or permission not taken when needed.
     Information Technology Senapati, Manipur in partial fulfilment for the award of the
     degree of Bachelor of Technology in Computer Science and Engineering is a record of
     bonafide work carried out by \textbf{Eesh Saxena} bearing roll number
-    220101021.}\\[2.0cm]
+    230101032.}\\[2.0cm]
 
     \hspace*{2.6in}\large{Signature of Supervisor}\\[0.3cm]
-    \hspace*{2.5in}\textbf{([Supervisor Name])}\\[0.5cm]
+    \hspace*{2.5in}\textbf{(Ms.\ Jennyl Thiam)}\\[0.5cm]
 
 \end{center}
 \vspace{0.5cm}
@@ -129,24 +129,36 @@ Signature of the Examiner 4 ............................\\\\
 
 % ── ABSTRACT ──────────────────────────────────────────────────────
 \begin{abstract}
-Large Language Models (LLMs) suffer from hallucination when their parametric knowledge
-conflicts with user-provided documents—a problem that standard Retrieval-Augmented
-Generation (RAG) pipelines do not address. This project implements and extends
-TruthfulRAG v5, a Knowledge-Graph (KG) based RAG pipeline that explicitly detects and
-resolves knowledge conflicts. Building upon the three-module architecture (Module A: Graph
-Construction; Module B: Graph Retrieval; Module C: Conflict Resolution) of TruthfulRAG
-v4 (arXiv:2511.10375), v5 introduces six novel improvements: \textbf{[N1]}
-cross-document corroboration scoring, \textbf{[N2]} exponential temporal decay on edge
-weights, \textbf{[N3]} hybrid BM25 + semantic retrieval with Reciprocal Rank Fusion,
-\textbf{[N4]} temporal graph snapshots for historical queries, \textbf{[N6]}
-human-readable explanation-chain generation, and \textbf{[N7]} a calibrated three-factor
-confidence score. A pre-pipeline schema inference step \textbf{[A4+]} makes the system
-fully domain-agnostic, automatically discovering entity and relation types from the input
-corpus. The pipeline runs entirely locally using the Qwen2.5-7B-Instruct LLM via Ollama
-and Neo4j as the graph database. Experimental evaluation on a political-corporate corpus
-demonstrates correct contradiction resolution, a 35\% LLM cache hit rate, and calibrated
-confidence scores of 42\% and 71\% for two evaluation queries—accurately reflecting the
-degree of parametric memory conflict.
+Large Language Models (LLMs) exhibit hallucination and factual inconsistency when their
+parametric knowledge conflicts with user-provided documents --- a problem that standard
+Retrieval-Augmented Generation (RAG) pipelines do not address. This project implements
+and extends TruthfulRAG v5, a Knowledge-Graph (KG) based RAG pipeline that explicitly
+detects and resolves temporal and factual conflicts present in document corpora.
+
+Building upon the three-module architecture (Module A: Graph Construction; Module B:
+Graph Retrieval; Module C: Conflict Resolution) of TruthfulRAG v4 (arXiv:2511.10375),
+version 5 introduces six novel contributions: \textbf{[N1]} cross-document corroboration
+scoring that weights facts by how many independent sources agree; \textbf{[N2]}
+exponential temporal decay ($e^{-\lambda t}$) ensuring newer facts are preferred over
+older ones; \textbf{[N3]} hybrid BM25 and semantic retrieval fused by Reciprocal Rank
+Fusion (RRF) for robust document selection; \textbf{[N4]} a human-readable explanation
+chain that makes every conflict resolution decision fully auditable; \textbf{[N5]} a
+calibrated three-factor confidence score (entropy change, corroboration, temporal
+recency); and \textbf{[N6]} a claim verification mode returning structured
+\texttt{SUPPORTED}, \texttt{REFUTED}, or \texttt{UNCERTAIN} verdicts with evidence.
+
+A pre-pipeline schema inference step \textbf{[A4+]} renders the system fully
+domain-agnostic --- no manual configuration is required when switching between medical,
+legal, scientific, or historical corpora. The pipeline runs entirely on local hardware
+using the Qwen2.5-7B-Instruct language model served via Ollama and Neo4j Community
+Edition as the graph database. A production-quality dual-panel web interface enables
+real-time, side-by-side comparison of standard LangChain RAG against TruthfulRAG v5 on
+any user-supplied corpus with a single click.
+
+Experimental evaluation across four domain corpora (medical, legal, Indian science, and
+space science) demonstrates correct contradiction resolution, a 35\,\% LLM cache hit
+rate, and calibrated confidence scores accurately reflecting the degree of evidential
+conflict in each domain.
 \end{abstract}
 
 \pagebreak
@@ -157,19 +169,25 @@ degree of parametric memory conflict.
 \end{center}
 \vspace{2cm}
 
-I would like to express my sincere gratitude to my supervisor, [Supervisor Name], for
-their invaluable guidance and support throughout this project. I thank the Department of
-Computer Science and Engineering at IIIT Senapati, Manipur for providing the computational
-resources and academic environment necessary to complete this work. I am grateful to the
-open-source communities behind LangChain, Neo4j, Ollama, and the sentence-transformers
-library, whose tools formed the technical foundation of this project. Finally, I
-acknowledge the authors of TruthfulRAG v4 (arXiv:2511.10375), whose research inspired
-the design of this system.
+I would like to express my sincere gratitude to my project instructor, Ms.\ Jennyl Thiam,
+for her invaluable guidance, thorough feedback, and consistent support throughout the
+duration of this project. Her direction was instrumental in shaping the final system design
+and ensuring the academic rigour of this work.
+
+I thank the Department of Computer Science and Engineering at IIIT Senapati, Manipur for
+providing the computational resources and academic environment necessary to complete this
+work. I am grateful to the open-source communities behind LangChain, Neo4j, Ollama, and
+the \texttt{sentence-transformers} library, whose tools formed the technical foundation of
+this project.
+
+Finally, I acknowledge the authors of TruthfulRAG v4 (arXiv:2511.10375), whose published
+research provided the theoretical and architectural basis from which this project's
+extensions were designed.
 
 \vspace{1cm}
 
 \hspace{7cm} Eesh Saxena\\
-\hspace{7cm} 220101021
+\hspace{7cm} 230101032
 
 \tableofcontents
 \listoffigures

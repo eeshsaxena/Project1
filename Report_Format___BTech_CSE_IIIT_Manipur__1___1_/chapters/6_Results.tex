@@ -175,10 +175,14 @@ missions that both involve the Moon---a nuanced retrieval task.
 \subsection{Key System Output Charts}
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.85\textwidth]{report_file/chart1_grouped_bar.png}
-    \caption{Answer accuracy across all three system generations and question types}
-    \label{fig:bar}
+\centering
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Grouped Bar Chart]}\\
+\textit{Answer accuracy across all three system generations (LC RAG, v4, v5)}\\
+\textit{for stable facts, temporally-conflicted facts, and claim verification.}
+\vspace{2.5cm}}}
+\caption{Answer accuracy across all three system generations and question types}
+\label{fig:bar}
 \end{figure}
 
 The grouped bar chart above shows the clearest story. For stable facts
@@ -187,51 +191,101 @@ facts, the gap opens up sharply: standard LangChain RAG answers correctly about
 half the time, while TruthfulRAG v5 handles them reliably.
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.72\textwidth]{report_file/chart2_radar.png}
-    \caption{Six-dimension capability radar chart}
-    \label{fig:radar}
+\centering
+\fbox{\parbox{0.72\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Six-Dimension Capability Radar Chart]}\\
+\textit{Axes: Conflict Detection, Temporal Awareness, Confidence,}\\
+\textit{Claim Verification, Explanation, Domain Agnosticism.}\\
+\textit{LC RAG vs.\ TruthfulRAG v5 overlaid.}
+\vspace{2.5cm}}}
+\caption{Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}
+\label{fig:radar}
 \end{figure}
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.80\textwidth]{report_file/chart4_temporal_decay.png}
-    \caption{How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}
-    \label{fig:decay}
+\centering
+\fbox{\parbox{0.80\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Temporal Decay Curve]}\\
+\textit{X-axis: Fact age in years (0--30). Y-axis: Retrieval weight (0--1.0).}\\
+\textit{$\lambda = 0.08$; half-life at approximately 8.7 years marked.}
+\vspace{2.5cm}}}
+\caption{How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}
+\label{fig:decay}
 \end{figure}
 
 The temporal decay chart shows something intuitive: a scientific discovery from
-2006 (like Pluto's reclassification) retains about 20\% of its original
+2006 (like Pluto's reclassification) retains about 20\,\% of its original
 retrieval weight by 2026. This naturally pushes older superseded facts to the
 bottom of the ranking before any conflict detection even runs.
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.78\textwidth]{report_file/chart3_score_gap.png}
-    \caption{Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}
-    \label{fig:gap}
+\centering
+\fbox{\parbox{0.78\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Score Gap Bar Chart]}\\
+\textit{Side-by-side bars showing retrieval scores of the conflicting pair.}\\
+\textit{v4 (scores tied) vs.\ v5 (clear gap created by decay and corroboration).}
+\vspace{2.5cm}}}
+\caption{Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created)}
+\label{fig:gap}
 \end{figure}
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{report_file/chart6_corroboration.png}
-    \caption{Corroboration bonus as a function of source support count [N1]}
-    \label{fig:corr}
+\centering
+\fbox{\parbox{0.75\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Corroboration Bonus Curve]}\\
+\textit{X-axis: Number of agreeing sources (1--10).}\\
+\textit{Y-axis: $\log(1 + \text{support})$ score multiplier.}
+\vspace{2.5cm}}}
+\caption{Corroboration bonus as a function of source support count [N1]}
+\label{fig:corr}
 \end{figure}
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.78\textwidth]{report_file/chart7_confidence.png}
-    \caption{Confidence score breakdown across evaluation queries [N7]}
-    \label{fig:confidence}
+\centering
+\fbox{\parbox{0.78\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Confidence Score Breakdown Bar Chart]}\\
+\textit{Four queries shown. Each bar split into entropy, support, and recency components.}
+\vspace{2.5cm}}}
+\caption{Confidence score breakdown across evaluation queries [N5]}
+\label{fig:confidence}
 \end{figure}
 
 \begin{figure}[H]
-    \centering
-    \includegraphics[width=0.80\textwidth]{report_file/chart8_gains_over_langchain.png}
-    \caption{Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}
-    \label{fig:gains}
+\centering
+\fbox{\parbox{0.80\textwidth}{\centering\vspace{2.5cm}
+\textit{[Figure: Accuracy Gain Bar Chart]}\\
+\textit{Percentage accuracy gain of TruthfulRAG v5 over LangChain RAG baseline}\\
+\textit{across four domains: Medical, Legal, Indian Science, Space Science.}
+\vspace{2.5cm}}}
+\caption{Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline}
+\label{fig:gains}
 \end{figure}
+
+\subsection{Web Interface Screenshots}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}
+\textit{[Figure: Chatbot Screenshot --- Medical Corpus Loaded]}\\
+\textit{Query: ``Can children take aspirin for fever?''}\\
+\textit{LC panel: no conflict detected, returns old recommendation.}\\
+\textit{v5 panel: conflict removed, correct 2023 guideline returned, 42\,\% conf.}
+\vspace{3cm}}}
+\caption{Side-by-side comparison: LC RAG vs.\ TruthfulRAG v5 on conflicted medical query}
+\label{fig:ss1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}
+\textit{[Figure: Claim Verify Screenshot]}\\
+\textit{Claim: ``Aspirin is safe for children with fever.''}\\
+\textit{v5 verdict: REFUTED --- with evidence and confidence shown.}
+\vspace{3cm}}}
+\caption{Claim Verification Mode [N6] --- REFUTED verdict with graph evidence}
+\label{fig:ss2}
+\end{figure}
+
 
 \subsection{The Space Telescope Query: A Notable Result}
 

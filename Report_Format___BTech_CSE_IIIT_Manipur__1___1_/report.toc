@@ -44,66 +44,66 @@
 \contentsline {subsection}{\numberline {3.5.1}Version Control}{18}{subsection.3.5.1}%
 \contentsline {chapter}{\numberline {4}System Design}{19}{chapter.4}%
 \contentsline {section}{\numberline {4.1}System Architecture}{19}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Data Flow Diagrams (DFD)}{19}{section.4.2}%
-\contentsline {subsection}{\numberline {4.2.1}Level 0 Data Flow Diagram (Context Diagram)}{19}{subsection.4.2.1}%
-\contentsline {section}{\numberline {4.3}Class Diagrams}{20}{section.4.3}%
-\contentsline {section}{\numberline {4.4}Module Design}{21}{section.4.4}%
-\contentsline {subsection}{\numberline {4.4.1}Module: Pre-Pipeline Schema Inference [A4+]}{21}{subsection.4.4.1}%
-\contentsline {subsection}{\numberline {4.4.2}Module: Knowledge Graph Construction (Module A)}{21}{subsection.4.4.2}%
-\contentsline {subsection}{\numberline {4.4.3}Module: Graph Retrieval (Module B)}{21}{subsection.4.4.3}%
-\contentsline {subsection}{\numberline {4.4.4}Module: Conflict Resolution and Answer Generation (Module C)}{22}{subsection.4.4.4}%
-\contentsline {section}{\numberline {4.5}Database Design}{22}{section.4.5}%
-\contentsline {subsection}{\numberline {4.5.1}Neo4j Graph Schema}{22}{subsection.4.5.1}%
-\contentsline {subsection}{\numberline {4.5.2}Corpus JSON Schema}{22}{subsection.4.5.2}%
-\contentsline {section}{\numberline {4.6}Sequence Diagrams}{23}{section.4.6}%
-\contentsline {section}{\numberline {4.7}User Interface Design}{23}{section.4.7}%
-\contentsline {subsection}{\numberline {4.7.1}Overview}{23}{subsection.4.7.1}%
-\contentsline {subsection}{\numberline {4.7.2}Main Menu (Input Modes)}{24}{subsection.4.7.2}%
-\contentsline {subsection}{\numberline {4.7.3}Workflows}{24}{subsection.4.7.3}%
-\contentsline {subsection}{\numberline {4.7.4}Design Note}{24}{subsection.4.7.4}%
-\contentsline {chapter}{\numberline {5}Implementation}{25}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Development Environment}{25}{section.5.1}%
-\contentsline {subsection}{\numberline {5.1.1}Programming Language: Python 3.11}{25}{subsection.5.1.1}%
-\contentsline {subsection}{\numberline {5.1.2}IDE: Visual Studio Code}{25}{subsection.5.1.2}%
-\contentsline {subsection}{\numberline {5.1.3}Version Control: Git and GitHub}{25}{subsection.5.1.3}%
-\contentsline {subsection}{\numberline {5.1.4}Libraries and Frameworks}{26}{subsection.5.1.4}%
-\contentsline {section}{\numberline {5.2}System Architecture Implementation}{27}{section.5.2}%
-\contentsline {subsection}{\numberline {5.2.1}Why a Layered Pipeline Architecture?}{27}{subsection.5.2.1}%
-\contentsline {subsection}{\numberline {5.2.2}Why a Single Python File?}{27}{subsection.5.2.2}%
-\contentsline {subsection}{\numberline {5.2.3}Why Share the Embedding Model Across Classes?}{28}{subsection.5.2.3}%
-\contentsline {subsection}{\numberline {5.2.4}Why an In-Memory LLM Cache?}{28}{subsection.5.2.4}%
-\contentsline {subsection}{\numberline {5.2.5}Why PPR (Personalised PageRank) for Graph Retrieval?}{28}{subsection.5.2.5}%
-\contentsline {subsection}{\numberline {5.2.6}Why Entropy as the Conflict Resolution Signal?}{29}{subsection.5.2.6}%
-\contentsline {section}{\numberline {5.3}Code Implementation}{29}{section.5.3}%
-\contentsline {subsection}{\numberline {5.3.1}Key Code Snippets}{29}{subsection.5.3.1}%
-\contentsline {subsubsection}{Temporal Decay [N2]}{29}{section*.9}%
-\contentsline {subsubsection}{Combined Path Scoring}{30}{section*.10}%
-\contentsline {subsubsection}{Shannon Entropy Calculation}{30}{section*.11}%
-\contentsline {subsubsection}{Calibrated Confidence Score [N7]}{30}{section*.12}%
-\contentsline {subsubsection}{Schema Inference JSON Parsing [A4+]}{30}{section*.13}%
-\contentsline {section}{\numberline {5.4}Testing}{30}{section.5.4}%
-\contentsline {subsection}{\numberline {5.4.1}Unit Testing}{30}{subsection.5.4.1}%
-\contentsline {subsection}{\numberline {5.4.2}Integration Testing}{31}{subsection.5.4.2}%
-\contentsline {subsection}{\numberline {5.4.3}System Testing}{31}{subsection.5.4.3}%
-\contentsline {subsection}{\numberline {5.4.4}User Testing}{31}{subsection.5.4.4}%
-\contentsline {section}{\numberline {5.5}Challenges and Solutions}{32}{section.5.5}%
-\contentsline {subsection}{\numberline {5.5.1}Challenges}{32}{subsection.5.5.1}%
-\contentsline {subsection}{\numberline {5.5.2}Solutions}{32}{subsection.5.5.2}%
-\contentsline {chapter}{\numberline {6}Results}{33}{chapter.6}%
-\contentsline {section}{\numberline {6.1}System Output Evaluation}{33}{section.6.1}%
-\contentsline {subsection}{\numberline {6.1.1}Functional Evaluation}{33}{subsection.6.1.1}%
-\contentsline {section}{\numberline {6.2}Project Development Timeline}{34}{section.6.2}%
-\contentsline {section}{\numberline {6.3}Performance Metrics}{35}{section.6.3}%
-\contentsline {section}{\numberline {6.4}Screenshots and System Interface}{36}{section.6.4}%
-\contentsline {subsection}{\numberline {6.4.1}Indian Science Domain Results}{36}{subsection.6.4.1}%
-\contentsline {subsection}{\numberline {6.4.2}Key System Output Charts}{37}{subsection.6.4.2}%
-\contentsline {subsection}{\numberline {6.4.3}The Space Telescope Query: A Notable Result}{39}{subsection.6.4.3}%
-\contentsline {section}{\numberline {6.5}Comparison Against Requirements}{40}{section.6.5}%
-\contentsline {subsection}{\numberline {6.5.1}Functional Requirements Fulfillment}{40}{subsection.6.5.1}%
-\contentsline {subsection}{\numberline {6.5.2}Non-Functional Requirements Fulfillment}{40}{subsection.6.5.2}%
-\contentsline {section}{\numberline {6.6}Future Enhancements}{40}{section.6.6}%
-\contentsline {chapter}{\numberline {7}Conclusion}{42}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Contributions to the Field}{42}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Future Enhancements}{43}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Final Thoughts}{44}{section.7.3}%
-\contentsline {chapter}{Bibliography}{45}{chapter*.25}%
+\contentsline {section}{\numberline {4.2}Data Flow Diagrams (DFD)}{20}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Level 0 Data Flow Diagram (Context Diagram)}{20}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}Level 1 Data Flow Diagram}{21}{subsection.4.2.2}%
+\contentsline {section}{\numberline {4.3}Class Diagrams}{22}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Module Design}{23}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}Module: Pre-Pipeline Schema Inference [A4+]}{23}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}Module: Knowledge Graph Construction (Module A)}{23}{subsection.4.4.2}%
+\contentsline {subsection}{\numberline {4.4.3}Module: Graph Retrieval (Module B)}{23}{subsection.4.4.3}%
+\contentsline {subsection}{\numberline {4.4.4}Module: Conflict Resolution and Answer Generation (Module C)}{24}{subsection.4.4.4}%
+\contentsline {section}{\numberline {4.5}Database Design}{25}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}Neo4j Graph Schema}{25}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}Corpus JSON Schema}{25}{subsection.4.5.2}%
+\contentsline {section}{\numberline {4.6}Sequence Diagram}{26}{section.4.6}%
+\contentsline {section}{\numberline {4.7}Web Interface Design}{27}{section.4.7}%
+\contentsline {subsection}{\numberline {4.7.1}Overview}{27}{subsection.4.7.1}%
+\contentsline {subsection}{\numberline {4.7.2}Interface Layout}{27}{subsection.4.7.2}%
+\contentsline {chapter}{\numberline {5}Implementation}{29}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Development Environment}{29}{section.5.1}%
+\contentsline {subsection}{\numberline {5.1.1}Programming Language: Python 3.11}{29}{subsection.5.1.1}%
+\contentsline {subsection}{\numberline {5.1.2}IDE: Visual Studio Code}{29}{subsection.5.1.2}%
+\contentsline {subsection}{\numberline {5.1.3}Version Control: Git and GitHub}{29}{subsection.5.1.3}%
+\contentsline {subsection}{\numberline {5.1.4}Libraries and Frameworks}{30}{subsection.5.1.4}%
+\contentsline {section}{\numberline {5.2}System Architecture Implementation}{31}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Why a Layered Pipeline Architecture?}{31}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Why a Single Python File?}{31}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Why Share the Embedding Model Across Classes?}{32}{subsection.5.2.3}%
+\contentsline {subsection}{\numberline {5.2.4}Why an In-Memory LLM Cache?}{32}{subsection.5.2.4}%
+\contentsline {subsection}{\numberline {5.2.5}Why PPR (Personalised PageRank) for Graph Retrieval?}{32}{subsection.5.2.5}%
+\contentsline {subsection}{\numberline {5.2.6}Why Entropy as the Conflict Resolution Signal?}{33}{subsection.5.2.6}%
+\contentsline {section}{\numberline {5.3}Code Implementation}{33}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Key Code Snippets}{33}{subsection.5.3.1}%
+\contentsline {subsubsection}{Temporal Decay [N2]}{33}{section*.17}%
+\contentsline {subsubsection}{Combined Path Scoring}{34}{section*.18}%
+\contentsline {subsubsection}{Shannon Entropy Calculation}{34}{section*.19}%
+\contentsline {subsubsection}{Calibrated Confidence Score [N7]}{34}{section*.20}%
+\contentsline {subsubsection}{Schema Inference JSON Parsing [A4+]}{34}{section*.21}%
+\contentsline {section}{\numberline {5.4}Testing}{34}{section.5.4}%
+\contentsline {subsection}{\numberline {5.4.1}Unit Testing}{34}{subsection.5.4.1}%
+\contentsline {subsection}{\numberline {5.4.2}Integration Testing}{35}{subsection.5.4.2}%
+\contentsline {subsection}{\numberline {5.4.3}System Testing}{35}{subsection.5.4.3}%
+\contentsline {subsection}{\numberline {5.4.4}User Testing}{35}{subsection.5.4.4}%
+\contentsline {section}{\numberline {5.5}Challenges and Solutions}{36}{section.5.5}%
+\contentsline {subsection}{\numberline {5.5.1}Challenges}{36}{subsection.5.5.1}%
+\contentsline {subsection}{\numberline {5.5.2}Solutions}{36}{subsection.5.5.2}%
+\contentsline {chapter}{\numberline {6}Results}{37}{chapter.6}%
+\contentsline {section}{\numberline {6.1}System Output Evaluation}{37}{section.6.1}%
+\contentsline {subsection}{\numberline {6.1.1}Functional Evaluation}{37}{subsection.6.1.1}%
+\contentsline {section}{\numberline {6.2}Project Development Timeline}{38}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Performance Metrics}{39}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Screenshots and System Interface}{40}{section.6.4}%
+\contentsline {subsection}{\numberline {6.4.1}Indian Science Domain Results}{40}{subsection.6.4.1}%
+\contentsline {subsection}{\numberline {6.4.2}Key System Output Charts}{41}{subsection.6.4.2}%
+\contentsline {subsection}{\numberline {6.4.3}Web Interface Screenshots}{45}{subsection.6.4.3}%
+\contentsline {subsection}{\numberline {6.4.4}The Space Telescope Query: A Notable Result}{46}{subsection.6.4.4}%
+\contentsline {section}{\numberline {6.5}Comparison Against Requirements}{46}{section.6.5}%
+\contentsline {subsection}{\numberline {6.5.1}Functional Requirements Fulfillment}{46}{subsection.6.5.1}%
+\contentsline {subsection}{\numberline {6.5.2}Non-Functional Requirements Fulfillment}{46}{subsection.6.5.2}%
+\contentsline {section}{\numberline {6.6}Future Enhancements}{46}{section.6.6}%
+\contentsline {chapter}{\numberline {7}Conclusion}{48}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Contributions to the Field}{48}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Future Enhancements}{49}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Final Thoughts}{50}{section.7.3}%
+\contentsline {chapter}{Bibliography}{51}{chapter*.35}%
