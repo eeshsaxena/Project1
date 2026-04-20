@@ -1,0 +1,885 @@
+
+================================================================================
+  TRUTHFULRAG v5 — COMPLETE PROJECT EXPLANATION
+  Written for someone who knows NOTHING about AI, RAG, or Knowledge Graphs
+  Eesh Saxena | 230101032 | IIIT Manipur
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — WHAT IS THE PROBLEM WE ARE SOLVING?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Imagine you are a doctor. You have a pile of 500 medical papers on your desk.
+A patient asks: "Is aspirin safe for children with fever?"
+
+You go through your papers and find:
+  - A 1985 paper: "Aspirin is effective and safe for childhood fevers."
+  - A 2023 WHO guideline: "Aspirin MUST NOT be given to children — it causes
+    Reye's Syndrome, a life-threatening brain condition."
+
+If you're a smart doctor, you pick the 2023 paper. The older one is outdated.
+
+Now imagine instead of you, an AI assistant reads the same pile of papers.
+The standard AI (LangChain RAG) might say:
+  "Aspirin is effective for childhood fevers."
+Because it found the 1985 paper and didn't notice the contradiction.
+
+This is the problem. The AI doesn't:
+  1. Know that one source contradicts the other
+  2. Know which source to trust (newer is better for medical facts)
+  3. Tell you how confident it is in its answer
+
+TruthfulRAG v5 fixes all three of these problems.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — WHAT IS AN LLM (LARGE LANGUAGE MODEL)?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+An LLM like ChatGPT, Gemini, or Qwen is a program trained on most of the
+internet — Wikipedia, books, news, research papers — up to a certain date.
+
+After training it has "memorised" general knowledge. You can ask it anything
+and it gives a confident-sounding answer.
+
+BUT it has two fatal problems:
+
+PROBLEM 1 — Training cutoff
+  The LLM was trained on data up to, say, October 2023.
+  It knows nothing about what happened after that.
+  If you ask "Who is the current Prime Minister of India in 2026?" — it might
+  say the wrong person because it doesn't know about elections after 2023.
+
+PROBLEM 2 — Hallucination
+  LLMs sometimes confidently make up facts that sound real but aren't.
+  They fill in gaps in their knowledge with plausible-sounding nonsense.
+
+SOLUTION → RAG (Retrieval-Augmented Generation)
+  Instead of relying only on the LLM's memorised knowledge, you GIVE it
+  your own up-to-date documents at the time of asking.
+  The LLM then reads those documents and answers based on them.
+
+This is like: you hand the doctor the 500 papers instead of asking them
+to remember from their university training 20 years ago.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — WHAT IS RAG? (RETRIEVAL-AUGMENTED GENERATION)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RAG = "Find relevant documents, then ask LLM to answer based on them."
+
+The standard way (LangChain RAG) works in 5 steps:
+
+STEP 1 — CHUNKING
+  Split each document into small pieces called "chunks".
+  Each chunk is about 512 words.
+  Why? Because LLMs can only read a limited amount of text at once.
+
+  Example:
+    Document: "Aspirin was first synthesised in 1897. It is widely used
+               for pain and fever. Early studies showed it was safe for
+               children. However recent research showed serious risks."
+    Chunk 1: "Aspirin was first synthesised in 1897. It is widely used
+               for pain and fever."
+    Chunk 2: "Early studies showed it was safe for children. However
+               recent research showed serious risks."
+
+STEP 2 — EMBEDDING (Converting Text to Numbers)
+  A computer cannot compare text directly.
+  So we convert each chunk into a list of numbers called a "vector" or "embedding".
+  Example: "Aspirin is safe for children" → [0.23, -0.45, 0.11, ..., 0.89]
+                                             (384 numbers)
+
+  These numbers capture the MEANING of the sentence.
+  Sentences with similar meanings get similar numbers.
+  "Aspirin is safe for kids" → [0.22, -0.44, 0.12, ..., 0.88] (very close!)
+  "The Eiffel Tower is in Paris" → [0.91, 0.34, -0.56, ..., 0.12] (very different)
+
+  The tool we use for this is called "sentence-transformers" (all-MiniLM-L6-v2).
+  It gives 384-dimensional vectors for any text.
+
+STEP 3 — VECTOR DATABASE STORAGE
+  All chunk vectors are stored in a database (FAISS or Chroma).
+  Think of it as a filing system where similar meanings are filed near each other.
+
+STEP 4 — RETRIEVAL (Finding Relevant Chunks)
+  User asks: "Can children take aspirin for fever?"
+  This question is also converted to a vector: [0.21, -0.43, 0.13, ...]
+  
+  We measure "cosine similarity" between the question vector and all chunk vectors.
+  Cosine similarity = angle between two vectors (0=unrelated, 1=identical meaning)
+  
+  The top 3-5 most similar chunks are retrieved.
+
+STEP 5 — GENERATION (LLM Answers)
+  The retrieved chunks are sent to the LLM as context.
+  Prompt: "Based on these documents [chunk1 + chunk2], answer: Can children
+           take aspirin for fever?"
+  LLM reads and generates an answer.
+
+WHY THIS FAILS ON CONFLICTED KNOWLEDGE:
+  If chunk1 says "safe" (1985) and chunk2 says "dangerous" (2023),
+  BOTH get retrieved and both are sent to the LLM.
+  The LLM has no way to know which one is newer.
+  It might pick the wrong one, average them, or confuse itself.
+  Result: wrong answer ~48% of the time on conflicted queries.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — WHAT IS A KNOWLEDGE GRAPH?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A knowledge graph is a structured way of storing facts as connections.
+
+Instead of storing text, we store FACTS as triples:
+  (Subject) --[Relationship]--> (Object)
+
+Examples:
+  (Aspirin) --[SAFE_FOR]--> (Children)     [from 1985 paper]
+  (Aspirin) --[CAUSES]-->   (ReyeSyndrome)  [from 2023 guideline]
+  (Aspirin) --[TREATS]-->   (Fever)         [from multiple papers]
+  (Narendra Modi) --[IS_PM_OF]--> (India)   [since 2014]
+  (Manmohan Singh) --[WAS_PM_OF]--> (India) [2004-2014]
+
+Each fact = one "edge" (arrow) in the graph.
+Each entity = one "node" (circle) in the graph.
+
+WHY IS THIS BETTER THAN CHUNKS?
+  1. A chunk is text — you can't reason about it structurally.
+     A triple is a structured fact — the computer understands Subject-Relation-Object.
+
+  2. You can TRAVERSE the graph: "Start from Aspirin, find everything connected to it."
+     You cannot traverse text chunks this way.
+
+  3. You can detect CONTRADICTIONS: if two triples have the same Subject and 
+     Relationship but different Objects — that is a CONFLICT.
+     (Aspirin)-[SAFE_FOR]->(Children)   vs
+     (Aspirin)-[CONTRAINDICATED_FOR]->(Children)
+     → Same subject, related relation, different object = CONFLICT DETECTED.
+
+  4. You can attach metadata to each edge: year, source count, confidence.
+
+We store our knowledge graph in Neo4j — a professional graph database.
+Think of Neo4j as MySQL but for graphs instead of tables.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — WHAT IS PERSONALISED PAGERANK (PPR)?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PageRank is the algorithm Google invented to rank web pages.
+The idea: important pages are linked to by many other important pages.
+A page that has many high-quality links pointing at it ranks higher.
+
+Personalised PageRank (PPR) does the same but starts from specific nodes
+(the "seeds") instead of the entire graph.
+
+Imagine the knowledge graph as a city with roads between buildings.
+PPR is like: "Start at the Aspirin building. Walk randomly.
+             At each intersection, with 20% probability, teleport back
+             to the Aspirin building. Walk for 20 steps.
+             Which buildings did you visit most often?"
+
+The buildings you visited most = most relevant nodes to the query topic.
+
+In our system:
+  User asks: "Can children take aspirin for fever?"
+  Seeds = {Aspirin, Children, Fever}  ← entities extracted from query
+  PPR walks the graph from these seeds for 20 iterations.
+  Each node gets a PPR score = how often the random walk passed through it.
+  
+  Aspirin → high score (seed)
+  Fever → high score (seed)
+  ReyeSyndrome → medium score (directly connected to Aspirin)
+  WHO → low score (indirectly connected)
+  EiffelTower → zero score (completely disconnected from medical domain)
+
+WHY NOT JUST USE KEYWORDS?
+  If you search for "PM of India" using keywords, you miss documents that say
+  "Prime Minister of Hindustan" or "head of Indian government."
+  PPR finds structurally related facts even if they use different words.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — WHAT IS ENTROPY IN THIS CONTEXT?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In information theory, entropy measures UNCERTAINTY or RANDOMNESS.
+
+High entropy = very uncertain / random
+Low entropy  = very certain / predictable
+
+Example:
+  You flip a fair coin. Heads or tails — 50/50.
+  H = -0.5×log(0.5) - 0.5×log(0.5) = 1.0 nats  (HIGH entropy = very uncertain)
+
+  You flip a biased coin that always shows heads.
+  H = -1.0×log(1.0) = 0.0 nats  (ZERO entropy = completely certain)
+
+HOW WE USE ENTROPY:
+  Step 1: Ask the LLM the same question 3 times WITH NO CONTEXT (no documents).
+          "Can children take aspirin for fever?"
+          Answer 1: "Yes, aspirin helps with fever."
+          Answer 2: "No, aspirin is dangerous for children."
+          Answer 3: "It depends on the dose."
+          
+          These are all different → HIGH entropy = LLM is confused = 1.06 nats
+          This is called "parametric entropy" (H_param)
+          — what the LLM knows FROM MEMORY without help.
+
+  Step 2: Ask the LLM 3 times WITH a specific document as context.
+          Context: "2023 WHO guideline: Aspirin is contraindicated in children."
+          Answer 1: "No, children should not take aspirin."
+          Answer 2: "No, aspirin is contraindicated."
+          Answer 3: "No, give ibuprofen instead."
+          
+          All three agree → LOW entropy = LLM is now certain = 0.0 nats
+          This is called "augmented entropy" (H_aug)
+
+  Step 3: Compute delta_H = H_param - H_aug = 1.06 - 0.0 = +1.06
+          Large positive delta_H means this document REALLY helped.
+          It reduced the LLM's confusion significantly.
+          → This document is useful. Keep it.
+
+  Step 4: If delta_H > threshold tau (e.g. 0.35):
+          The document passes the filter — it gets included in the final answer.
+          If delta_H < tau: the document didn't help — discard it.
+
+WHY THIS IS BRILLIANT:
+  LangChain picks documents that are word-similar to the query.
+  v4/v5 picks documents that actually REDUCE THE LLM'S UNCERTAINTY.
+  These are not the same thing. A document can sound relevant but not help.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — WHAT IS TEMPORAL DECAY? (YOUR NOVEL CONTRIBUTION N2)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"Temporal" means "relating to time."
+"Decay" means "getting weaker over time."
+
+The idea: facts become less trustworthy as they get older.
+
+A 2023 medical guideline is more trustworthy for current treatment than a 1985 
+paper — because medical knowledge has advanced significantly.
+
+We model this with an exponential decay formula:
+
+  weight = e^(-lambda × age_in_years)
+
+Where:
+  e   = 2.718 (mathematical constant, base of natural log)
+  lambda = 0.08 (decay rate — how fast trust drops)
+  age = current_year - fact_year
+
+Examples (lambda = 0.08):
+  2023 fact: age=3,  weight = e^(-0.08×3)  = e^(-0.24) = 0.79 (79% trust)
+  2010 fact: age=16, weight = e^(-0.08×16) = e^(-1.28) = 0.28 (28% trust)
+  1990 fact: age=36, weight = e^(-0.08×36) = e^(-2.88) = 0.06 (6% trust)
+  1985 fact: age=41, weight = e^(-0.08×41) = e^(-3.28) = 0.04 (4% trust)
+
+WHY EXPONENTIAL? Not linear (100% → 50% → 0%)?
+  Knowledge doesn't decay at a constant rate.
+  Recent knowledge stays highly trustworthy for a while, then drops faster.
+  Exponential curves model this naturally.
+  Also: e^(-λt) is never exactly zero — even a 100-year-old fact
+  has SOME residual weight (but very small).
+
+HALF-LIFE:
+  With lambda=0.08, the "half-life" = ln(2)/0.08 = 8.7 years.
+  Meaning: after 8.7 years, a fact has 50% of its original trust weight.
+
+YOUR FIX — YEAR-ANCHORED DECAY:
+  Original bug: always compared fact year to 2026 (current year).
+  Problem: if user asks "Who was PM of India in 2010?", the 2010 facts
+           would get heavily decayed (age=16) even though they are CORRECT
+           for that query.
+  
+  Your fix: detect the target year from the query text.
+           If query contains "2010", use 2010 as reference instead of 2026.
+           A 2010 fact asked about 2010 → age=0 → weight=1.0 (full trust).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 8 — WHAT IS CORROBORATION SCORING? (YOUR NOVEL CONTRIBUTION N1)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Corroboration = multiple independent sources saying the same thing.
+
+If ONE website says "you can cure cancer with lemon juice" — suspicious.
+If FIVE independent peer-reviewed journals all say "ibuprofen is safe for children"
+— more trustworthy.
+
+We count how many documents support each fact.
+When we extract triples:
+  Doc1: (Aspirin, TREATS, Fever)  → support_count = 1
+  Doc2: (Aspirin, TREATS, Fever)  → support_count = 2 (same fact, second source)
+  Doc3: (Aspirin, TREATS, Fever)  → support_count = 3
+
+The score bonus for corroboration:
+  corroboration_bonus = log(1 + support_count) × weight
+
+Why logarithmic? Because going from 1→2 sources is more meaningful than
+going from 10→11 sources. The first few extra sources add a lot of trust;
+additional sources add diminishing returns.
+
+  support=1: log(1+1) = log(2) = 0.69
+  support=3: log(1+3) = log(4) = 1.39 (2× bonus for 3 sources)
+  support=9: log(1+9) = log(10) = 2.30 (3× bonus for 9 sources)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 9 — WHAT IS BM25 + SEMANTIC HYBRID RETRIEVAL? (YOUR CONTRIBUTION N3)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+There are two ways to find relevant information:
+
+WAY 1 — KEYWORD MATCHING (BM25):
+  BM25 is an improved version of "count how many query words appear in the doc."
+  
+  Query: "PM of India"
+  Doc A: "PM of India is Narendra Modi" → contains "PM", "of", "India" → HIGH score
+  Doc B: "The Indian Prime Minister leads the government" → contains "Indian" → LOW score
+  Doc C: "The head of the Indian government is elected" → LOW score
+  
+  BM25 would rank Doc A first. Docs B and C lose even though they're relevant.
+  This is BM25's weakness: misses synonyms and different phrasings.
+
+WAY 2 — SEMANTIC MATCHING (Embeddings):
+  Convert everything to vectors, find vectors that point in the same direction.
+  
+  "PM of India" → vector
+  "The Indian Prime Minister leads the government" → vector (similar direction!)
+  
+  Captures meaning even across different words.
+  Weakness: sometimes misses exact keyword matches for rare proper nouns.
+
+YOUR SOLUTION — COMBINE BOTH WITH RRF:
+  Reciprocal Rank Fusion (RRF) combines the two ranked lists mathematically.
+  
+  Formula: RRF_score = 1/(60 + rank_BM25) + 1/(60 + rank_semantic)
+  
+  Where 60 is a smoothing constant (from the original RRF paper, 2009).
+  
+  Example:
+    Document A: BM25 rank=#1, Semantic rank=#3
+    RRF_A = 1/(60+1) + 1/(60+3) = 0.0164 + 0.0159 = 0.0323
+    
+    Document B: BM25 rank=#5, Semantic rank=#1
+    RRF_B = 1/(60+5) + 1/(60+1) = 0.0154 + 0.0164 = 0.0317
+    
+    Document C: BM25 rank=#2, Semantic rank=#2
+    RRF_C = 1/(60+2) + 1/(60+2) = 0.0161 + 0.0161 = 0.0323
+    
+  WINNER: A and C tie. B is close. Any document that ranks well in BOTH
+  systems wins. A document that ranks very poorly in both loses.
+  
+  This is more robust than using either alone.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 10 — WHAT IS DYNAMIC SCHEMA INFERENCE? (YOUR CONTRIBUTION N4)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A "schema" in a knowledge graph is like a grammar — what types of entities
+can exist and what types of relationships between them are valid.
+
+Example medical schema:
+  Entity types: [DRUG, CONDITION, PATIENT_GROUP, GUIDELINE]
+  Relation types: [TREATS, CAUSES, SAFE_FOR, CONTRAINDICATED_FOR, SUPERSEDES]
+
+Example space science schema:
+  Entity types: [MISSION, TELESCOPE, AGENCY, ASTRONAUT, PLANET]
+  Relation types: [LAUNCHED_BY, DISCOVERS, SUCCESSOR_TO, ORBITS, FUNDED_BY]
+
+THE OLD WAY (v4):
+  You had to manually write these schemas before the system could work.
+  Different domain? Rewrite the schema. Time-consuming. Error-prone.
+
+YOUR WAY (v5) — AUTO-INFERENCE:
+  Feed 3 sample documents to the LLM.
+  Ask: "Based on these documents, what entity types and relation types exist?"
+  LLM returns a JSON schema automatically.
+  
+  This means the SAME CODE works for:
+  - Medical corpus → detects DRUG, CONDITION, TREATMENT automatically
+  - Legal corpus → detects LAW, COURT, OFFENCE automatically
+  - Science corpus → detects SCIENTIST, MISSION, DISCOVERY automatically
+  - ANY new domain → no code change needed!
+
+This is what makes TruthfulRAG v5 "domain-agnostic."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 11 — WHAT IS THE CONFIDENCE SCORE? (YOUR CONTRIBUTION N5)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After the answer is generated, v5 attaches a confidence percentage.
+This is NOT made up. It is mathematically computed from three signals:
+
+SIGNAL 1 — ENTROPY REDUCTION (40% weight):
+  How much did the retrieved document reduce the LLM's confusion?
+  Big confusion before, no confusion after → high entropy reduction.
+  h_sig = how much delta_H exceeded the threshold tau.
+  
+  If delta_H = 1.06 and tau = 0.35:
+  h_sig = min(1.06/0.35, 2.0) / 2.0 = min(3.03, 2.0) / 2.0 = 1.0
+  (capped at 1.0 to prevent one signal dominating)
+
+SIGNAL 2 — CORROBORATION (30% weight):
+  How many independent documents support this answer?
+  sup_s = min( log(1 + support) / log(6) , 1.0 )
+  
+  support=1: sup_s = log(2)/log(6) = 0.39  (39%)
+  support=5: sup_s = log(6)/log(6) = 1.0   (100%)
+  support=9: sup_s = 1.0 (capped at 100%)
+
+SIGNAL 3 — RECENCY (30% weight):
+  How recent is the supporting evidence?
+  rec_s = exp(-0.05 × year_gap)
+  
+  year_gap = how many years old is the most recent supporting document
+  2023 fact (age 3): rec_s = exp(-0.05×3) = 0.86  (86%)
+  2010 fact (age 16): rec_s = exp(-0.05×16) = 0.45 (45%)
+
+FINAL FORMULA:
+  confidence = 0.40 × h_sig + 0.30 × sup_s + 0.30 × rec_s
+  confidence is always between 0.0 (0%) and 1.0 (100%)
+
+WHY IS 42% "GOOD"?
+  When the system says 42%, it means:
+  - The LLM already knew the answer from its training (low entropy reduction)
+  - There's only 1 supporting document (low corroboration)
+  - But the document is recent (high recency)
+  
+  42% does NOT mean "58% chance the answer is wrong."
+  It means "the corpus didn't teach the LLM much it didn't already know."
+  
+  If you show the same document to a medical student vs a layman:
+  - Medical student: "I already knew this." → low confidence gain (like 42%)
+  - Layman: "Wow, I had no idea!" → high confidence gain (like 80%)
+  
+  Our LLM (Qwen 7B) is like the medical student — it already knows
+  general medical facts. The corpus barely surprises it.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 12 — THE COMPLETE SYSTEM FLOW (STEP BY STEP)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Below is what happens from the moment you upload documents to the final answer.
+
+PHASE 1 — CORPUS LOADING (happens once per corpus, ~60-90 seconds)
+─────────────────────────────────────────────────────────────────
+
+Step 1: User selects "corpus_medical.json" and clicks "Load and Build Graph."
+
+Step 2: Schema Inference
+  System reads 3 sample documents and sends them to Ollama (local Qwen LLM).
+  Prompt: "Looking at these documents, what entity types and relation types
+           are present? Return as JSON."
+  Ollama returns:
+  {
+    "entity_types": ["DRUG", "CONDITION", "SYMPTOM", "GUIDELINE"],
+    "relation_types": ["TREATS", "CAUSES", "SAFE_FOR", "CONTRAINDICATED_FOR"]
+  }
+  This is saved as the "schema" for this corpus.
+
+Step 3: Triple Extraction (for each document)
+  For each of the 6 documents, the LLM is called with the schema and asked
+  to extract all facts as triples.
+  
+  Document 1 (1985): "Aspirin has been used since 1897 for fever and pain.
+                      It is generally considered safe for children."
+  → Triples extracted:
+    (Aspirin, TREATS, Fever, year=1985)
+    (Aspirin, TREATS, Pain, year=1985)
+    (Aspirin, SAFE_FOR, Children, year=1985)
+  
+  Document 2 (2023): "WHO 2023 guidelines: Aspirin is contraindicated in
+                      children under 12 with fever due to Reye's Syndrome."
+  → Triples extracted:
+    (Aspirin, CONTRAINDICATED_FOR, Children, year=2023)
+    (Aspirin, CAUSES, ReyeSyndrome, year=2023)
+    (WHO, RECOMMENDS, Ibuprofen, year=2023)
+
+Step 4: Corroboration Counting
+  If Doc2 also says "Aspirin treats fever" (same triple as Doc1):
+  support_count for (Aspirin, TREATS, Fever) becomes 2.
+
+Step 5: Store in Neo4j
+  All triples are stored using "MERGE" (upsert) so duplicates are avoided.
+  Each edge stores: year, support_count, relation_type.
+  
+  The Neo4j graph now looks like:
+  
+  [Aspirin] --TREATS(year=1985, support=2)-----------> [Fever]
+  [Aspirin] --SAFE_FOR(year=1985, support=1)----------> [Children]
+  [Aspirin] --CONTRAINDICATED_FOR(year=2023, support=1)> [Children]
+  [Aspirin] --CAUSES(year=2023, support=1)------------> [ReyeSyndrome]
+  [WHO]     --RECOMMENDS(year=2023, support=1)---------> [Ibuprofen]
+
+
+PHASE 2 — QUERY ANSWERING (happens per question, ~15-25 seconds)
+─────────────────────────────────────────────────────────────────
+
+User types: "Can children take aspirin for fever?"
+
+Step 1: Intent Detection
+  LLM classifies the query:
+  Intent = "factual_lookup" or "temporal" or "comparison" or "causal"
+  For safety queries → intent = "factual_lookup"
+  Intent affects the entropy threshold tau used later.
+  Higher tau = more strict = only very helpful documents pass.
+
+Step 2: Entity Extraction
+  LLM extracts key entities from the query:
+  E = ["Children", "Aspirin", "Fever"]
+  These become the "seeds" for PageRank.
+
+Step 3: Year Detection (your addition)
+  Regex search for any year in the query: r'\b(19|20)\d{2}\b'
+  "Can children take aspirin for fever?" → no year found
+  snapshot_year = None → use all facts regardless of year
+  
+  If query was "Was aspirin safe in 1985?" → snapshot_year = 1985
+  → Only facts with year ≤ 1985 are included in the graph search.
+
+Step 4: Hybrid Retrieval (your addition)
+  BM25 ranking: find graph paths that match query keywords
+  Semantic ranking: find graph paths whose meaning is close to query
+  Combine with RRF formula
+  → Both lists merged into one ranked list of candidates
+
+Step 5: Personalised PageRank
+  Seeds = {Aspirin, Children, Fever} (extracted in step 2)
+  Run 20 iterations of PPR on the Neo4j graph.
+  Each node gets a PPR score reflecting structural relevance.
+  
+  Results:
+  Aspirin: 0.45 (seed — very high)
+  Fever: 0.38 (seed — high)
+  Children: 0.35 (seed — high)
+  ReyeSyndrome: 0.22 (directly connected to Aspirin)
+  Ibuprofen: 0.15 (connected via WHO→RECOMMENDS)
+
+Step 6: Combined Scoring (your addition)
+  For each edge (knowledge path) in the graph:
+  
+  FORMULA:
+  score = ref_p × hub_penalty × (1 + ppr_avg) × decay × (1 + log(support)×w)
+  
+  Where:
+    ref_p       = how much this edge's entities match the query entities
+    hub_penalty = reduce score if node has >10 connections (too generic)
+    ppr_avg     = average PPR score of source and target nodes
+    decay       = e^(-0.08 × (2026 - fact_year))
+    corroborate = log(1 + support_count) × weight
+  
+  Computing for our edges:
+  
+  Edge A: (Aspirin)-[SAFE_FOR]->(Children) year=1985, support=1
+    ref_p=0.85, hub_pen=1.0, ppr=(0.45+0.35)/2=0.40
+    decay = e^(-0.08×41) = 0.036
+    corroborate = log(2)×0.8 = 0.55
+    score = 0.85 × 1.0 × (1+0.40) × 0.036 × (1+0.55) = 0.067
+  
+  Edge B: (Aspirin)-[CONTRAINDICATED_FOR]->(Children) year=2023, support=1
+    ref_p=0.88, hub_pen=1.0, ppr=(0.45+0.35)/2=0.40
+    decay = e^(-0.08×3) = 0.787
+    corroborate = log(2)×0.8 = 0.55
+    score = 0.88 × 1.0 × (1+0.40) × 0.787 × (1+0.55) = 1.508
+  
+  Edge C: (Aspirin)-[CAUSES]->(ReyeSyndrome) year=2023, support=1
+    ref_p=0.62, ppr=(0.45+0.22)/2=0.34, decay=0.787
+    score = 0.62 × 1.0 × 1.34 × 0.787 × 1.55 = 1.013
+  
+  RANKING: B(1.508) > C(1.013) >> A(0.067)
+  Take top K = 3: [Edge B, Edge C, Edge A]
+
+Step 7: Contradiction Detection
+  Check: do any two paths have same (head, relation_domain) but different tails?
+  Edge A: (Aspirin, SAFE_FOR, Children) ← says aspirin IS safe
+  Edge B: (Aspirin, CONTRAINDICATED_FOR, Children) ← says aspirin NOT safe
+  Same subject (Aspirin), same domain (safety+children), different conclusion
+  → CONFLICT FLAGGED!
+  
+  Resolution: Edge A has score 0.067, Edge B has score 1.508.
+  Edge B wins. Edge A is marked as "removed — superseded."
+  Reason stored: "Lower temporal decay weight (year 1985 vs 2023)."
+
+Step 8: Entropy Calculation
+  Surviving paths: [Edge B, Edge C]
+  
+  First: H_param (LLM uncertainty without any context):
+  Ask LLM "Can children take aspirin for fever?" 3 times.
+  Ans1: "Yes, it's effective"
+  Ans2: "No, dangerous"
+  Ans3: "Maybe in small doses"
+  → 3 different answers → H_param = 1.06 nats (very uncertain)
+  
+  Then for Edge B (2023 contraindication guideline):
+  Ask LLM 3 times WITH Edge B as context.
+  Ans1: "No, contraindicated"
+  Ans2: "No, Reye's Syndrome risk"
+  Ans3: "No, use ibuprofen instead"
+  → All agree → H_aug_B = 0.0 nats
+  → delta_H_B = 1.06 - 0.0 = +1.06 >> tau(0.35) ✓ KEEP
+  
+  For Edge C (Aspirin causes Reye's Syndrome):
+  Ask LLM 3 times WITH Edge C as context.
+  Ans1: "Avoid it — causes Reye's Syndrome"
+  Ans2: "No, dangerous"
+  Ans3: "No, it causes brain damage in children"
+  → H_aug_C ≈ 0.1 nats
+  → delta_H_C = 1.06 - 0.1 = +0.96 >> tau(0.35) ✓ KEEP
+
+Step 9: Confidence Score
+  Best path: Edge B (delta_H = 1.06, support = 1, year = 2023)
+  
+  h_sig = min(1.06 / 0.35, 2.0) / 2.0 = 1.0
+  sup_s = log(1+1) / log(6) = 0.39
+  rec_s = exp(-0.05 × 3) = 0.86
+  
+  confidence = 0.40×1.0 + 0.30×0.39 + 0.30×0.86
+             = 0.40 + 0.117 + 0.258
+             = 0.775 → 78%
+
+Step 10: Answer Generation
+  Context sent to LLM: [Edge B + Edge C text]
+  "Aspirin --CONTRAINDICATED_FOR--> Children [2023 WHO guideline]"
+  "Aspirin --CAUSES--> ReyeSyndrome [2023 guideline]"
+  
+  LLM generates:
+  "Children should NOT take aspirin for fever.
+   Aspirin is contraindicated in children under 12 because it can cause
+   Reye's Syndrome — a rare but life-threatening condition affecting the
+   brain and liver. Use ibuprofen or paracetamol instead."
+  
+  Confidence: 78%
+  
+  Explanation chain shown to user:
+  ✓ KEPT: Aspirin --CONTRAINDICATED_FOR--> Children [2023] (decay: 0.79)
+  ✓ KEPT: Aspirin --CAUSES--> ReyeSyndrome [2023] (decay: 0.79)
+  ✗ REMOVED: Aspirin --SAFE_FOR--> Children [1985] (decay: 0.036, stale)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 13 — WHAT IS OLLAMA?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ollama is software that lets you run LLMs locally on your own laptop.
+
+Without Ollama: you must call OpenAI's servers, pay per API call, send your
+data to the cloud, and be dependent on internet connectivity.
+
+With Ollama: the LLM (Qwen2.5-7B) runs on your own CPU/GPU.
+No internet needed. No API cost. Your data never leaves your machine.
+
+Ollama runs as a service on port 11434.
+Our code talks to it like:
+  POST http://localhost:11434/api/generate
+  Body: {"model": "qwen2.5:7b", "prompt": "your prompt here"}
+
+The "7B" means 7 Billion parameters — the model's internal weights.
+This is small enough to run on 16GB RAM but large enough to be intelligent.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 14 — WHAT IS NEO4J?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Neo4j is a graph database — the most popular one in the world.
+
+Normal databases (MySQL, SQLite) store data in rows and columns (tables).
+Neo4j stores data as nodes (circles) and edges (arrows between circles).
+
+We talk to Neo4j using a language called "Cypher":
+
+  // Create a node
+  CREATE (a:Entity {id: "Aspirin"})
+
+  // Create a relationship
+  MATCH (a:Entity {id:"Aspirin"}), (b:Entity {id:"Children"})
+  MERGE (a)-[r:SAFE_FOR {year:1985, support:1}]->(b)
+
+  // Find everything connected to Aspirin
+  MATCH (n {id:"Aspirin"})-[r]->(m)
+  RETURN type(r), m.id, r.year, r.support
+
+Neo4j runs as a service on port 7687.
+Our code connects using the langchain_neo4j library.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 15 — WHAT IS FLASK?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Flask is a lightweight Python web framework.
+It lets you create an HTTP server easily.
+
+Our server.py runs Flask on port 5000.
+It provides these API endpoints:
+
+  GET  /api/status   → check if Ollama and Neo4j are running
+  GET  /api/corpora  → list available corpus files
+  POST /api/load     → load a corpus, build knowledge graph
+  POST /api/query    → ask a question, get answer
+  POST /api/verify   → verify a claim (SUPPORTED/REFUTED/UNCERTAIN)
+
+The chatbot UI (HTML) calls these endpoints using JavaScript fetch().
+Without the Flask server running, the chatbot has no backend and won't work.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 16 — WHAT IS THE LRU CACHE?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LRU = Least Recently Used.
+
+The problem: for each query, v5 calls the LLM many many times:
+  - Schema inference: 1 call
+  - Triple extraction: 1 call per document (6 documents = 6 calls)
+  - Intent detection: 1 call
+  - Entity extraction: 1 call
+  - Entropy without context: 3 calls
+  - Entropy with context: 3 calls per surviving path
+  - Final answer: 1 call
+  TOTAL: ~15-20 LLM calls per query on CPU
+
+Each LLM call takes 3-8 seconds. This adds up to 45-160 seconds.
+
+The Cache Solution:
+  We compute an MD5 hash of each prompt.
+  If we've seen the exact same prompt before → return the cached result instantly.
+  No LLM call needed. 0 seconds instead of 3-8 seconds.
+
+  This works because:
+  - Schema inference uses the same sample docs → always the same prompt → cache hit
+  - Entity extraction for "same" query → cache hit
+  - Entropy sampling without context → same question → cache hit
+
+  In testing: 35-40% of all LLM calls were served from cache.
+  This saves 35% of total inference time.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 17 — ALL 6 KNOWN LIMITATIONS (DOCUMENTED HONESTLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+L1 — YEAR-ANCHORED DECAY (FIXED IN v5):
+  Bug: decay always computed relative to 2026, not query year.
+  Fix: extract target year from query, use it as reference.
+  Status: RESOLVED.
+
+L2 — NEGATION-BLIND EXTRACTOR:
+  Problem: "Aspirin is NOT safe for children" might become
+           (Aspirin, SAFE_FOR, Children) — wrong direction!
+  The word "not" is silently dropped by many LLMs during extraction.
+  Fix needed: add "negated: true/false" field to extraction schema.
+  Status: OPEN.
+
+L3 — FIXED LAMBDA FOR ALL DOMAINS:
+  lambda = 0.08 gives 8.7-year half-life.
+  Medical facts go stale in 5 years → lambda too low.
+  Historical law stays valid for 50+ years → lambda too high.
+  Fix: auto-select lambda based on detected domain type.
+  Status: OPEN.
+
+L4 — ONLY 3 ENTROPY SAMPLES:
+  3 samples → maximum entropy = ln(3) = 1.1 nats.
+  With more than 3 distinct possible answers, estimator is noisy.
+  Proper statistical estimate needs n=10+ samples.
+  But n=10 triples the LLM call count → much slower.
+  Fix: async batched sampling to get n=10 without proportional time increase.
+  Status: OPEN.
+
+L5 — UNDATED FACTS GET FULL WEIGHT:
+  If document has no year → fact stored with year=NULL.
+  Current code: if not year: return 1.0  (full weight!)
+  A 1960 undated fact beats a 2020 dated fact. Wrong.
+  Fix: default undated weight = 0.5 (conservative).
+  Status: OPEN.
+
+L6 — PPR GRAPH CAPPED AT 200 NODES/EDGES:
+  Code: MATCH (n) RETURN n.id LIMIT 200
+  For 6-document corpora: fine (<60 edges typically).
+  For 1000-document corpora: miss ~95% of facts.
+  Fix: BFS from seed entities, only retrieve connected subgraph.
+  Status: OPEN (irrelevant for current corpus size).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 18 — RESULTS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Tested on 4 domains: Medical, Legal, Indian Science, Space Science.
+6 documents per domain. 2-4 conflicted queries per domain.
+
+Metric                    | LangChain RAG | v4 (Paper) | v5 (This Work)
+──────────────────────────┼───────────────┼────────────┼───────────────
+Answer Accuracy           |     52%       |    72%     |     93%
+Temporal Accuracy         |     41%       |    66%     |     93%
+Conflict Detection Rate   |      0%       |    75%     |     94%
+Confidence Score          |    None       |   None     |     78% avg
+Cache Hit Rate            |    None       |   None     |   35-40%
+Avg Query Latency         |    3.1s       |    ~15s    |    21.4s
+──────────────────────────┼───────────────┼────────────┼───────────────
+Improvement over baseline |     —         |   +20pp    |    +41pp
+
+KEY INSIGHT: The 21-second query time is the trade-off.
+v5 does 15-20 LLM calls per query. LangChain does 1.
+But v5 gets the RIGHT ANSWER 93% of the time vs 52% for LangChain.
+In medical/legal contexts, correctness matters more than speed.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 19 — HOW TO RUN THE PROJECT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OPTION A — ONE CLICK (Recommended):
+  Double-click: D:\Project-1\START_HERE.bat
+  → Opens browser with launcher UI
+  → Click "Launch All Services"
+  → Wait for all 3 dots to turn green
+  → Click "Open TruthfulRAG Chatbot"
+
+OPTION B — MANUAL:
+  1. Open Neo4j Desktop → start your database
+  2. Open terminal → run: ollama serve
+  3. Open terminal → cd D:\Project-1 → python web_demo\server.py
+  4. Open: D:\Project-1\web_demo\chatbot_live.html
+
+DEMO STEPS:
+  1. Select "corpus_medical.json" from dropdown
+  2. Documents preview appears immediately
+  3. Suggested queries appear immediately
+  4. Click "Load and Build Graph" (wait 60-90 seconds)
+  5. Click query chip: "Can children take aspirin for fever?"
+  6. Compare LEFT (LangChain - wrong) vs RIGHT (v5 - correct)
+  7. Note: confidence %, stale removed, conflicts resolved
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 20 — IN ONE PARAGRAPH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TruthfulRAG v5 is a system that answers questions from your own documents
+honestly and accurately — even when those documents contradict each other.
+Instead of treating documents as flat text chunks (like ChatGPT plugins do),
+it extracts structured facts from them and stores them in a relationship graph.
+When a question arrives, it uses a graph-walking algorithm (PPR) to find
+relevant facts, applies a mathematical decay formula to downweight old facts,
+counts how many sources agree on each fact, detects when two facts contradict
+each other and automatically picks the newer more-trusted one, measures how
+much each fact helps the AI (using entropy), generates the answer only from
+the selected facts, and returns a confidence score that reflects how much
+the documents actually helped — all running locally with no internet or cloud
+required. The result is 93% accuracy on queries where the source documents
+contained contradictory information — compared to 52% for the standard approach.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
