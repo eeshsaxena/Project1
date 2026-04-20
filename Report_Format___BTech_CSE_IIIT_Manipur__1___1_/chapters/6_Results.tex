@@ -1,4 +1,4 @@
-
+﻿
 % ================================================================
 % CHAPTER 6: RESULTS  (humanised rewrite with Indian examples)
 % ================================================================
@@ -393,3 +393,122 @@ downweighted proportionally, and any facts newer than the target year are
 already excluded by the temporal snapshot filter~[N4]. Without this fix, a
 query like ``Who was the CEO of Twitter in 2020?'' would have penalised the
 2020 facts despite them being the correct answer.
+
+% ── LIMITATION 2 ──────────────────────────────────────────────────────────
+\subsection{Limitation: Negation-Blind Triple Extraction}
+
+The LLM-based triple extractor (Module~A) is prompted to return structured
+\texttt{(head, relation, tail, year)} tuples from each document.  The extractor
+has no explicit mechanism for capturing negation.  A document sentence such as
+``\emph{Aspirin should \textbf{not} be administered to children with fever}''
+may cause the extractor to produce the triple
+\texttt{(Aspirin, SAFE\_FOR, Children)} --- the semantic opposite of what the
+text asserts.  Because the extraction prompt asks for factual relationships, the
+word ``not'' is frequently dropped when the LLM converts prose into structured
+form.
+
+\textbf{Impact:} Negated facts could reinforce rather than contradict a
+competing claim, reducing the conflict detection rate for safety-critical domains.
+
+\textbf{Planned fix:} The extraction prompt should be extended with an explicit
+\texttt{"negated": true|false} field in the JSON schema, and a post-processing
+step should invert the relation (e.g.,\ \texttt{SAFE\_FOR} $\rightarrow$
+\texttt{UNSAFE\_FOR}) when the negation flag is set.
+
+% ── LIMITATION 3 ──────────────────────────────────────────────────────────
+\subsection{Limitation: Fixed Decay Rate \texorpdfstring{$\lambda$}{lambda} Across All Domains}
+
+The temporal decay parameter $\lambda = 0.08$ was chosen to give a half-life of
+$\ln 2 / 0.08 \approx 8.7$ years, which is appropriate for general factual
+knowledge.  However, knowledge stales at very different rates depending on the
+domain:
+
+\begin{itemize}
+    \item \textbf{Medical guidelines}: A 5-year-old clinical recommendation can
+    be dangerously outdated.  An appropriate $\lambda \approx 0.25$ would decay
+    a 5-year-old fact to $e^{-1.25} \approx 0.29$.
+    \item \textbf{Constitutional/historical law}: A 50-year-old statute may be
+    fully valid today.  A lower $\lambda \approx 0.01$ is more appropriate.
+    \item \textbf{Scientific constants}: Facts like the speed of light are
+    timeless; $\lambda = 0$ is correct.
+\end{itemize}
+
+The current implementation applies a single global $\lambda$ to all domains,
+which can cause over-decay in stable domains (unfairly penalising old-but-valid
+science facts) and under-decay in fast-moving domains (retaining outdated
+medical facts with too high a weight).  A future enhancement should auto-select
+$\lambda$ based on the schema intent class output by Module~A or allow per-corpus
+configuration.
+
+% ── LIMITATION 4 ──────────────────────────────────────────────────────────
+\subsection{Limitation: Low-Variance Entropy Estimate from \texorpdfstring{$n=3$}{n=3} Samples}
+
+The semantic entropy calculation~[C2] samples the LLM $n = 3$ times with
+temperature $> 0$ and computes the token-diversity entropy of the resulting
+answers.  With only three samples, the estimator has high variance: if two of
+the three samples happen to give the same answer by chance, entropy reads as
+low even if the LLM is genuinely uncertain.
+
+Formally, with $n = 3$ the maximum possible entropy is $\ln 3 \approx 1.099$
+nats.  A reliable entropy estimate over a distribution of $k$ distinct answers
+requires $n \gg k$ samples.  For $k = 5$ plausible answer classes (as can
+occur in multi-entity queries), three samples cannot distinguish between a
+distribution that is nearly uniform (high uncertainty) and one that is strongly
+peaked (low uncertainty).
+
+Increasing to $n = 10$ would improve estimate quality but would multiply the
+LLM call count per query by more than three, pushing average latency from
+$\sim$\!21 seconds to $>$\!60 seconds on CPU hardware.  A batched parallel
+sampling strategy using asynchronous Ollama invocations would recover the
+accuracy improvement at lower wall-clock cost.
+
+% ── LIMITATION 5 ──────────────────────────────────────────────────────────
+\subsection{Limitation: Undated Triples Receive Implicitly Maximum Recency}
+
+When the LLM extractor cannot identify a publication year for a fact ---
+either because the source document contains no date, or because the LLM
+omits the \texttt{year} field --- the triple is stored with
+\texttt{year = NULL} in Neo4j.  The \texttt{\_temporal\_decay} function
+handles this case with an explicit guard:
+
+\begin{verbatim}
+if not year: return 1.0
+\end{verbatim}
+
+Returning $w = 1.0$ means undated facts are treated as \emph{maximally fresh}
+--- equivalent to a fact published today.  This is the wrong bias for most
+corpora: an undated fact is more likely to be from an unspecified historical
+period than from the current year.  If a corpus contains both a dated 2023
+document and an undated 1985 document, the undated fact competes at full
+weight against the dated 2023 fact, defeating the purpose of temporal decay.
+
+\textbf{Planned fix:} Undated facts should receive a conservative default
+weight (e.g., $w = 0.5$, corresponding to $\lambda t \approx 8.7$ years of
+age) rather than the maximum weight of 1.0.
+
+% ── LIMITATION 6 ──────────────────────────────────────────────────────────
+\subsection{Limitation: PPR and Edge Retrieval Capped at 200 Records}
+
+The Personalised Page\-Rank computation in Module~B queries Neo4j for all
+nodes and edges using:
+
+\begin{verbatim}
+MATCH (n) RETURN n.id LIMIT 200
+MATCH (a)-[r]->(b) RETURN ... LIMIT 200
+\end{verbatim}
+
+For the six-document corpora used in this project, the graph contains well
+under 200 edges, so the cap is never reached.  However, for a production
+corpus with hundreds of documents, the graph could contain thousands of edges.
+Truncating at 200 edges means the PPR walk operates on an incomplete graph,
+potentially missing high-relevance facts that happen to fall outside the
+first 200 results returned by Neo4j's unordered traversal.
+
+\textbf{Impact:} Retrieval recall drops as corpus size grows, because
+structurally relevant but unlucky-ordered nodes are silently excluded.
+
+\textbf{Planned fix:} Replace the flat \texttt{LIMIT 200} with a
+seed-anchored subgraph expansion:\ run a BFS from the seed entities up
+to depth~3 and retrieve only edges reachable from those seeds,
+eliminating irrelevant disconnected subgraph components and making the
+cap practically hard to reach for topic-focused queries.

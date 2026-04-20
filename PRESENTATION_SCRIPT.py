@@ -1,451 +1,496 @@
 # ============================================================
-#  PRESENTATION SCRIPT — TruthfulRAG v5
+#  PRESENTATION SCRIPT — TruthfulRAG v5  [TECHNICAL VERSION]
 #  B.Tech Project-I (CS3201) | IIIT Senapati, Manipur
 #  Student : Eesh Saxena (230101032)
 #  Instructor: Dr. Jennil Thiyam
+#  Approx runtime: 13–15 minutes
 # ============================================================
-#  READ ALOUD — approximately 12–15 minutes for full demo
-#  Sections marked [CLICK] = do that action on your laptop
+#  [ACTION] = do this on screen
+#  [FORMULA] = write/point to this on board or slide
 # ============================================================
 
 
 # ──────────────────────────────────────────────────────────────
-# SLIDE 1 — OPENING / TITLE
+# OPENING  (~45 seconds)
 # ──────────────────────────────────────────────────────────────
-
 """
-Good [morning / afternoon], Dr. Thiyam and everyone present.
+Good [morning/afternoon], Dr. Thiyam.
 
-My name is Eesh Saxena, roll number 230101032, and today I will be
-presenting my Project-I submission:
+I am Eesh Saxena, roll number 230101032.
 
-    TruthfulRAG v5 — A Dynamic, Domain-Agnostic Knowledge-Graph
-    Retrieval-Augmented Generation Pipeline with Conflict Resolution.
+My project is titled:
+  TruthfulRAG v5 — a Dynamic, Domain-Agnostic Knowledge-Graph
+  Retrieval-Augmented Generation Pipeline with Temporal Conflict Resolution.
 
-In roughly 12 minutes I will walk you through:
-  — why this problem matters
-  — what existing tools get wrong
-  — how TruthfulRAG v5 solves it
-  — a live demonstration on real data
-  — and the measured results
-"""
+The paper I am extending is arXiv:2511.10375 — TruthfulRAG v4,
+published November 2024.
 
-
-# ──────────────────────────────────────────────────────────────
-# SLIDE 2 — THE PROBLEM  (1.5 min)
-# ──────────────────────────────────────────────────────────────
-
-"""
-Let us start with a simple scenario.
-
-You ask an AI assistant: "Who is the current Prime Minister of India?"
-
-The AI says: "Manmohan Singh."
-
-That was correct in 2010.  But your document collection has a 2024 article
-that says the current Prime Minister is Narendra Modi.  And you also have
-a 2014 article saying Modi just got elected.
-
-A standard AI system will hand all three articles to the language model
-and say "answer this."  The language model has no way to pick the right one.
-It might average them, pick the most frequently mentioned name, or just
-follow whatever appears first.  In our tests it gets this wrong about half
-the time.
-
-This is called a knowledge conflict — and it is extremely common in:
-  — news archives       (leaders change, companies merge, laws get replaced)
-  — medical databases   (treatment guidelines are updated every few years)
-  — legal databases     (old penal codes are replaced by new ones)
-  — scientific records  (discoveries are superseded by newer findings)
-
-The problem has two parts:
-
-  ONE — The standard tool, called Retrieval-Augmented Generation or RAG,
-        does not detect that two facts contradict each other.
-
-  TWO — Even if it did detect a conflict, it has no principled way to
-        decide which fact is more trustworthy.
-
-TruthfulRAG v5 solves both.
+I will cover the problem formulation, the architectural pipeline,
+the six novel contributions I added on top of the base paper,
+a live system demonstration, and the measured evaluation results
+including documented limitations.
 """
 
 
 # ──────────────────────────────────────────────────────────────
-# SLIDE 3 — WHAT IS RAG? (1 min)
+# SECTION 1 — PROBLEM STATEMENT  (~2 minutes)
 # ──────────────────────────────────────────────────────────────
-
 """
-Before I explain the solution, let me briefly explain what RAG is,
-because everything else builds on this.
+The core problem is called a knowledge conflict in retrieval-augmented
+generation.
 
-A Large Language Model — like the one powering ChatGPT — has fixed
-knowledge from its training period.  After the training cutoff, it knows
-nothing new.
+Standard RAG has three steps:
+  — chunk documents into fixed-length text windows
+  — embed each chunk with a sentence encoder and store in a vector index
+  — at query time, retrieve top-K chunks by cosine similarity and
+    concatenate them as context for the LLM
 
-RAG fixes this by giving the model your documents at question time.
+The problem arises when the retrieved context contains contradictory
+facts — specifically temporal conflicts, where the same entity has
+different attribute values in documents from different years.
 
-Standard RAG works like this:
-  Step 1 — Split your documents into small chunks
-  Step 2 — Convert each chunk into a number vector using an embedding model
-  Step 3 — When a question arrives, find the chunks whose vectors are
-            closest to the question vector
-  Step 4 — Give the top-K chunks and the question to the LLM and ask it to answer
+Example: your corpus contains a 2010 document saying
+  "Aspirin is the standard treatment for childhood fever"
+and a 2023 WHO-guidelines document saying
+  "Aspirin is contraindicated in children due to Reye's Syndrome".
 
-This is fast — typically 2 to 3 seconds per query.
+Standard RAG retrieves both chunks, concatenates them, and hands
+the contradictory context to the LLM.
+The LLM has no instruction to prefer the newer source.
+In our experiments this produces the correct answer only
+52 percent of the time — essentially a coin flip on conflicted queries.
 
-But it has a fatal weakness: it is keyword-level matching.
-It cannot reason.  It cannot compare two facts.
-It cannot say "this one is from 2023, that one is from 2010 — trust this one."
+The two sub-problems are:
+  (1) Detection — the system must identify that two retrieved facts
+      share the same subject–relation pair but differ on the object.
+  (2) Resolution — given a detected conflict, the system must have
+      a principled, computable criterion for selecting the trustworthy fact.
 
-LangChain is the most popular open-source framework for building RAG systems.
-We use it as our baseline throughout this project.
-"""
-
-
-# ──────────────────────────────────────────────────────────────
-# SLIDE 4 — THE v5 SOLUTION (2 min)
-# ──────────────────────────────────────────────────────────────
-
-"""
-TruthfulRAG v5 is based on a research paper published on arXiv in November 2024
-— arXiv:2511.10375 — which proposed a three-module Knowledge-Graph RAG pipeline
-called TruthfulRAG v4.
-
-I re-implemented that paper and added six original improvements on top of it.
-
-Let me explain the pipeline first, then the improvements.
-
-THE PIPELINE — There are three modules, running in sequence:
-
-  MODULE A — Graph Construction
-    Instead of splitting documents into chunks, we extract FACTS from them.
-    Each fact is a triple: head entity → relation → tail entity.
-    Example: "Elon Musk → CEO_OF → Twitter" with year "2022" attached.
-    These triples are stored in a Neo4j graph database.
-    The graph is like a structured brain — not flat text, but connected knowledge.
-
-  MODULE B — Graph Retrieval
-    When the user asks a question, we do not search by keywords.
-    We run a graph algorithm called Personalised PageRank starting from the
-    entities mentioned in the question.
-    This finds facts that are STRUCTURALLY close to the topic.
-    We then apply our scoring formula: score = e to the minus lambda-t,
-    multiplied by log of (1 + support count).
-    What this means: newer facts score higher, and facts confirmed by
-    more documents score higher.
-
-  MODULE C — Conflict Resolution and Answer Generation
-    Before passing anything to the LLM, we check: do any two retrieved paths
-    share the same subject and relation but disagree on the object?
-    If yes — that is a conflict.  We discard the older one.
-    We then measure how uncertain the LLM is WITHOUT any context — this is
-    called parametric entropy.  We only pass facts that actually REDUCE
-    that uncertainty.
-    The surviving facts go to the LLM for final answer generation.
-
-THE SIX IMPROVEMENTS I ADDED:
-
-  N1 — Cross-document corroboration scoring.
-       If five documents all say the same fact, that fact gets a higher score
-       than a fact mentioned in only one document.  More sources = more trust.
-
-  N2 — Exponential temporal decay.
-       Every fact in the graph has a year.
-       Score is multiplied by e to the minus 0.08 times the age in years.
-       A 2024 fact keeps full score.  A 2014 fact loses about 55% of its score.
-       A 1990 fact retains only about 20%.  This happens automatically.
-
-  N3 — Hybrid BM25 plus semantic retrieval with Reciprocal Rank Fusion.
-       Two retrieval techniques are fused: one finds keyword matches,
-       the other finds semantic matches.  Together they cover more relevant
-       facts than either alone.
-
-  N4 — Explanation chain generation.
-       When the system removes a conflicting fact, it records why.
-       The user sees: "Removed: Jack Dorsey as CEO — superseded 2022."
-       This makes the system transparent and auditable.
-
-  N5 — Calibrated three-factor confidence score.
-       Every answer comes with a percentage.  It is not made up.
-       It is computed from: how much did the context reduce entropy,
-       how many sources corroborate the answer, and how recent is the evidence.
-
-  N6 — Claim verification mode.
-       Instead of asking a question, the user can make a claim.
-       The system returns: SUPPORTED, REFUTED, or UNCERTAIN — with evidence.
+Neither of these is addressed by LangChain's standard retrieval chain.
 """
 
 
 # ──────────────────────────────────────────────────────────────
-# SLIDE 5 — LIVE DEMO (4 min)
-# [CLICK] Open the chatbot in your browser
+# SECTION 2 — ARCHITECTURE  (~3 minutes)
 # ──────────────────────────────────────────────────────────────
-
 """
-Let me now show you the system running live.
+The pipeline has three modules, directly matching the paper's design.
 
-[CLICK — open chatbot_live.html in browser]
+─────── MODULE A — GRAPH CONSTRUCTION ─────────────────────────
 
-What you see is a dual-panel interface.
-The LEFT panel is standard LangChain RAG — the baseline we compare against.
-The RIGHT panel is TruthfulRAG v5.
+Instead of chunking, we extract structured triples from documents.
 
-Both systems are connected to the same local infrastructure:
-  — Ollama is running Qwen2.5-7B-Instruct, a 7-billion parameter LLM,
-    entirely on this machine.  No internet.  No cloud.
-  — Neo4j Community Edition is our graph database, also running locally.
-  — The Flask server connects everything.
+For each document the LLM is called with a schema-guided prompt:
 
-The status chips at the top show:
-  Ollama — GREEN, connected.
-  Neo4j — GREEN, connected.
+  PROMPT: "Extract factual relationships as JSON triples.
+           Schema entity types: {entity_types}
+           Schema relation types: {relation_types}
+           Each item: {"head":str, "relation":str, "tail":str, "year":int|null}"
 
-[CLICK — select corpus_medical.json from the dropdown]
+The schema itself is auto-inferred at corpus-load time — the LLM reads
+a sample of documents and returns the relevant entity and relation types.
+This is what makes the system domain-agnostic: there is no hardcoded ontology.
 
-I will use the medical corpus.  It contains six documents from different years
-about aspirin, ibuprofen, and pain relief in children.  Some documents say
-aspirin is safe for children.  Others — newer ones from 2023 — say it is
-dangerous and must not be given to children with fever because it causes
-a condition called Reye's Syndrome.
+Extracted triples are deduplicated and stored in Neo4j using MERGE:
+  MERGE (a:Entity {id: head})
+  MERGE (b:Entity {id: tail})
+  MERGE (a)-[r:RELATION {year: yr, support: count}]->(b)
 
-This is a real clinical conflict.
+The support counter — novel contribution N1 — increments each time
+the same triple is extracted from a different source document,
+enabling corroboration scoring.
 
-[CLICK — Load and Build Graph]
+─────── MODULE B — GRAPH RETRIEVAL ──────────────────────────────
 
-The system is now:
-  — Inferring the schema: it asks the LLM what kinds of entities are in
-    these documents.  No manual configuration.
-  — Building the knowledge graph: extracting triples from all six documents
-    and storing them in Neo4j.
-  — This takes about 60 to 90 seconds because each document goes through
-    the LLM for triple extraction.
+When a query arrives:
 
-[Wait for "Both pipelines ready" message]
+  Step 1 — Intent classification:
+    The LLM classifies the query as one of five intents:
+    factual_lookup, temporal, comparison, causal, or unknown.
+    This sets the entropy threshold tau for Module C.
 
-The graph is built.
+  Step 2 — Key entity and relation keyword extraction:
+    The LLM returns the named entities E and relation keywords Rkw
+    from the query. These become the seed nodes for PageRank.
 
-[CLICK — the suggested query: "Can children take aspirin for fever?"]
+  Step 3 — Hybrid retrieval [N3]:
+    Two ranked lists are computed — BM25 keyword rank and
+    sentence-embedding cosine rank.
+    They are fused with Reciprocal Rank Fusion:
+    RRF score = sum over lists of 1 / (k + rank_i)
+    where k = 60.
+    This fuses lexical and semantic matches.
 
-Both systems are now answering the same question.
+  Step 4 — Personalised PageRank [B4]:
+    PPR is run on the Neo4j graph with seeds = extracted entities E.
+    After 20 damped iterations the score of each node reflects its
+    structural proximity to the query topic — not its textual similarity.
 
-[PAUSE — let both answers appear]
+  Step 5 — Combined scoring:
+    Each knowledge path (edge) gets a composite score:
 
-Look at the results.
+    [FORMULA]
+    score = ref_p × hub_penalty × (1 + ppr_avg) × decay × (1 + corroborate)
 
-LEFT panel — LangChain RAG:
-  It says something like: "Aspirin is generally used for fever and pain relief."
-  It found the older documents that recommend aspirin.
-  There is no conflict check.  No confidence.  No audit trail.
-  It is wrong by 2023 medical guidelines.
+    where:
+      ref_p      = alpha × entity_coverage + beta × relation_coverage
+      hub_penalty = 0.8 if degree(node) > 10 else 1.0
+      ppr_avg    = mean PPR score of source and target nodes
+      decay      = exp(-lambda × max(0, ref_year - fact_year))  [N2]
+      corroborate = log(1 + support_count) × weight             [N1]
 
-RIGHT panel — TruthfulRAG v5:
-  It says: "Children should NOT take aspirin for fever.
-  Aspirin is associated with Reye's Syndrome in children.
-  Ibuprofen or paracetamol is recommended instead — as of 2023 guidelines."
+    lambda = 0.08, giving half-life of 8.7 years.
+    ref_year = query year if specified, else current year (2026).
+    Paths are sorted descending and the top-K are passed to Module C.
 
-Look at the diagnostics below the answer:
-  — Intent detected: factual-safety query
-  — Paths retained: the 2023 guideline
-  — Conflicts removed: the older 1980s aspirin recommendation
-  — Confidence: around 42 to 55 percent
+─────── MODULE C — CONFLICT RESOLUTION + ANSWER ─────────────────
 
-The confidence is not 100% because Qwen already knows some of this from
-its training data — the corpus confirmed it rather than teaching it something
-entirely new.  A higher confidence would appear if you asked about something
-the LLM has never seen — like an internal policy document.
+  Step 1 — Contradiction detection:
+    For every pair of paths sharing the same (head, relation) but
+    different tail values, a conflict is flagged.
+    The lower-scoring path is marked for removal.
 
-Now let me switch to a different corpus to show domain-agnosticism.
+  Step 2 — Semantic entropy without context [C2]:
+    The LLM is sampled n=3 times without any context:
+    H_param = token-diversity Shannon entropy over the n answers.
+    This estimates the LLM's parametric uncertainty on the query.
 
-[CLICK — select corpus_india_science.json]
-[CLICK — Load and Build Graph]
-[Wait for ready message]
-[CLICK — "Who is the father of the Indian space programme?"]
+  Step 3 — Semantic entropy with context [C4]:
+    For each surviving path, the LLM is sampled n=3 times WITH
+    that path as context.
+    H_aug = entropy of augmented answers.
+    delta_H = H_param - H_aug.
+    A path is selected if delta_H > tau — meaning it clearly reduced
+    language model uncertainty.
 
-Same code.  Same pipeline.  Zero configuration changes.
-The system automatically discovered that this corpus is about scientists
-and missions — entity types like PERSON, ORGANIZATION, and MISSION.
-It returns Dr. Vikram Sarabhai, with the correct temporal chain.
+  Step 4 — Calibrated confidence score [N5]:
+    conf = 0.40 × h_sig  +  0.30 × sup_s  +  0.30 × rec_s
 
-This works on any domain you put in front of it.
+    where:
+      h_sig = min(|delta_H| / tau, 2.0) / 2.0
+      sup_s = min(log(1 + support) / log(6), 1.0)
+      rec_s = exp(-0.05 × year_gap)
+
+  Step 5 — Answer generation and explanation chain [N4][N6]:
+    The LLM is called exactly once with the surviving paths as context,
+    producing a final answer.
+    Removed paths are emitted as an explanation chain showing
+    what was filtered and why.
 """
 
 
 # ──────────────────────────────────────────────────────────────
-# SLIDE 6 — THE NUMBERS (2 min)
+# SECTION 3 — SIX NOVEL CONTRIBUTIONS  (~1.5 minutes)
 # ──────────────────────────────────────────────────────────────
-
 """
-Now let me talk about the measured results.
+The base paper (v4) implements Modules A, B, C with a fixed schema.
+I added six contributions on top:
 
-I evaluated TruthfulRAG v5 against two baselines:
-  — Standard LangChain RAG
-  — TruthfulRAG v4, the original paper's implementation
+  N1 — Cross-document corroboration scoring:
+       log(1 + support_count) is multiplied into the path score.
+       A fact confirmed across 5 sources scores higher than
+       a singleton fact regardless of textual similarity.
 
-The evaluation was done on four domain corpora:
+  N2 — Exponential temporal decay with query-year anchoring:
+       decay = exp(-0.08 × (ref_year - fact_year))
+       ref_year = query year if detected; else current year.
+       This ensures that for historical queries, the correct
+       year's facts receive full weight rather than being penalised.
+
+  N3 — Hybrid BM25 + semantic RRF retrieval:
+       Fuses keyword-level BM25 rank with sentence-embedding
+       cosine rank using reciprocal rank fusion.
+       Covers cases where one retrieval mode fails the other.
+
+  N4 — LLM-inferred dynamic schema (domain-agnostic):
+       Entity types and relation types are inferred by the LLM
+       from a sample of the input corpus — no manual ontology.
+       Same codebase processes medical, legal, science corpora
+       without any configuration change.
+
+  N5 — Three-factor calibrated confidence score:
+       Quantifies epistemic uncertainty as a weighted combination
+       of entropy reduction, corroboration, and temporal recency.
+       Cannot exceed 1.0 by construction.
+
+  N6 — Claim verification endpoint:
+       Given a claim string, the pipeline returns a structured
+       verdict: SUPPORTED, REFUTED, or UNCERTAIN — with the
+       graph-path evidence and confidence score attached.
+"""
+
+
+# ──────────────────────────────────────────────────────────────
+# SECTION 4 — LIVE DEMONSTRATION  (~4 minutes)
+# [ACTION] open chatbot_live.html in browser
+# ──────────────────────────────────────────────────────────────
+"""
+Let me show the system running.
+
+[ACTION — open chatbot_live.html]
+
+The interface has two panels.
+Left: standard LangChain RAG — chunk, embed, cosine, generate.
+Right: TruthfulRAG v5 — schema, graph, PPR, decay, entropy, confidence.
+
+Status chips: Ollama is on port 11434, Neo4j on 7687, Flask on 5000.
+All three are local — no internet dependency.
+
+[ACTION — select corpus_medical.json]
+
+As soon as you select a corpus, you can see:
+  — the individual document snippets appear in the preview panel immediately
+  — the suggested queries for this corpus are injected without loading
+
+[ACTION — click "Load and Build Graph"]
+
+What happens during this 60–90 second wait:
+
+  1. Schema inference call to Ollama — the LLM reads 3 sample documents
+     and returns entity types and relation types as JSON.
+     For this corpus it returns types like DRUG, CONDITION, TREATMENT.
+
+  2. For each of the 6 documents, the LLM is called with the extraction prompt.
+     Each call returns a list of triples with year annotations.
+     These are MERGE-written into Neo4j.
+
+  3. Vocabulary index built for BM25 retrieval.
+  4. Sentence embeddings computed for all documents.
+
+[ACTION — wait for ready message, then click suggested query:
+ "Can children take aspirin for fever?"]
+
+[PAUSE — let both panels respond]
+
+Left panel — LangChain:
+  The cosine retriever pulled whichever chunks scored highest by vector similarity.
+  It likely retrieved both the old and new aspirin documents.
+  The LLM received conflicting context and picked one — possibly the wrong one.
+  Confidence: none. Explanation: none.
+
+Right panel — TruthfulRAG v5:
+  Step by step what happened:
+  1. "aspirin" and "fever" were extracted as seed entities.
+  2. PPR was run — edges connected to Aspirin scored highest.
+  3. The system found TWO paths with the same head "Aspirin", same relation
+     "SAFE_FOR", but different tails: "Children [2010]" vs "NOT_Children [2023]".
+     — This is a detected conflict.
+  4. Temporal decay: the 2010 path gets exp(-0.08 × 16) = 0.28 weight.
+     The 2023 path gets exp(-0.08 × 3) = 0.79 weight.
+     Combined with corroboration, the 2023 path wins decisively.
+  5. The LLM is called once with ONLY the 2023 path as context.
+     It returns: "Aspirin should NOT be given to children — Reye's Syndrome risk."
+  6. Confidence: ~42–55% because Qwen already knows this from training.
+
+Notice the diagnostic output below the answer:
+  — Intent: factual_lookup or safety_check
+  — Paths retained: the 2023 WHO guideline
+  — Contradictions: the 2010 recommendation (removed, marked as stale)
+  — Stale removed count goes from 0 to 1
+"""
+
+
+# ──────────────────────────────────────────────────────────────
+# SECTION 5 — EVALUATION RESULTS  (~2 minutes)
+# ──────────────────────────────────────────────────────────────
+"""
+I evaluated against two baselines across four domain corpora:
 Medical, Legal, Indian Science, and Space Science.
-Six documents each, two to four evaluation queries per corpus.
+6 documents each. 2–4 conflicted queries per corpus.
 
-METRIC 1 — Answer Accuracy on Conflicted Queries
-  This is the most important metric.  I gave each system questions where
-  the corpus contained contradictory facts.
+─────── METRIC 1: Answer Accuracy on Conflicted Queries ─────────
 
-  LangChain RAG: 52 percent average.  Basically a coin flip.
-  TruthfulRAG v4: 72 percent.  Better, but still misses a third of cases.
-  TruthfulRAG v5: 93 percent.
+  LangChain RAG:    52% average — near-random on tied conflicts
+  TruthfulRAG v4:   72% — entropy-based selection but no decay
+  TruthfulRAG v5:   93% — temporal decay resolves most conflicts
+  Improvement:      +41 percentage points over baseline
 
-  The improvement from LangChain to v5 is plus 41 percentage points.
-  That is the core contribution of this project.
+─────── METRIC 2: Temporal Accuracy ─────────────────────────────
 
-METRIC 2 — Temporal Accuracy
-  These are queries specifically about CURRENT facts — where the answer
-  changed between documents.  "Who is the current X?"-style questions.
+  "Current-fact" queries where the answer changed over time:
+  LangChain:  41%
+  v4:         66%
+  v5:         93%
+  Improvement: +52 pp — directly attributable to N2 decay formula
 
-  LangChain: 41 percent.  Random.
-  v4: 66 percent.
-  v5: 93 percent.
+─────── METRIC 3: Conflict Detection Rate ────────────────────────
 
-  The temporal decay formula is directly responsible for this improvement.
+  LangChain:  0%   — no detection mechanism
+  v4:         75%
+  v5:         94%
 
-METRIC 3 — Conflict Detection Rate
-  Of all genuine factual conflicts present in the corpora,
-  what percentage did the system catch and resolve?
+  The remaining 6% missed cases are entities with completely
+  different surface forms mapping to the same domain —
+  for example "Indian Penal Code" and "Bharatiya Nyaya Sanhita".
+  Without an external entity linker these do not produce a
+  matching (head, relation) pair even though they conflict semantically.
 
-  LangChain: zero.  It has no mechanism for this.
-  v4: 75 percent.
-  v5: 94 percent.
+─────── METRIC 4: Confidence Calibration ─────────────────────────
 
-  The remaining 6% missed are cases where two documents describe the same
-  real-world conflict but use completely different entity names — for example
-  "Indian Penal Code" and "Bharatiya Nyaya Sanhita" refer to the same legal
-  domain but the system does not link them without an external knowledge base.
+  v5 only: 82% calibration score (|predicted - actual| averaged).
+  LangChain and v4 produce no confidence output at all.
 
-METRIC 4 — Confidence Calibration
-  This metric only applies to v5, because LangChain and v4 produce
-  no confidence score at all.
+─────── METRIC 5: Cache Hit Rate ─────────────────────────────────
 
-  Calibration measures whether the confidence percentage actually reflects
-  accuracy.  If the system says "I am 90% confident" it should be right
-  90% of the time.
+  35–40% of LLM calls were served from the in-process LRU cache,
+  saving 35% of total inference time on CPU hardware.
 
-  v5 calibration score: 82 percent.
-  This is competitive with much larger commercial systems.
+─────── LATENCY TRADE-OFF ────────────────────────────────────────
 
-METRIC 5 — Cache Hit Rate
-  v5 makes many LLM calls per query.  An LRU cache intercepts
-  duplicate prompts to avoid redundant inference.
+  LangChain average: 3.1s per query
+  TruthfulRAG v5:   21.4s per query
 
-  Cache hit rate across all test runs: 35 percent.
-  This saved roughly 35% of total inference time — which matters on CPU-only hardware.
+  The overhead comes from PPR (graph traversal), entropy sampling
+  (3 × n_paths LLM calls), and conflict resolution.
+  On GPU hardware with batched sampling, this would drop to under 5s.
+  For the academic scope of this project, correctness is prioritised
+  over raw latency.
 
-THE TRADE-OFF — Latency
-  LangChain average query time: 3.1 seconds.
-  TruthfulRAG v5 average: 21 seconds.
+─────── DOCUMENTED LIMITATIONS ──────────────────────────────────
 
-  Yes, v5 is slower.  It does graph construction, graph retrieval,
-  Personalised PageRank, entropy sampling, and conflict resolution —
-  all on CPU hardware with no GPU.
+  Six limitations are documented formally in Chapter 6 of the report:
 
-  For an academic system that prioritises correctness and transparency
-  over raw speed, this trade-off is acceptable.
-  In a production deployment, Neo4j queries and entropy sampling
-  could be parallelised to bring this down significantly.
+  L1: Negation-blind triple extraction.
+      The extractor may produce (Aspirin, SAFE_FOR, Children) from
+      a sentence that says aspirin is NOT safe.
+      Fix: add "negated": true|false field to the extraction schema.
+
+  L2: Fixed lambda = 0.08 for all domains.
+      Medical guidelines stale in 5 years; historical facts are valid for 50.
+      Fix: auto-select lambda from the inferred schema intent class.
+
+  L3: Entropy estimated from n = 3 samples.
+      Maximum entropy = ln(3) = 1.099 nats. For k > 3 answer classes,
+      the estimator has high variance.
+      Fix: async batched sampling with n = 10.
+
+  L4: Undated triples get decay weight w = 1.0 by default.
+      An undated 1985 document competes at full strength against a
+      dated 2023 document.
+      Fix: default undated weight = 0.5.
+
+  L5: PPR graph capped at LIMIT 200 edges.
+      Safe for 6-document corpora; would cause recall loss at scale.
+      Fix: seed-anchored BFS subgraph expansion.
+
+  L6: Year-anchored decay (resolved in final version).
+      Original code: decay = exp(-lambda × (2026 - fact_year)).
+      Fixed code: decay = exp(-lambda × max(0, Q_year - fact_year)).
+      Query year extracted using regex from query text.
 """
 
 
 # ──────────────────────────────────────────────────────────────
-# SLIDE 7 — CLOSING (1 min)
+# CLOSING  (~30 seconds)
 # ──────────────────────────────────────────────────────────────
-
 """
 To summarise:
 
-The problem: Standard RAG systems fail on conflicted knowledge.
-The solution: A knowledge-graph pipeline that detects temporal conflicts,
-scores facts by recency and source count, and generates calibrated confidence.
+  Problem:   RAG systems fail on temporal knowledge conflicts.
+  Approach:  Knowledge-graph triple extraction, PPR-based retrieval,
+             entropy-guided conflict resolution, calibrated confidence.
+  Result:    93% accuracy on conflicted queries versus 52% baseline.
+             Six novel algorithmic contributions, all open-source,
+             all running locally on consumer CPU hardware.
 
-The result: 93% accuracy on conflicted queries versus 52% for the baseline.
-A 41 percentage point improvement — achieved entirely with open-source tools,
-running locally, with no cloud dependency and no manual domain configuration.
+The full source code, report, evaluation notebook, and Gantt chart
+are available on GitHub.
 
-The six novel contributions — corroboration scoring, temporal decay,
-hybrid retrieval, explanation chains, calibrated confidence, and claim
-verification — all address specific, measurable gaps in the existing literature.
-
-The full source code, report, and evaluation notebook are available on GitHub.
-
-Thank you.  I am happy to take any questions.
+Thank you. I am ready for questions.
 """
 
 
 # ──────────────────────────────────────────────────────────────
-# COMMON QUESTIONS AND PREPARED ANSWERS
+# ANTICIPATED VIVA QUESTIONS — TECHNICAL ANSWERS
 # ──────────────────────────────────────────────────────────────
-
 """
-Q: Why use a knowledge graph instead of just better chunking?
+Q: What is the complexity of PPR and how does it scale?
 
-A: Chunking treats documents as flat text.  You cannot traverse a chunk.
-   You cannot ask "what facts are connected to this entity?"
-   A graph stores relationships explicitly.  The connection between
-   "Elon Musk" and "Twitter" and "2022" is a first-class object in the graph.
-   We can walk from one entity to related ones, detect contradictions
-   at the edge level, and apply temporal decay per fact rather than per document.
-   Chunking cannot do any of this.
-
-
-Q: Why 42% confidence — did the system fail?
-
-A: No.  42% is the correct answer.  Confidence in v5 does not mean
-   "probability of being correct."  It means "how much did your corpus
-   shift the LLM's uncertainty?"
-   For the Twitter CEO query, Qwen already knows Elon Musk bought Twitter
-   from its training data.  The corpus confirmed that, but it did not
-   TEACH the model anything new.  So entropy barely moved.  Hence 42%.
-   If you query about something the model has never seen — internal data,
-   post-training events — confidence jumps to 75–90%.
+A: PPR requires O(iterations × edges) work per query.
+   With 20 iterations and the LIMIT 200 graph, it is effectively O(4000).
+   On the 6-document corpora the graph has under 60 edges, so PPR
+   completes in milliseconds.  At scale — thousands of edges — a
+   sparse matrix multiply approach (using scipy.sparse) would be needed.
+   Currently PPR runs in a Python dict-based adjacency list, which is
+   acceptable for the experimental scale.
 
 
-Q: What is Personalised PageRank and why use it?
+Q: How does BM25 + semantic RRF improve over either alone?
 
-A: PageRank is the algorithm Google invented to rank web pages.
-   Personalised PageRank biases the random walk towards specific seed nodes.
-   In our case, the seeds are the entities mentioned in the user's question.
-   We run 20 iterations.  Facts that are structurally closer to the seed
-   entities in the graph receive higher relevance scores — regardless of
-   keyword overlap.  This finds facts that are semantically adjacent even
-   if they share no words with the query.
-
-
-Q: Why not use LangGraph or a newer agentic framework?
-
-A: LangGraph adds agent orchestration on top of the same retrieval primitives.
-   It does not solve the knowledge conflict problem.  You can build an agent
-   that calls a RAG tool, but if that tool does not do conflict detection,
-   the agent inherits the same weakness.
-   The conflict resolution happens at the data representation level —
-   in the knowledge graph structure — not at the orchestration level.
-   So a graph-first approach like v5 addresses the root cause.
+A: BM25 matches documents that share keyword tokens with the query.
+   It fails when a document uses synonyms or different phrasing.
+   Sentence embeddings capture semantic similarity even across
+   paraphrases but can fail on rare proper nouns.
+   RRF fusion: score_i = 1/(60 + rank_BM25) + 1/(60 + rank_sem).
+   Empirically, facts that rank in top-5 for BOTH methods are the
+   most reliably relevant.  The k=60 constant is standard from the
+   original RRF paper (Cormack et al., 2009).
 
 
-Q: Does it work without internet?
+Q: The confidence is 42% — how do you know the formula is calibrated?
 
-A: Completely.  Every component runs locally:
-   Ollama serves the LLM on localhost:11434.
-   Neo4j runs on localhost:7687.
-   The Flask server runs on localhost:5000.
-   No API keys, no subscriptions, no data leaving the machine.
-   I ran the entire evaluation on a laptop with an Intel Core i7 and 16 GB RAM.
+A: Calibration means the predicted confidence correlates with actual
+   accuracy across a held-out sample.  I computed:
+   calibration = 1 - mean(|conf_i - accuracy_i|) over 4 query sets.
+   The result was 82%.  I acknowledge this is a small evaluation sample
+   and the confidence weights (h:0.40, sup:0.30, rec:0.30) are empirically
+   chosen, not optimised on a validation set.  A proper calibration study
+   with Platt scaling or temperature scaling would give more principled weights.
 
 
-Q: What would you improve if given more time?
+Q: Why use Neo4j and not a simpler in-memory graph?
 
-A: Three things.
-   First — multi-hop reasoning.  Currently the retriever finds direct edges.
-   I would extend it to follow chains of two or three hops, which would
-   handle more complex queries.
-   Second — entity linking for the legal domain.  The system misses conflicts
-   between entities that have different names but refer to the same real-world
-   concept — like IPC and BNS.  An alignment step using Wikidata would fix this.
-   Third — GPU acceleration for entropy sampling.  Currently entropy requires
-   three separate LLM calls per path.  On a GPU these could be batched.
+A: Two reasons.
+   First, Cypher queries allow us to express the temporal snapshot filter
+   cleanly: WHERE r.year <= 2010.
+   Second, Neo4j persists the graph between queries.
+   Building the graph takes 60–90 seconds on first ingest.
+   For all subsequent queries in the same session, the graph is already
+   in Neo4j — zero rebuild cost.
+   An in-memory NetworkX graph would need to be re-built on every server
+   restart and could not be queried with Cypher.
+
+
+Q: What happens when the LLM refuses to extract triples or returns invalid JSON?
+
+A: Module A wraps all LLM calls in a markdown-stripping JSON parser:
+   it strips code fences, trailing commas, and attempts json.loads.
+   If parsing still fails after stripping, the document is skipped
+   with a warning — it does not crash the pipeline.
+   This was critical during testing: Qwen sometimes wraps JSON output
+   in triple backticks with a "json" language tag.
+   The parser handles that case explicitly.
+
+
+Q: You mention the system is domain-agnostic. How is schema inferred?
+
+A: During corpus load, a 3-document sample is passed to this prompt:
+
+   "You are a knowledge-graph ontology designer.
+    Given these documents, return a JSON schema:
+    {entity_types: [...], relation_types: [...]}"
+
+   The returned types are stored in the CFG dictionary and used
+   as constraints in all subsequent extraction prompts.
+   For the medical corpus Qwen returns entity types like
+   DRUG, CONDITION, GUIDELINE and relations like
+   TREATS, CONTRAINDICATED_FOR, SUPERSEDES.
+   For the space corpus it returns MISSION, TELESCOPE, AGENCY
+   and relations like LAUNCHED_BY, DISCOVERS, SUCCESSOR_TO.
+   No code change is required between domains.
+
+
+Q: Your temporal decay assumes the publication year equals the fact year.
+   What if a 2020 article discusses a 1985 historical fact?
+
+A: You are right — this is a known limitation.
+   The extractor is prompted to return the year the fact was
+   TRUE, not the article publication year.
+   The prompt says: "year = the year the fact was established or
+   most recently confirmed, not the document publication date."
+   However, this distinction is subtle and LLMs do not always
+   follow it correctly.  A post-processing check comparing the
+   extracted year against the document's own publication date would
+   partially address this.  It is noted in the report as an
+   open improvement.
 """
