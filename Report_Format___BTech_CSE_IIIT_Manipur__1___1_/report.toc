@@ -102,6 +102,7 @@
 \contentsline {subsection}{\numberline {6.5.1}Functional Requirements Fulfillment}{34}{subsection.6.5.1}%
 \contentsline {subsection}{\numberline {6.5.2}Non-Functional Requirements Fulfillment}{38}{subsection.6.5.2}%
 \contentsline {section}{\numberline {6.6}Future Enhancements}{38}{section.6.6}%
+\contentsline {subsection}{\numberline {6.6.1}Known Limitation: Temporal Decay Reference Year}{38}{subsection.6.6.1}%
 \contentsline {chapter}{\numberline {7}Conclusion}{39}{chapter.7}%
 \contentsline {section}{\numberline {7.1}Contributions to the Field}{39}{section.7.1}%
 \contentsline {section}{\numberline {7.2}Future Enhancements}{40}{section.7.2}%

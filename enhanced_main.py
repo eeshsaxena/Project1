@@ -487,12 +487,16 @@ class EnhancedGraphRetriever:
         e_cov = e_hit/max(len(E),1); r_cov = r_hit/max(len(Rkw),1)
         return self.cfg["alpha"]*e_cov + self.cfg["beta"]*r_cov
 
-    def _temporal_decay(self, year: Optional[int]) -> float:
-        """[N2] Exponential decay: older facts score lower."""
+    def _temporal_decay(self, year: Optional[int],
+                         reference_year: Optional[int] = None) -> float:
+        """[N2] Exponential decay: older facts score lower.
+        When query specifies a year (e.g. 'who was PM in 2010?'),
+        decay is anchored to that year, not today — so facts FROM
+        that year get full weight instead of being penalised."""
         if not self.cfg["use_temporal_decay"] or not year: return 1.0
         lam = self.cfg["temporal_decay_lambda"]
-        return math.exp(-lam * max(0, CURRENT_YEAR - year))
-
+        ref = reference_year or CURRENT_YEAR
+        return math.exp(-lam * max(0, ref - year))
 
     def retrieve(self, query: str):
         E, Rkw = self._keys(query); intent = self.detect_intent(query)
@@ -521,7 +525,8 @@ class EnhancedGraphRetriever:
             hub_pen     = (1-self.cfg["hub_penalty_weight"]) if deg_max>10 else 1.0  # [B3]
             ref_p       = self._ref_p(context, E, Rkw)                               # [B1]
             ppr_avg     = (ppr.get(src,0)+ppr.get(tgt,0))/2                          # [B4]
-            decay       = self._temporal_decay(yr)                                    # [N2]
+            decay       = self._temporal_decay(yr,
+                              reference_year=snapshot_year)           # [N2] anchored to query year if given
             corroborate = math.log(1+sc)*self.cfg["corroboration_weight"]             # [N1]
 
             # v5 combined score: adds decay [N2] and corroboration [N1] to v4 base

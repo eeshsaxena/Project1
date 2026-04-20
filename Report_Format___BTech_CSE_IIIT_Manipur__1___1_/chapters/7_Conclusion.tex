@@ -1,4 +1,4 @@
-﻿
+
 % ================================================================
 % CHAPTER 7: CONCLUSION
 % ================================================================
@@ -96,6 +96,14 @@ This project makes the following contributions:
     corpus clears the previous graph. A future version should support
     named, coexisting graph partitions, allowing simultaneous retrieval
     across medical, legal, and scientific domains in a single query.
+
+    \item \textbf{Year-anchored temporal decay} (\emph{resolved in v5 final}):
+    An early version computed decay relative to the current calendar year for
+    all queries, which incorrectly penalised facts from the target year when
+    the user asked a year-specific question (e.g.\ ``Who was the CEO in 2020?'').
+    The final implementation detects the target year from the query text and
+    anchors the decay reference to that year, so facts from exactly the target
+    year receive full weight ($w = 1.0$) rather than being discarded as stale.
 \end{itemize}
 
 % ----------------------------------------------------------------

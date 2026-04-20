@@ -221,7 +221,8 @@ def api_corpora():
                     "docs":    len(d.get("docs",    [])),
                     "queries": len(d.get("queries", [])),
                     "query_list": d.get("queries", []),
-                    "doc_previews": [s[:90].replace('\n',' ')+'…' if len(s)>90 else s for s in d.get("docs",[])],
+                    "doc_previews": [s[:250].replace('\n',' ') for s in d.get("docs",[])],
+                    "doc_full": d.get("docs",[]),
                 })
             except: pass
     return jsonify(result)

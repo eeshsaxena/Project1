@@ -120,12 +120,22 @@ nav{height:50px;display:flex;align-items:center;justify-content:space-between;
 .mt-dim{color:var(--dim);}
 
 /* CORPUS PREVIEW PANEL */
-#corpus-preview{display:none;padding:.5rem 1.5rem;background:var(--s2);border-bottom:var(--line);flex-shrink:0;}
+#corpus-preview{display:none;padding:.6rem 1.5rem .8rem;background:var(--s2);border-bottom:var(--line);flex-shrink:0;}
 #corpus-preview.show{display:block;}
-.cp-title{font-family:var(--mono);font-size:.58rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;}
-.cp-docs{display:flex;flex-wrap:wrap;gap:.4rem;}
-.cp-doc{font-family:var(--mono);font-size:.62rem;color:var(--dim);background:var(--card);border:var(--line);border-radius:4px;padding:.2rem .5rem;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
-.cp-doc:hover{color:var(--text);border-color:rgba(77,126,247,.3);}
+.cp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;}
+.cp-title{font-family:var(--mono);font-size:.6rem;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
+.cp-count{font-family:var(--mono);font-size:.58rem;color:var(--dim);}
+.cp-docs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.5rem;}
+.cp-doc{
+  font-size:.7rem;color:var(--text);background:var(--card);
+  border:var(--line);border-radius:6px;padding:.5rem .7rem;
+  cursor:default;transition:border-color .15s, max-height .3s;
+  max-height:3.6rem;overflow:hidden;position:relative;
+}
+.cp-doc:hover{border-color:rgba(77,126,247,.45);max-height:10rem;}
+.cp-doc-num{font-family:var(--mono);font-size:.55rem;color:var(--accent);margin-bottom:.2rem;font-weight:700;display:block;}
+.cp-doc-txt{color:var(--dim);line-height:1.45;}
+.cp-doc-txt em{color:var(--text);font-style:normal;font-weight:600;}
 
 /* typing */
 .typing{display:flex;gap:4px;align-items:center;padding:.5rem .7rem;}
@@ -198,9 +208,11 @@ nav{height:50px;display:flex;align-items:center;justify-content:space-between;
   <div id="setup-msg">Start server.py first, then select a corpus.</div>
 </div>
 
-<!-- CORPUS PREVIEW -->
 <div id="corpus-preview">
-  <div class="cp-title">Corpus Documents</div>
+  <div class="cp-header">
+    <span class="cp-title">&#9632; Corpus Documents</span>
+    <span class="cp-count" id="cp-count"></span>
+  </div>
   <div class="cp-docs" id="cp-docs"></div>
 </div>
 
@@ -367,8 +379,15 @@ async function loadList(){
 function onSel(){
   const path=document.getElementById('corpus-sel').value;
   document.getElementById('load-btn').disabled=!path;
-  if(path && corpusRegistry[path]) showCorpusPreview(corpusRegistry[path]);
-  else document.getElementById('corpus-preview').classList.remove('show');
+  if(path && corpusRegistry[path]){
+    const data=corpusRegistry[path];
+    showCorpusPreview(data);
+    // Immediately inject sample queries on selection — no need to wait for load
+    if(data.query_list?.length){ clearSamples(); injectSamples(data.query_list); samplesInjected=true; }
+  } else {
+    document.getElementById('corpus-preview').classList.remove('show');
+    clearSamples();
+  }
 }
 async function loadCorpus(){
   const path=document.getElementById('corpus-sel').value;
@@ -382,12 +401,20 @@ async function loadCorpus(){
 function showCorpusPreview(data){
   const preview=document.getElementById('corpus-preview');
   const docsEl=document.getElementById('cp-docs');
+  const countEl=document.getElementById('cp-count');
   docsEl.innerHTML='';
   if(!data.doc_previews?.length){ preview.classList.remove('show'); return; }
-  data.doc_previews.forEach(d=>{
-    const el=document.createElement('div');
-    el.className='cp-doc'; el.textContent=d; el.title=d;
-    docsEl.appendChild(el);
+  if(countEl) countEl.textContent=`${data.doc_previews.length} documents — hover to expand`;
+  data.doc_previews.forEach((d,i)=>{
+    const card=document.createElement('div');
+    card.className='cp-doc';
+    // Bold the first sentence or first 60 chars as a headline
+    const heading=d.split('.')[0].trim();
+    const rest=d.slice(heading.length+1).trim();
+    card.innerHTML=`<span class="cp-doc-num">DOC ${i+1}</span>`+
+      `<span class="cp-doc-txt"><em>${heading}.</em> ${rest}</span>`;
+    card.title=d;
+    docsEl.appendChild(card);
   });
   preview.classList.add('show');
 }

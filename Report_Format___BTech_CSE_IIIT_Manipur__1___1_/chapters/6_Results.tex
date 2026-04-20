@@ -356,8 +356,40 @@ convicted the person found guilty under the law that replaced the IPC?'' is the
 kind of chain that requires following multiple edges in sequence, which the
 current retriever cannot do.
 
+
 The confidence scores across all domains were clustered around 40--42\%, which
 reflects the fact that Qwen's parametric knowledge is already fairly confident
 on many of these topics, making it hard for the provided context to move the
 entropy needle. A lighter, less-informed LLM would likely produce more varied
 and informative confidence scores.
+
+\subsection{Known Limitation: Temporal Decay Reference Year}
+
+During development a subtle design issue was identified and subsequently fixed.
+The original implementation of the exponential decay function~[N2] always
+computed the age of a fact relative to the \emph{current real-world year}:
+
+\[
+  w(t) = e^{-\lambda(Y_{\text{current}} - Y_{\text{fact}})}
+\]
+
+This is correct for queries such as ``Who is the current Prime Minister?''
+where the user wants the most recent fact. However, for year-specific queries
+such as ``Who was the Prime Minister in 2010?'', the original formula would
+still apply a large decay penalty to 2010 facts (since they are 16 years
+old relative to 2026), even though 2010 is precisely the target year.
+
+The fix implemented in the final version detects a target year from the query
+text using \texttt{\_extract\_query\_year()} and passes it as the decay
+reference:
+
+\begin{equation}
+  w(t, Q_{\text{year}}) = e^{-\lambda \max(0,\; Q_{\text{year}} - Y_{\text{fact}})}
+\end{equation}
+
+When \(Q_{\text{year}}\) is detected, facts dated exactly at the query year
+receive full weight (\(w = 1.0\)), facts older than the target year are
+downweighted proportionally, and any facts newer than the target year are
+already excluded by the temporal snapshot filter~[N4]. Without this fix, a
+query like ``Who was the CEO of Twitter in 2020?'' would have penalised the
+2020 facts despite them being the correct answer.
