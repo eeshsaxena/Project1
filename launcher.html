@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TruthfulRAG v5 — Launcher</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root{
+    --bg:     #0a0a0f;
+    --s1:     #0f0f1a;
+    --s2:     #141420;
+    --card:   #1a1a2e;
+    --border: rgba(255,255,255,0.07);
+    --text:   #e8e8f0;
+    --dim:    #6b6b8a;
+    --accent: #4d7ef7;
+    --green:  #3a9444;
+    --red:    #c94444;
+    --yellow: #c9a432;
+    --mono:   'JetBrains Mono', monospace;
+    --sans:   'Inter', sans-serif;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    min-height:100vh;background:var(--bg);color:var(--text);
+    font-family:var(--sans);display:flex;align-items:center;
+    justify-content:center;overflow:hidden;
+  }
+
+  /* Animated background grid */
+  body::before{
+    content:'';position:fixed;inset:0;
+    background-image:
+      linear-gradient(rgba(77,126,247,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(77,126,247,0.04) 1px, transparent 1px);
+    background-size:40px 40px;
+    animation:gridMove 20s linear infinite;
+    pointer-events:none;
+  }
+  @keyframes gridMove{to{background-position:40px 40px;}}
+
+  /* Glow blobs */
+  .blob{
+    position:fixed;border-radius:50%;filter:blur(80px);opacity:0.12;
+    pointer-events:none;animation:blobPulse 8s ease-in-out infinite;
+  }
+  .blob1{width:500px;height:500px;background:#4d7ef7;top:-150px;left:-150px;animation-delay:0s;}
+  .blob2{width:400px;height:400px;background:#7c4de8;bottom:-100px;right:-100px;animation-delay:3s;}
+  .blob3{width:300px;height:300px;background:#3a9444;top:50%;left:50%;transform:translate(-50%,-50%);animation-delay:6s;}
+  @keyframes blobPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
+
+  .card{
+    position:relative;z-index:10;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:20px;padding:3rem 2.8rem 2.5rem;
+    width:min(480px, 94vw);
+    box-shadow:0 40px 120px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+    backdrop-filter:blur(20px);
+  }
+
+  /* Logo area */
+  .logo{text-align:center;margin-bottom:2.2rem;}
+  .logo-icon{font-size:2.6rem;margin-bottom:.5rem;display:block;}
+  .logo h1{font-size:1.55rem;font-weight:700;letter-spacing:-.02em;}
+  .logo h1 span{color:var(--accent);}
+  .logo p{font-size:.78rem;color:var(--dim);margin-top:.3rem;font-weight:400;}
+
+  /* Services list */
+  .services{display:flex;flex-direction:column;gap:.75rem;margin-bottom:2rem;}
+  .svc{
+    display:flex;align-items:center;gap:1rem;
+    background:var(--s1);border:1px solid var(--border);
+    border-radius:10px;padding:.8rem 1rem;
+    transition:border-color .3s;
+  }
+  .svc.ok{border-color:rgba(58,148,68,.35);}
+  .svc.error{border-color:rgba(201,68,68,.35);}
+  .svc.starting{border-color:rgba(201,164,50,.35);}
+
+  .svc-icon{font-size:1.3rem;flex-shrink:0;width:2rem;text-align:center;}
+  .svc-info{flex:1;min-width:0;}
+  .svc-name{font-size:.82rem;font-weight:600;color:var(--text);}
+  .svc-msg{font-size:.7rem;color:var(--dim);font-family:var(--mono);margin-top:.15rem;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* Status dot */
+  .dot{
+    width:10px;height:10px;border-radius:50%;flex-shrink:0;
+    background:var(--dim);transition:background .4s;
+  }
+  .dot.ok{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .dot.error{background:var(--red);box-shadow:0 0 8px var(--red);}
+  .dot.starting{
+    background:var(--yellow);box-shadow:0 0 8px var(--yellow);
+    animation:pulse .8s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  /* Launch button */
+  #launch-btn{
+    width:100%;padding:1rem 1.5rem;
+    background:linear-gradient(135deg,#4d7ef7,#7c4de8);
+    border:none;border-radius:12px;color:#fff;
+    font-size:1rem;font-weight:700;font-family:var(--sans);
+    cursor:pointer;letter-spacing:.01em;
+    box-shadow:0 8px 30px rgba(77,126,247,.4);
+    transition:all .25s;position:relative;overflow:hidden;
+  }
+  #launch-btn::before{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);
+    opacity:0;transition:opacity .25s;
+  }
+  #launch-btn:hover:not(:disabled)::before{opacity:1;}
+  #launch-btn:hover:not(:disabled){
+    transform:translateY(-2px);
+    box-shadow:0 12px 40px rgba(77,126,247,.55);
+  }
+  #launch-btn:active:not(:disabled){transform:translateY(0);}
+  #launch-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+  #launch-btn .btn-text{display:flex;align-items:center;justify-content:center;gap:.55rem;}
+  #launch-btn .spinner{
+    display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);
+    border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;
+  }
+  #launch-btn.loading .spinner{display:block;}
+  #launch-btn.loading .launch-icon{display:none;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* Open chatbot button */
+  #open-btn{
+    display:none;width:100%;padding:.85rem;margin-top:.75rem;
+    background:transparent;border:1px solid var(--green);
+    border-radius:12px;color:var(--green);font-family:var(--sans);
+    font-size:.9rem;font-weight:600;cursor:pointer;
+    transition:all .25s;
+  }
+  #open-btn:hover{background:var(--green);color:#fff;box-shadow:0 6px 20px rgba(58,148,68,.3);}
+  #open-btn.show{display:block;animation:fadeUp .4s ease;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+  /* Progress bar */
+  .progress-wrap{
+    height:3px;background:var(--border);border-radius:2px;
+    margin-bottom:1.5rem;overflow:hidden;display:none;
+  }
+  .progress-wrap.show{display:block;}
+  .progress-bar{
+    height:100%;width:0%;border-radius:2px;
+    background:linear-gradient(90deg,#4d7ef7,#7c4de8);
+    transition:width .6s ease;
+  }
+
+  /* Footer */
+  .footer{text-align:center;margin-top:1.5rem;font-size:.68rem;color:var(--dim);}
+  .footer a{color:var(--accent);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="blob blob1"></div>
+<div class="blob blob2"></div>
+<div class="blob blob3"></div>
+
+<div class="card">
+
+  <div class="logo">
+    <span class="logo-icon">🧠</span>
+    <h1>TruthfulRAG <span>v5</span></h1>
+    <p>Knowledge-Graph RAG · Conflict Resolver · Live Demo</p>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+
+  <div class="services">
+    <div class="svc" id="svc-ollama">
+      <span class="svc-icon">🤖</span>
+      <div class="svc-info">
+        <div class="svc-name">Ollama LLM Runtime</div>
+        <div class="svc-msg" id="msg-ollama">Qwen2.5-7B · port 11434</div>
+      </div>
+      <div class="dot" id="dot-ollama"></div>
+    </div>
+
+    <div class="svc" id="svc-neo4j">
+      <span class="svc-icon">🗄️</span>
+      <div class="svc-info">
+        <div class="svc-name">Neo4j Graph Database</div>
+        <div class="svc-msg" id="msg-neo4j">Knowledge Graph Store · port 7687</div>
+      </div>
+      <div class="dot" id="dot-neo4j"></div>
+    </div>
+
+    <div class="svc" id="svc-server">
+      <span class="svc-icon">⚡</span>
+      <div class="svc-info">
+        <div class="svc-name">Flask API Server</div>
+        <div class="svc-msg" id="msg-server">TruthfulRAG backend · port 5000</div>
+      </div>
+      <div class="dot" id="dot-server"></div>
+    </div>
+  </div>
+
+  <button id="launch-btn" onclick="launch()">
+    <div class="btn-text">
+      <span class="launch-icon">🚀</span>
+      <div class="spinner"></div>
+      <span id="btn-label">Launch All Services</span>
+    </div>
+  </button>
+
+  <button id="open-btn" onclick="openChatbot()">
+    ✅ &nbsp;Open TruthfulRAG Chatbot →
+  </button>
+
+  <div class="footer">
+    TruthfulRAG v5 · Eesh Saxena (230101032) · IIIT Manipur<br>
+    Instructor: Dr. Jennil Thiyam &nbsp;·&nbsp;
+    <a href="web_demo/chatbot_live.html">Direct link to chatbot</a>
+  </div>
+
+</div>
+
+<script>
+const LAUNCHER = 'http://127.0.0.1:5001';
+let polling = false;
+
+// ── Check if launcher backend is alive ──────────────────────
+async function checkLauncher(){
+  try{
+    const r = await fetch(`${LAUNCHER}/health`, {signal: AbortSignal.timeout(1000)});
+    return r.ok;
+  } catch { return false; }
+}
+
+// ── Pre-check status on page load ───────────────────────────
+async function preCheck(){
+  const alive = await checkLauncher();
+  if(!alive){
+    setMsg('server','Launcher not running — open START_HERE.bat first','');
+    document.getElementById('launch-btn').disabled = true;
+    document.getElementById('btn-label').textContent = 'Start START_HERE.bat first';
+    return;
+  }
+  await pollStatus();
+}
+
+// ── Poll status continuously ─────────────────────────────────
+async function pollStatus(){
+  try{
+    const r = await fetch(`${LAUNCHER}/status`);
+    const d = await r.json();
+
+    ['ollama','neo4j','server'].forEach(k => {
+      setDot(k, d[k].status);
+      setMsg(k, d[k].msg, d[k].status);
+    });
+
+    const doneCount = ['ollama','neo4j','server']
+      .filter(k => d[k].status === 'ok').length;
+    setProgress(doneCount / 3 * 100);
+
+    if(d.all_ok){
+      document.getElementById('launch-btn').disabled = false;
+      document.getElementById('launch-btn').classList.remove('loading');
+      document.getElementById('btn-label').textContent = 'All Running ✓';
+      document.getElementById('open-btn').classList.add('show');
+      polling = false;
+      return;
+    }
+
+    const anyError = ['ollama','neo4j','server'].some(k => d[k].status === 'error');
+    if(anyError){
+      document.getElementById('launch-btn').disabled = false;
+      document.getElementById('launch-btn').classList.remove('loading');
+      document.getElementById('btn-label').textContent = 'Retry Launch';
+      polling = false;
+      return;
+    }
+  } catch(e){ console.warn('poll error', e); }
+
+  if(polling) setTimeout(pollStatus, 1500);
+}
+
+function setDot(svc, status){
+  const el = document.getElementById('dot-'+svc);
+  el.className = 'dot ' + (status === 'idle' ? '' : status);
+  const card = document.getElementById('svc-'+svc);
+  card.className = 'svc ' + (status === 'idle' ? '' : status);
+}
+
+function setMsg(svc, msg, status){
+  document.getElementById('msg-'+svc).textContent = msg;
+}
+
+function setProgress(pct){
+  const wrap = document.getElementById('progress-wrap');
+  wrap.classList.add('show');
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+// ── Launch ───────────────────────────────────────────────────
+async function launch(){
+  const btn = document.getElementById('launch-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  document.getElementById('btn-label').textContent = 'Starting services…';
+  document.getElementById('open-btn').classList.remove('show');
+
+  try{
+    await fetch(`${LAUNCHER}/launch`, {method:'POST'});
+  } catch(e){
+    alert('Could not reach launcher. Make sure START_HERE.bat is running.');
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    return;
+  }
+
+  polling = true;
+  pollStatus();
+}
+
+function openChatbot(){
+  window.open('web_demo/chatbot_live.html', '_blank');
+}
+
+// Init
+window.addEventListener('load', preCheck);
+</script>
+</body>
+</html>
