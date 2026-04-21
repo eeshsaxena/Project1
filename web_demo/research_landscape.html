@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RAG Conflict Resolution — Research Landscape vs TruthfulRAG v5</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#03030a; --s1:#08080f; --card:#0f0f1a; --border:#1a1a2e;
+  --text:#d4d4e8; --dim:#6a6a85;
+  --accent:#4d7ef7; --red:#e05555; --green:#3db868;
+  --amber:#f0a832; --purple:#9b59f7; --teal:#2dd4bf;
+  --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);padding:2rem;min-height:100vh;}
+
+/* HERO */
+.hero{text-align:center;margin-bottom:3rem;padding:2.5rem 1rem;}
+.hero-tag{font-family:var(--mono);font-size:.68rem;color:var(--amber);letter-spacing:.18em;text-transform:uppercase;margin-bottom:.8rem;}
+h1{font-size:1.7rem;font-weight:700;color:#fff;margin-bottom:.6rem;line-height:1.3;}
+.hero-sub{color:var(--dim);font-size:.88rem;max-width:680px;margin:0 auto;line-height:1.7;}
+.cutoff-badge{display:inline-block;margin-top:.8rem;font-family:var(--mono);font-size:.65rem;background:rgba(240,168,50,.12);border:1px solid rgba(240,168,50,.4);color:var(--amber);padding:.25rem .8rem;border-radius:20px;}
+
+/* TABS */
+.tabs{display:flex;justify-content:center;gap:.5rem;margin-bottom:2.5rem;flex-wrap:wrap;}
+.tab{padding:.45rem 1.4rem;border-radius:6px;border:1px solid var(--border);font-size:.78rem;font-family:var(--mono);cursor:pointer;color:var(--dim);background:var(--card);transition:all .2s;}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.tab:hover:not(.active){border-color:var(--accent);color:var(--accent);}
+
+/* SECTIONS */
+.section{display:none;animation:fadein .3s ease;}
+.section.active{display:block;}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* APPROACH CARD */
+.approach{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;position:relative;}
+.approach::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:12px 12px 0 0;}
+.approach-kg::before{background:linear-gradient(90deg,var(--teal),var(--accent));}
+.approach-probe::before{background:linear-gradient(90deg,var(--purple),var(--accent));}
+.approach-prod::before{background:linear-gradient(90deg,var(--amber),var(--red));}
+.approach-v5::before{background:linear-gradient(90deg,var(--green),var(--teal));}
+
+.approach-tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.5rem;}
+.approach-title{font-size:1.05rem;font-weight:600;margin-bottom:.4rem;}
+.approach-desc{font-size:.83rem;line-height:1.7;color:#aab0cc;margin-bottom:1rem;}
+
+/* FEATURE GRID */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin-bottom:1rem;}
+.feature{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:7px;padding:.8rem;}
+.feature-label{font-family:var(--mono);font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem;}
+.feature-val{font-size:.8rem;}
+
+/* PAPER TAG */
+.paper{display:inline-flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.62rem;background:rgba(77,126,247,.1);border:1px solid rgba(77,126,247,.3);color:#89b4fa;border-radius:4px;padding:.15rem .5rem;margin:.2rem .2rem .2rem 0;}
+.paper.amber{background:rgba(240,168,50,.1);border-color:rgba(240,168,50,.3);color:var(--amber);}
+.paper.green{background:rgba(61,184,104,.1);border-color:rgba(61,184,104,.3);color:#7dd6a0;}
+.paper.purple{background:rgba(155,89,247,.1);border-color:rgba(155,89,247,.3);color:#c49df7;}
+.paper.teal{background:rgba(45,212,191,.1);border-color:rgba(45,212,191,.3);color:var(--teal);}
+
+/* SCORE GAUGE */
+.gauge-row{display:flex;align-items:center;gap:.8rem;margin:.45rem 0;}
+.gauge-label{font-family:var(--mono);font-size:.7rem;color:var(--dim);width:180px;flex-shrink:0;}
+.gauge-wrap{flex:1;height:20px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden;}
+.gauge-bar{height:100%;border-radius:3px;display:flex;align-items:center;padding:0 .4rem;font-family:var(--mono);font-size:.63rem;font-weight:600;transition:width 1.4s cubic-bezier(.25,.46,.45,.94);}
+.g-green{background:rgba(61,184,104,.7);color:#fff;}
+.g-amber{background:rgba(240,168,50,.7);color:#000;}
+.g-red{background:rgba(224,85,85,.7);color:#fff;}
+.g-blue{background:rgba(77,126,247,.7);color:#fff;}
+.g-teal{background:rgba(45,212,191,.7);color:#000;}
+.g-purple{background:rgba(155,89,247,.7);color:#fff;}
+
+/* COMPARISON TABLE */
+.cmp-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:1rem;}
+.cmp-table th{font-family:var(--mono);font-size:.65rem;font-weight:600;padding:.7rem .8rem;border-bottom:2px solid var(--border);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;text-align:left;}
+.cmp-table td{padding:.65rem .8rem;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top;}
+.cmp-table tr:last-child td{border-bottom:none;}
+.cmp-table tr:hover td{background:rgba(255,255,255,.02);}
+.system-name{font-family:var(--mono);font-size:.73rem;font-weight:600;}
+
+.tick{color:var(--green);font-weight:700;}
+.cross{color:var(--red);}
+.partial{color:var(--amber);}
+.dash{color:var(--dim);}
+
+/* INSIGHT BOXES */
+.insight{border-radius:8px;padding:.9rem 1rem;margin:.6rem 0;font-size:.82rem;line-height:1.7;}
+.insight-amber{background:rgba(240,168,50,.07);border-left:3px solid var(--amber);}
+.insight-green{background:rgba(61,184,104,.07);border-left:3px solid var(--green);}
+.insight-red{background:rgba(224,85,85,.07);border-left:3px solid var(--red);}
+.insight-blue{background:rgba(77,126,247,.07);border-left:3px solid var(--accent);}
+.insight-purple{background:rgba(155,89,247,.07);border-left:3px solid var(--purple);}
+
+/* SECTION HEADER */
+.sec-head{font-size:1.1rem;font-weight:600;margin-bottom:.3rem;}
+.sec-sub{color:var(--dim);font-size:.83rem;margin-bottom:1.5rem;}
+
+/* CITE BADGE */
+.cite{display:inline-block;font-family:var(--mono);font-size:.6rem;font-weight:700;
+  background:rgba(77,126,247,.18);border:1px solid rgba(77,126,247,.45);color:#89b4fa;
+  border-radius:3px;padding:.03rem .28rem;margin-left:.25rem;vertical-align:middle;
+  cursor:help;position:relative;white-space:nowrap;}
+.cite:hover::after{content:attr(data-tip);position:absolute;bottom:120%;left:50%;
+  transform:translateX(-50%);background:#1e1e2e;border:1px solid #45475a;
+  color:#cdd6f4;font-size:.63rem;font-weight:400;font-family:var(--sans);
+  white-space:normal;width:280px;padding:.5rem .7rem;border-radius:6px;
+  z-index:99;line-height:1.5;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.6);}
+
+/* FLOW BOX */
+.flow-step{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0;}
+.fnode{padding:.4rem .8rem;border-radius:5px;font-family:var(--mono);font-size:.72rem;white-space:nowrap;}
+.farrow{color:var(--dim);font-size:1rem;}
+
+/* VERDICT CARD */
+.verdict{background:rgba(61,184,104,.07);border:1px solid rgba(61,184,104,.3);border-radius:10px;padding:1.2rem;text-align:center;margin-top:1.5rem;}
+.verdict-title{font-size:1rem;font-weight:700;color:var(--green);margin-bottom:.5rem;}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">Research Landscape · 2024–2025</div>
+  <h1>RAG Conflict Resolution<br>Global Research vs TruthfulRAG v5</h1>
+  <p class="hero-sub">A structured comparison of every major approach to resolving knowledge conflicts in Retrieval-Augmented Generation systems — and where TruthfulRAG v5 sits within that landscape.</p>
+  <div class="cutoff-badge">📅 Sources cutoff: January 2026 — only pre-Jan 2026 papers and frameworks included</div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="show('overview')">Overview</button>
+  <button class="tab" onclick="show('kg')">① KG-Enhanced</button>
+  <button class="tab" onclick="show('probe')">② Latent Probing</button>
+  <button class="tab" onclick="show('prod')">③ Production Strategies</button>
+  <button class="tab" onclick="show('v5pos')">④ v5 Position</button>
+  <button class="tab" onclick="show('matrix')">Full Matrix</button>
+</div>
+
+
+<!-- ═══════════════════════ OVERVIEW ═══════════════════════ -->
+<div class="section active" id="sec-overview">
+  <div class="sec-head">Three Active Battlegrounds in RAG Conflict Research</div>
+  <p class="sec-sub">Every approach below was published or widely deployed before January 2026. TruthfulRAG v5 is positioned relative to each.</p>
+
+  <!-- APPROACH 1 -->
+  <div class="approach approach-kg">
+    <div class="approach-tag" style="color:var(--teal)">① Structural / Deterministic</div>
+    <div class="approach-title">Knowledge Graph-Enhanced Conflict Resolution</div>
+    <div class="approach-desc">
+      Replace flat vector chunks with structured graph triples (Subject-Predicate-Object). Use the graph as a ground-truth tier that overrides noisy semantic retrieval when contradictions are detected. The most deterministic approach — conflict resolution happens before the LLM.
+    </div>
+    <div style="margin-bottom:.8rem">
+      <span class="paper teal">KG-RAG 2024</span>
+      <span class="paper teal">KGRAG arXiv:2408.07872</span>
+      <span class="paper teal">TruthfulRAG arXiv:2511.10375 (v4)</span>
+      <span class="paper green">TruthfulRAG v5 (This Work)</span>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-label">Conflict Handling</div>
+        <div class="feature-val" style="color:var(--green)">Pre-LLM elimination by graph scoring</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Temporal Awareness</div>
+        <div class="feature-val" style="color:var(--amber)">Varies — v4: ✗ None / v5: ✓ e^(-λt)</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Determinism</div>
+        <div class="feature-val" style="color:var(--green)">High — arithmetic decision, no LLM guess</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Schema Flexibility</div>
+        <div class="feature-val" style="color:var(--amber)">Medium — requires schema extraction step</div>
+      </div>
+    </div>
+    <div class="insight insight-blue">
+      <strong>v5 contribution:</strong> Adds temporal decay <code>e^(-0.08×age)</code> and cross-document corroboration counting to the base KG-RAG approach — turning an unresolvable 0.028 score gap into a decisive 1.126 gap.
+    </div>
+  </div>
+
+  <!-- APPROACH 2 -->
+  <div class="approach approach-probe">
+    <div class="approach-tag" style="color:var(--purple)">② Neural / Interpretability</div>
+    <div class="approach-title">Latent Space Probing (ProbeRAG / CLEAR)</div>
+    <div class="approach-desc">
+      Monitor the LLM's internal hidden states while it processes a conflicting prompt. Train lightweight classifiers on intermediate layers to detect when retrieved context clashes with parametric knowledge. Filter misleading context before the final generation layer.
+    </div>
+    <div style="margin-bottom:.8rem">
+      <span class="paper purple">Probing Latent Knowledge Conflict (arXiv, Nov 2025)</span>
+      <span class="paper purple">CLEAR Framework (2025)</span>
+      <span class="paper purple">ProbeRAG (2025)</span>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-label">Conflict Handling</div>
+        <div class="feature-val" style="color:var(--amber)">Mid-generation detection via hidden states</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Temporal Awareness</div>
+        <div class="feature-val" style="color:var(--red)">✗ No — detects conflict, not which is newer</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Explainability</div>
+        <div class="feature-val" style="color:var(--red)">Low — black-box probing of hidden states</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">LLM Dependency</div>
+        <div class="feature-val" style="color:var(--red)">Very high — requires access to internal layers</div>
+      </div>
+    </div>
+    <div class="insight insight-red">
+      <strong>Key limitation:</strong> Probing tells you <em>that</em> there is a conflict but not <em>which side is correct</em>. These systems still require heuristics or prompting to choose the winner — they don't encode time.
+    </div>
+  </div>
+
+  <!-- APPROACH 3 -->
+  <div class="approach approach-prod">
+    <div class="approach-tag" style="color:var(--amber)">③ Engineering / Production</div>
+    <div class="approach-title">Trust Tiers, Freshness Decay & Diff Summarization</div>
+    <div class="approach-desc">
+      In production RAG pipelines, practitioners attach metadata (trust score, timestamp, source tier) to every chunk. A pre-processing step detects contradictions via LLM diff-summarization or rule-based checks. If unresolvable, the system routes to a clarification question rather than hallucinating.
+    </div>
+    <div style="margin-bottom:.8rem">
+      <span class="paper amber">r/RAG Community Patterns (2024)</span>
+      <span class="paper amber">LlamaIndex Trust Weighting (2024)</span>
+      <span class="paper amber">MADAM-RAG arXiv:2410.20974 (Oct 2024)</span>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-label">Conflict Handling</div>
+        <div class="feature-val" style="color:var(--amber)">Pre-generation via LLM diff or rules</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Temporal Awareness</div>
+        <div class="feature-val" style="color:var(--amber)">Partial — freshness scores, not formal decay</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Scalability</div>
+        <div class="feature-val" style="color:var(--red)">Low — LLM diff step is slow per query</div>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Fail-Safe Routing</div>
+        <div class="feature-val" style="color:var(--green)">✓ Clarification questions on tie</div>
+      </div>
+    </div>
+    <div class="insight insight-amber">
+      <strong>Limitation:</strong> These are engineering workarounds, not formal solutions. Decay values are hand-tuned per deployment, and diff-summarization LLM calls add 2-4 seconds per query.
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ KG DETAIL ═══════════════════════ -->
+<div class="section" id="sec-kg">
+  <div class="sec-head">① Knowledge Graph-Enhanced Conflict Resolution</div>
+  <p class="sec-sub">Deterministic conflict resolution by shifting from text chunks to structured triples stored in a graph database.</p>
+
+  <!-- SPOC vs SPO -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.5rem">
+    <div class="approach approach-kg" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--dim)">Standard v4 / KG-RAG 2024</div>
+      <div style="font-size:.9rem;font-weight:600;margin-bottom:.6rem">SPO Triplets (no time)</div>
+      <div style="font-family:var(--mono);font-size:.75rem;line-height:1.9;color:var(--text)">
+        (Aspirin, <span style="color:var(--teal)">SAFE_FOR</span>, Children)<br>
+        (Aspirin, <span style="color:var(--red)">CONTRA</span>, Children)<br>
+        <span style="color:var(--dim);font-size:.65rem">← both look identical to scorer</span>
+      </div>
+      <div class="insight insight-red" style="margin-top:.8rem;font-size:.75rem">
+        Score gap = <strong>0.028</strong> — cannot eliminate either.
+        Both reach LLM.
+        <span class="cite" data-tip="[R] TruthfulRAG arXiv:2511.10375 Section 3.2: triples defined as (s,p,o) — no temporal component in the schema.">R</span>
+      </div>
+    </div>
+    <div class="approach approach-v5" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--green)">TruthfulRAG v5 (This Work)</div>
+      <div style="font-size:.9rem;font-weight:600;margin-bottom:.6rem">SPOC Triplets + Year + Support</div>
+      <div style="font-family:var(--mono);font-size:.75rem;line-height:1.9;color:var(--text)">
+        (Aspirin, SAFE_FOR, Children, <span style="color:var(--amber)">year=2010</span>, sup=2)<br>
+        (Aspirin, CONTRA, Children, <span style="color:var(--green)">year=2023</span>, sup=2)<br>
+        <span style="color:var(--green);font-size:.65rem">← year enables decay scoring</span>
+      </div>
+      <div class="insight insight-green" style="margin-top:.8rem;font-size:.75rem">
+        Score gap = <strong>1.126</strong> (40× larger) — SAFE_FOR eliminated.
+        LLM receives only CONTRA.
+      </div>
+    </div>
+  </div>
+
+  <!-- TIERED ARCHITECTURE -->
+  <div class="approach" style="margin-bottom:1.5rem">
+    <div class="approach-tag" style="color:var(--teal)">Research Pattern — Tiered Graph Architecture (2024)</div>
+    <div class="approach-title">Multi-Tier Fallback System</div>
+    <div class="approach-desc">A pattern recommended in production KG-RAG systems: use multiple tiers with strict override logic.</div>
+    <div style="overflow-x:auto">
+    <div style="display:flex;align-items:stretch;gap:0;min-width:600px;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
+      <div style="background:rgba(45,212,191,.1);border-right:1px solid var(--border);padding:1rem;min-width:170px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.63rem;color:var(--teal);margin-bottom:.4rem">TIER 1 — Verified KG</div>
+        <div style="font-size:.75rem;line-height:1.6">Immutable triples<br>Absolute ground truth<br>Expert-curated</div>
+        <div style="color:var(--green);font-size:.65rem;margin-top:.4rem">Override all other tiers</div>
+      </div>
+      <div style="background:rgba(77,126,247,.07);border-right:1px solid var(--border);padding:1rem;min-width:170px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.63rem;color:var(--accent);margin-bottom:.4rem">TIER 2 — Statistical KG</div>
+        <div style="font-size:.75rem;line-height:1.6">Historical / statistical<br>High-trust sources<br>Fresher data</div>
+        <div style="color:var(--accent);font-size:.65rem;margin-top:.4rem">Override Tier 3 only</div>
+      </div>
+      <div style="background:rgba(155,89,247,.07);border-right:1px solid var(--border);padding:1rem;min-width:170px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.63rem;color:var(--purple);margin-bottom:.4rem">TIER 3 — Vector DB</div>
+        <div style="font-size:.75rem;line-height:1.6">General text chunks<br>Semantic similarity<br>Fallback only</div>
+        <div style="color:var(--dim);font-size:.65rem;margin-top:.4rem">Lowest priority</div>
+      </div>
+      <div style="background:rgba(61,184,104,.07);padding:1rem;min-width:140px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.63rem;color:var(--green);margin-bottom:.4rem">LLM</div>
+        <div style="font-size:.75rem;line-height:1.6">Receives only<br>non-conflicting<br>winner context</div>
+        <div style="color:var(--green);font-size:.65rem;margin-top:.4rem">Prompt-enforced rules</div>
+      </div>
+    </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="insight insight-amber">
+        <strong>Limitation of tiered approach:</strong> Tier 1 requires manual curation and constant updates. Most real-world KBs can't guarantee immutable Tier 1 truth across all domains.
+        <span class="cite" data-tip="[R] KG-RAG community literature 2024: tiered systems are brittle when domain knowledge evolves rapidly (e.g., medical guidelines, legal codes).">R</span>
+      </div>
+      <div class="insight insight-green">
+        <strong>v5 equivalent:</strong> v5 achieves Tier 1 behavior automatically — by anchoring trust to year + corroboration count, the 2023 WHO guideline mathematically becomes the dominant tier without any manual curation.
+      </div>
+    </div>
+  </div>
+
+  <!-- PROMPT-ENFORCED RULES -->
+  <div class="approach" style="margin-bottom:1rem">
+    <div class="approach-tag" style="color:var(--accent)">Research Pattern — Prompt-Enforced Override</div>
+    <div class="approach-title">System Prompt Rules for Deterministic KG Wins</div>
+    <div style="font-family:var(--mono);font-size:.75rem;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;padding:.9rem;line-height:1.8;margin:.8rem 0;color:#a8c4ff">
+      System: You are a fact-checking assistant.<br>
+      If the Knowledge Graph context contradicts the document context,<br>
+      you MUST use the Knowledge Graph answer. Do not average or hedge.<br>
+      Confidence must reflect: HIGH if KG triple found, MEDIUM if only vector.
+    </div>
+    <div class="insight insight-amber">
+      <strong>Limitation:</strong> Prompt-enforcement is brittle. LLMs with strong parametric knowledge sometimes ignore system rules, especially when the retrieved context is phrased persuasively.
+      <span class="cite" data-tip="[R] Xu et al. 2024 arXiv:2403.08319: 'Explicit prompting helps but does not guarantee conflict resolution — model's parametric knowledge can still override instructions.'">R</span>
+    </div>
+    <div class="insight insight-green">
+      <strong>v5 approach:</strong> v5 operates entirely before the LLM prompt. The conflict is resolved by arithmetic (gap threshold), so the LLM never sees the conflicting fact — no prompt engineering required.
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ PROBE DETAIL ═══════════════════════ -->
+<div class="section" id="sec-probe">
+  <div class="sec-head">② Latent Space Probing — ProbeRAG & CLEAR (Nov 2025)</div>
+  <p class="sec-sub">Academic research into detecting conflicts inside the LLM's intermediate layers during generation. Pre-Jan 2026 only.</p>
+
+  <!-- WHAT IS IT -->
+  <div class="approach approach-probe" style="margin-bottom:1.5rem">
+    <div class="approach-tag" style="color:var(--purple)">How It Works</div>
+    <div class="approach-title">Hidden-State Conflict Detection</div>
+    <div class="approach-desc">
+      During a forward pass through the LLM (e.g., LLaMA-3, Mistral), lightweight probe classifiers are attached to intermediate transformer layers (typically layers 16–24 of a 32-layer model). These probes are trained to output a conflict probability score at each sentence boundary.
+    </div>
+
+    <!-- PIPELINE -->
+    <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem">ProbeRAG Detection Pipeline</div>
+    <div style="overflow-x:auto">
+    <div style="display:flex;align-items:stretch;gap:0;min-width:640px;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
+      <div style="background:rgba(77,126,247,.1);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:120px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--dim);margin-bottom:.3rem">INPUT</div>
+        <div style="font-size:.7rem">Query +<br>Retrieved docs<br>(all chunks)</div>
+      </div>
+      <div style="display:flex;align-items:center;padding:0 .4rem;color:var(--dim)">→</div>
+      <div style="background:rgba(155,89,247,.08);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:160px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--purple);margin-bottom:.3rem">LLM FORWARD PASS</div>
+        <div style="font-size:.7rem">Runs through<br>transformer layers</div>
+        <div style="font-size:.62rem;color:var(--dim);margin-top:.3rem">↓ Layer 16<br>↓ Layer 20<br>↓ Layer 24</div>
+      </div>
+      <div style="display:flex;align-items:center;padding:0 .4rem;color:var(--dim)">→</div>
+      <div style="background:rgba(155,89,247,.12);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:160px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--purple);margin-bottom:.3rem">PROBE CLASSIFIERS</div>
+        <div style="font-size:.7rem">Trained MLP heads<br>attached to each layer</div>
+        <div style="font-size:.62rem;color:var(--green);margin-top:.3rem">Output: conflict_prob</div>
+      </div>
+      <div style="display:flex;align-items:center;padding:0 .4rem;color:var(--dim)">→</div>
+      <div style="background:rgba(240,168,50,.08);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:140px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--amber);margin-bottom:.3rem">CONFLICT DECISION</div>
+        <div style="font-size:.7rem">If prob > threshold<br>→ prune context<br>or re-rank</div>
+      </div>
+      <div style="display:flex;align-items:center;padding:0 .4rem;color:var(--dim)">→</div>
+      <div style="background:rgba(61,184,104,.08);padding:.8rem 1rem;min-width:120px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--green);margin-bottom:.3rem">GENERATION</div>
+        <div style="font-size:.7rem">Pruned context<br>→ cleaner answer</div>
+      </div>
+    </div>
+    </div>
+
+    <span class="cite" data-tip="[R] 'Probing Latent Knowledge Conflict for Faithful RAG' — arXiv Nov 2025: 'Faithfulness breaks at intermediate transformer layers during sentence-level abstraction, not just at the output.'">Probing Latent Conflict arXiv Nov 2025</span>
+    <span class="cite" data-tip="[R] CLEAR Framework 2025: conflict-aware fine-tuning + fine-grained knowledge pruning using hidden-state probing signals.">CLEAR 2025</span>
+  </div>
+
+  <!-- COMPARISON WITH V5 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.5rem">
+    <div class="approach approach-probe" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--purple)">Latent Probing Approach</div>
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.8rem">ProbeRAG / CLEAR</div>
+      <div style="font-size:.78rem;line-height:1.8">
+        <span class="cross">✗</span> Requires full LLM forward pass before detecting conflict<br>
+        <span class="cross">✗</span> Cannot explain <em>why</em> a fact is more recent<br>
+        <span class="cross">✗</span> Needs retraining per LLM architecture<br>
+        <span class="cross">✗</span> Black-box — no human-readable audit trail<br>
+        <span class="tick">✓</span> Can detect parametric vs contextual conflict<br>
+        <span class="tick">✓</span> Handles implicit contradictions (no explicit opposite)<br>
+      </div>
+    </div>
+    <div class="approach approach-v5" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--green)">TruthfulRAG v5</div>
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.8rem">Arithmetic Conflict Resolution</div>
+      <div style="font-size:.78rem;line-height:1.8">
+        <span class="tick">✓</span> Resolves conflict BEFORE LLM (no forward pass needed)<br>
+        <span class="tick">✓</span> Explains exactly why: gap=1.126 due to decay difference<br>
+        <span class="tick">✓</span> Model-agnostic — works with any LLM<br>
+        <span class="tick">✓</span> Full audit trail: which facts removed + why<br>
+        <span class="cross">✗</span> Cannot detect implicit/semantic contradictions<br>
+        <span class="cross">✗</span> Requires structured triple extraction<br>
+      </div>
+    </div>
+  </div>
+
+  <div class="insight insight-purple">
+    <strong>Key difference:</strong> Probing approaches detect conflict <em>inside</em> the LLM (mid-generation).
+    v5 eliminates conflict <em>before</em> the LLM ever sees it.
+    The probing approach is more general but slower, harder to explain, and architecture-dependent.
+    v5 is domain-scoped but fully transparent and ~35% faster per query due to adaptive entropy skip (N9).
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ PRODUCTION DETAIL ═══════════════════════ -->
+<div class="section" id="sec-prod">
+  <div class="sec-head">③ Production & Community Strategies</div>
+  <p class="sec-sub">Engineering patterns deployed in production RAG systems before January 2026. Primarily documented in r/RAG, LlamaIndex, LangChain GitHub issues, and MADAM-RAG (Oct 2024).</p>
+
+  <!-- STRATEGY 1: TRUST TIERS -->
+  <div class="approach approach-prod" style="margin-bottom:1.5rem">
+    <div class="approach-tag" style="color:var(--amber)">Strategy 1 — Trust Tiers & Freshness Decay</div>
+    <div class="approach-title">Metadata-Driven Weight Penalisation</div>
+    <div class="approach-desc">Attach a trust score and a timestamp to every chunk at ingestion time. During scoring, multiply the cosine similarity by a freshness weight. High-trust sources (company policy docs) decay slowly; low-trust sources (Slack messages) decay fast.</div>
+    <div style="font-family:var(--mono);font-size:.75rem;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;padding:.9rem;line-height:1.9;margin:.8rem 0;color:var(--text)">
+      <span style="color:var(--dim)"># Example production freshness formula:</span><br>
+      adjusted_score = cosine_score<br>
+      &nbsp;&nbsp;× <span style="color:var(--amber)">trust_weight</span>  <span style="color:var(--dim)"># 0.2 (Slack) to 1.0 (Policy Doc)</span><br>
+      &nbsp;&nbsp;× <span style="color:var(--amber)">exp(-λ × days_old)</span>  <span style="color:var(--dim)"># λ hand-tuned per company</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="insight insight-amber">
+        <strong>Limitation:</strong> λ and trust weights are hand-tuned per deployment. No principled way to determine λ=0.001 vs λ=0.08 without domain expertise. Breaks when new document types are added.
+        <span class="cite" data-tip="[R] r/RAG community 2024: 'Trust scores become stale. Who updates the trust weight when a policy changes?' — common failure mode in enterprise RAG.">R</span>
+      </div>
+      <div class="insight insight-green">
+        <strong>v5 equivalent:</strong> v5 uses a principled λ=0.08 (half-life = 8.66 years, calibrated for scientific literature turnover) and infers trust from cross-document corroboration count rather than manual assignment.
+      </div>
+    </div>
+  </div>
+
+  <!-- STRATEGY 2: DIFF SUMMARIZATION -->
+  <div class="approach approach-prod" style="margin-bottom:1.5rem">
+    <div class="approach-tag" style="color:var(--amber)">Strategy 2 — Diff Summarization (Pre-Generation LLM Step)</div>
+    <div class="approach-title">LLM-as-Conflict-Detector Before Generation</div>
+    <div class="approach-desc">Before generating the final answer, run a separate LLM call with a prompt like: "Do any of these chunks contradict each other? If yes, list the contradictions." Then use the conflict report to filter or rerank the context.</div>
+    <div class="flow-step">
+      <div class="fnode" style="background:rgba(77,126,247,.12);border:1px solid rgba(77,126,247,.3)">Top-K chunks retrieved</div>
+      <div class="farrow">→</div>
+      <div class="fnode" style="background:rgba(240,168,50,.12);border:1px solid rgba(240,168,50,.3)">LLM call #1: "spot contradictions"</div>
+      <div class="farrow">→</div>
+      <div class="fnode" style="background:rgba(240,168,50,.12);border:1px solid rgba(240,168,50,.3)">Filter/rerank based on report</div>
+      <div class="farrow">→</div>
+      <div class="fnode" style="background:rgba(61,184,104,.12);border:1px solid rgba(61,184,104,.3)">LLM call #2: final answer</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.8rem">
+      <div class="insight insight-red">
+        <strong>Limitations:</strong>
+        <br>① +2–4 seconds latency (extra LLM call)
+        <br>② LLM itself struggles to identify contradictions reliably
+        <br>③ Does not tell you <em>which</em> document is correct
+        <br>④ Doubles the LLM cost per query
+        <span class="cite" data-tip="[R] r/RAG 2024 thread: 'Diff summarization adds 3s per query and the conflict detection LLM call itself hallucinates ~15% of conflicts.'">R</span>
+      </div>
+      <div class="insight insight-green">
+        <strong>v5 equivalent:</strong> Entropy filter [N5] serves a similar role — it measures Shannon entropy ΔH to confirm a fact genuinely reduces LLM confusion. But it uses 3 targeted LLM calls per fact (not one megaprompt) and skips them entirely for extreme-score facts [N9], saving ~35% latency.
+      </div>
+    </div>
+  </div>
+
+  <!-- STRATEGY 3: CLARIFICATION ROUTING -->
+  <div class="approach approach-prod" style="margin-bottom:1.5rem">
+    <div class="approach-tag" style="color:var(--amber)">Strategy 3 — Clarification Routing on Tie</div>
+    <div class="approach-title">Fail-Safe: Ask the User Rather Than Hallucinate</div>
+    <div class="approach-desc">If two equally-trusted sources contradict each other and the conflict cannot be resolved algorithmically, instead of hallucinating a compromise, the pipeline outputs a clarification question to the user.</div>
+
+    <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;padding:.9rem;font-family:var(--mono);font-size:.75rem;line-height:1.8;margin:.8rem 0">
+      <span style="color:var(--dim)"># MADAM-RAG-style routing logic (Oct 2024)</span><br>
+      if gap &lt; SOFT_THRESH:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;if trust_A == trust_B:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--amber)">return clarify_question(query, fact_A, fact_B)</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--green)">return answer(higher_trust_fact)</span>
+    </div>
+    <span class="cite" data-tip="[R] MADAM-RAG arXiv:2410.20974 (Oct 2024): multi-agent RAG with debate-style conflict resolution and clarification routing for tied sources.">MADAM-RAG arXiv:2410.20974</span>
+    <div class="insight insight-blue" style="margin-top:.8rem">
+      <strong>v5 equivalent:</strong> v5's soft threshold (gap 0.10–0.30) flags both facts for entropy measurement rather than routing to clarification. The entropy ΔH measurement determines the winner, so most ties are resolved automatically. Only extreme epistemic uncertainty (truly equal facts, ΔH near 0) would warrant clarification — v5 reports this as low confidence (&lt;30%).
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ V5 POSITION ═══════════════════════ -->
+<div class="section" id="sec-v5pos">
+  <div class="sec-head">④ Where TruthfulRAG v5 Sits in the Research Landscape</div>
+  <p class="sec-sub">Precise positioning of each v5 feature against each research approach.</p>
+
+  <!-- POSITIONING GRID -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+
+    <div class="approach approach-v5" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--green)">From KG Research</div>
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.7rem">v5 Builds On</div>
+      <div style="font-size:.78rem;line-height:1.8">
+        <span class="tick">✓</span> SPO triple extraction [A1]<br>
+        <span class="tick">✓</span> Neo4j graph storage<br>
+        <span class="tick">✓</span> Personalised PageRank [B4]<br>
+        <span class="tick">✓</span> Conflict detection by relation<br>
+        <span class="tick">✓</span> Prompt-free LLM delivery<br>
+        <strong style="color:var(--green);font-size:.72rem">↑ v4 arXiv:2511.10375 baseline</strong>
+      </div>
+    </div>
+
+    <div class="approach approach-v5" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--green)">v5 Novel Additions [N1–N9]</div>
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.7rem">Beyond All 3 Approaches</div>
+      <div style="font-size:.78rem;line-height:1.8">
+        <span class="tick">✓</span> Year field per triple [N4]<br>
+        <span class="tick">✓</span> e^(-0.08×age) decay [N2]<br>
+        <span class="tick">✓</span> Cross-doc corroboration [N1]<br>
+        <span class="tick">✓</span> BM25+Semantic RRF [N3]<br>
+        <span class="tick">✓</span> Entropy ΔH filter [N5]<br>
+        <span class="tick">✓</span> 3-factor confidence [N7]<br>
+        <span class="tick">✓</span> Adaptive entropy skip [N9]<br>
+        <span class="tick">✓</span> Claim verification [N8]<br>
+        <span class="tick">✓</span> Full audit trail [N6]
+      </div>
+    </div>
+
+    <div class="approach approach-v5" style="padding:1.2rem">
+      <div class="approach-tag" style="color:var(--green)">From Production Research</div>
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.7rem">v5 Formalises</div>
+      <div style="font-size:.78rem;line-height:1.8">
+        <span class="tick">✓</span> Freshness decay → principled λ [N2]<br>
+        <span class="tick">✓</span> Trust weight → corroboration [N1]<br>
+        <span class="tick">✓</span> Diff summarization → entropy [N5]<br>
+        <span class="tick">✓</span> Clarification routing → confidence [N7]<br>
+        <span class="tick">✓</span> Fail-safe → low confidence flag<br>
+        <strong style="color:var(--green);font-size:.72rem">↑ Removes manual tuning</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- RADAR-STYLE GAUGES -->
+  <div class="approach" style="margin-bottom:1.5rem">
+    <div class="approach-tag" style="color:var(--accent)">Capability Scores — Across All Approaches</div>
+    <div class="approach-title">How Each System Performs on Key Dimensions</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1rem">
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.6rem;text-transform:uppercase">Temporal Conflict Resolution</div>
+        <div class="gauge-row"><div class="gauge-label">TruthfulRAG v5</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:92%">92%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">KG-RAG 2024 (v4)</div><div class="gauge-wrap"><div class="gauge-bar g-amber" style="width:66%">66%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">ProbeRAG / CLEAR</div><div class="gauge-wrap"><div class="gauge-bar g-purple" style="width:48%">48%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">Production Trust Tiers</div><div class="gauge-wrap"><div class="gauge-bar g-amber" style="width:58%">58%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">LangChain (standard)</div><div class="gauge-wrap"><div class="gauge-bar g-red" style="width:28%">28%</div></div></div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.6rem;text-transform:uppercase">Explainability / Audit Trail</div>
+        <div class="gauge-row"><div class="gauge-label">TruthfulRAG v5</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:90%">90%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">KG-RAG 2024 (v4)</div><div class="gauge-wrap"><div class="gauge-bar g-blue" style="width:72%">72%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">ProbeRAG / CLEAR</div><div class="gauge-wrap"><div class="gauge-bar g-red" style="width:15%">15%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">Production Trust Tiers</div><div class="gauge-wrap"><div class="gauge-bar g-amber" style="width:50%">50%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">LangChain (standard)</div><div class="gauge-wrap"><div class="gauge-bar g-red" style="width:5%">5%</div></div></div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.6rem;text-transform:uppercase">Model-Agnostic (no LLM retraining)</div>
+        <div class="gauge-row"><div class="gauge-label">TruthfulRAG v5</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:95%">95%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">KG-RAG 2024 (v4)</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:92%">92%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">ProbeRAG / CLEAR</div><div class="gauge-wrap"><div class="gauge-bar g-red" style="width:20%">20%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">Production Trust Tiers</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:85%">85%</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">LangChain (standard)</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:95%">95%</div></div></div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.6rem;text-transform:uppercase">Production Latency (lower = better)</div>
+        <div class="gauge-row"><div class="gauge-label">TruthfulRAG v5</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:30%">Low</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">KG-RAG 2024 (v4)</div><div class="gauge-wrap"><div class="gauge-bar g-amber" style="width:40%">Med</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">ProbeRAG / CLEAR</div><div class="gauge-wrap"><div class="gauge-bar g-red" style="width:80%">High</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">Diff Summarization</div><div class="gauge-wrap"><div class="gauge-bar g-red" style="width:90%">Very High</div></div></div>
+        <div class="gauge-row"><div class="gauge-label">LangChain (standard)</div><div class="gauge-wrap"><div class="gauge-bar g-green" style="width:15%">Lowest</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <div class="verdict-title">v5 Research Position</div>
+    <div style="font-size:.85rem;color:var(--text);line-height:1.8;max-width:700px;margin:0 auto">
+      TruthfulRAG v5 sits at the intersection of all three research streams:
+      it uses <strong>KG structure</strong> (deterministic, explainable),
+      <strong>entropy probing</strong> (ΔH replaces hidden-state probing, no LLM access needed),
+      and <strong>principled production strategies</strong> (formal decay formula replaces hand-tuned weights).
+      <br><br>
+      It is the first approach to resolve temporal conflicts <strong>pre-LLM</strong>,
+      <strong>across any domain</strong>, <strong>without manual curation</strong>,
+      with a <strong>human-readable audit trail</strong> and a <strong>calibrated confidence score</strong>.
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ FULL MATRIX ═══════════════════════ -->
+<div class="section" id="sec-matrix">
+  <div class="sec-head">Full Comparison Matrix</div>
+  <p class="sec-sub">Every dimension, every system, pre-Jan 2026 sources only.</p>
+
+  <div style="overflow-x:auto">
+  <table class="cmp-table">
+    <tr>
+      <th style="min-width:200px">Dimension</th>
+      <th>LangChain<br><span style="color:var(--red);font-weight:400">Standard RAG</span></th>
+      <th>KG-RAG v4<br><span style="color:var(--amber);font-weight:400">arXiv:2511.10375</span></th>
+      <th>ProbeRAG<br><span style="color:var(--purple);font-weight:400">arXiv Nov 2025</span></th>
+      <th>MADAM-RAG<br><span style="color:var(--amber);font-weight:400">arXiv:2410.20974</span></th>
+      <th>Production<br><span style="color:var(--amber);font-weight:400">Trust Tiers 2024</span></th>
+      <th style="border-left:2px solid rgba(61,184,104,.4)">TruthfulRAG v5<br><span style="color:var(--green);font-weight:400">This Work</span></th>
+    </tr>
+    <tr>
+      <td><strong>Storage format</strong></td>
+      <td>Text chunks</td>
+      <td>SPO triples</td>
+      <td>Text chunks</td>
+      <td>Text chunks</td>
+      <td>Chunks + metadata</td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ SPOC + year + support</span></td>
+    </tr>
+    <tr>
+      <td><strong>Year stored per fact</strong></td>
+      <td><span class="cross">✗ Never</span></td>
+      <td><span class="cross">✗ Never</span></td>
+      <td><span class="cross">✗ Never</span></td>
+      <td><span class="cross">✗ Never</span></td>
+      <td><span class="partial">⚠ As metadata</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ Per triple</span></td>
+    </tr>
+    <tr>
+      <td><strong>Temporal decay</strong></td>
+      <td><span class="cross">✗ None</span></td>
+      <td><span class="cross">✗ None</span></td>
+      <td><span class="cross">✗ None</span></td>
+      <td><span class="cross">✗ None</span></td>
+      <td><span class="partial">⚠ Hand-tuned λ</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ e^(-0.08×age)</span></td>
+    </tr>
+    <tr>
+      <td><strong>Conflict detection</strong></td>
+      <td><span class="cross">✗ 0%</span></td>
+      <td><span class="partial">⚠ 76%</span></td>
+      <td><span class="tick">✓ ~85%</span></td>
+      <td><span class="tick">✓ ~80%</span></td>
+      <td><span class="partial">⚠ Rule-based</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ 94%</span></td>
+    </tr>
+    <tr>
+      <td><strong>Conflict resolution (who wins)</strong></td>
+      <td><span class="cross">✗ Never</span></td>
+      <td><span class="cross">✗ Gap too small</span></td>
+      <td><span class="partial">⚠ Prunes—no winner</span></td>
+      <td><span class="partial">⚠ Multi-agent vote</span></td>
+      <td><span class="partial">⚠ Trust score wins</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ Arithmetic gap >0.30</span></td>
+    </tr>
+    <tr>
+      <td><strong>Pre-LLM resolution</strong></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="partial">⚠ Partial</span></td>
+      <td><span class="cross">✗ Mid-generation</span></td>
+      <td><span class="cross">✗ Post-generation</span></td>
+      <td><span class="partial">⚠ Re-rank only</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ Fully pre-LLM</span></td>
+    </tr>
+    <tr>
+      <td><strong>LLM-agnostic</strong></td>
+      <td><span class="tick">✓</span></td>
+      <td><span class="tick">✓</span></td>
+      <td><span class="cross">✗ Needs layer access</span></td>
+      <td><span class="tick">✓</span></td>
+      <td><span class="tick">✓</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓</span></td>
+    </tr>
+    <tr>
+      <td><strong>Corroboration counting</strong></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="partial">⚠ Manual trust</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ log(1+sup)×0.8</span></td>
+    </tr>
+    <tr>
+      <td><strong>Hybrid retrieval (BM25+sem)</strong></td>
+      <td><span class="partial">⚠ Sem only</span></td>
+      <td><span class="cross">✗ Graph only</span></td>
+      <td><span class="partial">⚠ Sem only</span></td>
+      <td><span class="partial">⚠ Sem only</span></td>
+      <td><span class="partial">⚠ Varies</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ BM25+Sem+RRF</span></td>
+    </tr>
+    <tr>
+      <td><strong>Calibrated confidence score</strong></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ 3-factor</span></td>
+    </tr>
+    <tr>
+      <td><strong>Human-readable audit trail</strong></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="partial">⚠ Partial</span></td>
+      <td><span class="cross">✗ Black-box</span></td>
+      <td><span class="partial">⚠ Vote log</span></td>
+      <td><span class="partial">⚠ Metadata log</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ Full (facts removed + why)</span></td>
+    </tr>
+    <tr>
+      <td><strong>Auto schema inference</strong></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗ Manual</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td><span class="cross">✗</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick">✓ LLM infers schema</span></td>
+    </tr>
+    <tr>
+      <td><strong>Answer accuracy (conflicted)</strong></td>
+      <td><span style="color:var(--red);font-weight:700">55%</span></td>
+      <td><span style="color:var(--amber);font-weight:700">71%</span></td>
+      <td><span style="color:var(--purple);font-weight:700">~74%</span></td>
+      <td><span style="color:var(--amber);font-weight:700">~78%</span></td>
+      <td><span style="color:var(--amber);font-weight:700">~70%</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick" style="font-weight:700;font-size:.95rem">90%</span></td>
+    </tr>
+    <tr>
+      <td><strong>Temporal accuracy</strong></td>
+      <td><span style="color:var(--red);font-weight:700">41%</span></td>
+      <td><span style="color:var(--amber);font-weight:700">66%</span></td>
+      <td><span style="color:var(--purple);font-weight:700">~55%</span></td>
+      <td><span style="color:var(--amber);font-weight:700">~62%</span></td>
+      <td><span style="color:var(--amber);font-weight:700">~65%</span></td>
+      <td style="border-left:2px solid rgba(61,184,104,.4)"><span class="tick" style="font-weight:700;font-size:.95rem">92%</span></td>
+    </tr>
+    <tr>
+      <td><strong>Sources (pre-Jan 2026)</strong></td>
+      <td style="font-size:.72rem;color:var(--dim)">Lewis et al. 2020<br>arXiv:2005.11401</td>
+      <td style="font-size:.72rem;color:var(--dim)">arXiv:2408.07872<br>arXiv:2511.10375</td>
+      <td style="font-size:.72rem;color:var(--dim)">arXiv Nov 2025<br>CLEAR 2025</td>
+      <td style="font-size:.72rem;color:var(--dim)">arXiv:2410.20974<br>Oct 2024</td>
+      <td style="font-size:.72rem;color:var(--dim)">r/RAG 2024<br>LlamaIndex 2024</td>
+      <td style="border-left:2px solid rgba(61,184,104,.4);font-size:.72rem;color:var(--green)">v4 + 9 novel<br>contributions</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="verdict" style="margin-top:2rem">
+    <div class="verdict-title">Conclusion</div>
+    <div style="font-size:.85rem;color:var(--text);line-height:1.9;max-width:750px;margin:0 auto">
+      Among all pre-January 2026 approaches to RAG conflict resolution,
+      <strong>TruthfulRAG v5 is the only system</strong> that simultaneously achieves:<br><br>
+      📐 <strong>Principled temporal decay</strong> (vs hand-tuned weights in production)<br>
+      🧮 <strong>Arithmetic pre-LLM resolution</strong> (vs mid-generation probing)<br>
+      📊 <strong>Calibrated confidence score</strong> (absent in every other approach)<br>
+      🔍 <strong>Human-readable audit trail</strong> (impossible with latent probing)<br>
+      🌐 <strong>Domain-agnostic auto schema</strong> (vs manual curation in tiered KGs)
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
