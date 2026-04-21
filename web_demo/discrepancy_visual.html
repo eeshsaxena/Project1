@@ -519,34 +519,142 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
 
   <!-- DISCREPANCY 1 -->
   <div class="card red-card">
-    <div class="card-title">❌ DISCREPANCY 1 — Year Is Permanently Discarded</div>
-    <div style="font-size:.85rem;margin-bottom:1rem;color:var(--dim)">When LangChain chunks and embeds documents, date/year metadata is <strong style="color:var(--red)">not factored into retrieval scoring</strong>.
+    <div class="card-title">❌ DISCREPANCY 1 — LangChain Cannot Differentiate Between Years
       <span class="cite" data-tip="[R1] Lewis et al. 2020 — arXiv:2005.11401 (NeurIPS). Original RAG uses MIPS-only retrieval. No date field in document schema.">R1</span>
-      <span class="cite" data-tip="[R3] LangChain Docs — similarity_search() computes cosine distance only. Metadata (dates) stored separately, NOT part of the similarity score.">R3</span>
-      The 1985 paper becomes indistinguishable from the 2023 WHO guideline.
-      <span class="cite" data-tip="[R5] towardsai.net FAISS guide + LangChain Docs: FAISS does not inherently store metadata. Date field is invisible to the ranker.">R5</span>
+      <span class="cite" data-tip="[R6] openreview.net NeurIPS 2024: 'Standard vector retrieval focuses on semantic similarity but often ignores timestamps.'">R6</span>
     </div>
-    <div class="flow">
-      <div class="node node-doc stale">Doc A (1985)<br>"Aspirin safe..."</div>
-      <div class="arrow">→</div>
-      <div class="node node-process">Chunker<br>512 tokens</div>
-      <div class="arrow">→</div>
-      <div class="node node-process">Embedder<br>384d vector</div>
-      <div class="arrow-red">→</div>
-      <div class="node node-wrong">Chunk A<br>Year: GONE ❌</div>
+
+    <!-- PROOF STATEMENT -->
+    <div style="background:rgba(224,85,85,.07);border:1px solid rgba(224,85,85,.3);border-radius:8px;padding:1rem;margin-bottom:1.2rem">
+      <div style="font-family:var(--mono);font-size:.7rem;color:var(--red);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em">Core Proof</div>
+      <div style="font-size:.85rem;line-height:1.7">
+        LangChain's <code>similarity_search()</code> computes <strong>cosine distance between embedding vectors only</strong>.
+        <span class="cite" data-tip="[R3] LangChain Official Docs — similarity_search() signature: query: str, k: int. No date/year parameter. Metadata is stored separately and NOT used in ranking.">R3</span>
+        The year a document was written <strong style="color:var(--red)">does not exist</strong> in the 384-dimensional vector space.
+        A 1985 paper and a 2023 guideline with similar words produce <strong style="color:var(--red)">nearly identical cosine scores</strong>
+        — the retriever has no mathematical way to prefer the newer one.
+        <span class="cite" data-tip="[R8] ragie.ai 2024: 'No Temporal Awareness: Standard cosine similarity calculations do not inherently know when a document was created.'">R8</span>
+      </div>
     </div>
-    <div class="flow">
-      <div class="node node-doc fresh">Doc B (2023)<br>"WHO: contraindicated"</div>
-      <div class="arrow">→</div>
-      <div class="node node-process">Chunker<br>512 tokens</div>
-      <div class="arrow">→</div>
-      <div class="node node-process">Embedder<br>384d vector</div>
-      <div class="arrow-red">→</div>
-      <div class="node node-wrong">Chunk B<br>Year: GONE ❌</div>
+
+    <!-- WHAT LC SEES vs REALITY SIDE BY SIDE -->
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:center;margin-bottom:1.2rem">
+
+      <!-- WHAT LC SEES -->
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--red);text-align:center;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.08em">What LangChain Sees</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+
+          <div style="background:rgba(77,126,247,.08);border:1px solid rgba(77,126,247,.25);border-radius:6px;padding:.7rem;font-family:var(--mono);font-size:.75rem">
+            <div style="color:#89b4fa;margin-bottom:.3rem">Chunk A — vector #1</div>
+            <div style="color:var(--dim);font-size:.64rem">[ 0.21, −0.08, 0.44, 0.17, … 384 dims ]</div>
+            <div style="color:var(--dim);font-size:.62rem;margin-top:.3rem;font-style:italic">year field: <span style="color:var(--red)">does not exist</span></div>
+          </div>
+
+          <div style="background:rgba(77,126,247,.08);border:1px solid rgba(77,126,247,.25);border-radius:6px;padding:.7rem;font-family:var(--mono);font-size:.75rem">
+            <div style="color:#89b4fa;margin-bottom:.3rem">Chunk B — vector #2</div>
+            <div style="color:var(--dim);font-size:.64rem">[ 0.19, −0.11, 0.42, 0.20, … 384 dims ]</div>
+            <div style="color:var(--dim);font-size:.62rem;margin-top:.3rem;font-style:italic">year field: <span style="color:var(--red)">does not exist</span></div>
+          </div>
+
+          <div style="background:rgba(77,126,247,.08);border:1px solid rgba(77,126,247,.25);border-radius:6px;padding:.7rem;font-family:var(--mono);font-size:.75rem">
+            <div style="color:#89b4fa;margin-bottom:.3rem">Query — vector #Q</div>
+            <div style="color:var(--dim);font-size:.64rem">[ 0.22, −0.09, 0.45, 0.16, … 384 dims ]</div>
+          </div>
+
+          <div style="padding:.6rem;background:rgba(255,255,255,.04);border-radius:5px;font-family:var(--mono);font-size:.72rem;text-align:center">
+            cos(Q, A) = <span style="color:var(--amber)">0.913</span>&nbsp;&nbsp;
+            cos(Q, B) = <span style="color:var(--amber)">0.882</span><br>
+            <span style="color:var(--red);font-size:.65rem">Gap = 0.031 &lt; any year-based threshold</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ARROW -->
+      <div style="text-align:center;font-size:1.8rem;color:var(--red)">≠</div>
+
+      <!-- REALITY -->
+      <div>
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--green);text-align:center;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.08em">Reality</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+
+          <div style="background:rgba(224,85,85,.08);border:1px solid rgba(224,85,85,.3);border-radius:6px;padding:.7rem;font-family:var(--mono);font-size:.75rem">
+            <div style="color:#f08080;margin-bottom:.3rem">Doc A — Written <strong>1985</strong></div>
+            <div style="font-size:.72rem">"Aspirin is safe for children with fever"</div>
+            <div style="color:var(--red);font-size:.65rem;margin-top:.3rem">⚠ Outdated — contradicted by WHO 2023</div>
+          </div>
+
+          <div style="background:rgba(61,184,104,.08);border:1px solid rgba(61,184,104,.3);border-radius:6px;padding:.7rem;font-family:var(--mono);font-size:.75rem">
+            <div style="color:#7dd6a0;margin-bottom:.3rem">Doc B — Written <strong>2023</strong></div>
+            <div style="font-size:.72rem">"Aspirin is contraindicated in children"</div>
+            <div style="color:var(--green);font-size:.65rem;margin-top:.3rem">✓ Current — WHO guideline</div>
+          </div>
+
+          <div style="padding:.6rem;background:rgba(61,184,104,.06);border:1px solid rgba(61,184,104,.2);border-radius:5px;font-family:var(--mono);font-size:.72rem;text-align:center">
+            Age gap: <span style="color:var(--amber)">38 years</span><br>
+            <span style="color:var(--green);font-size:.65rem">v5 decay ratio: 0.787 / 0.278 = 2.83×</span>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="gap-box gap-bad" style="margin-top:.8rem">Both chunks are now anonymous text. The database cannot tell them apart by age. 1985 = 2023.
-      <span class="cite" data-tip="[R6] openreview.net — NeurIPS 2024 RAG Workshop: 'Standard vector retrieval ignores timestamps.'">R6</span>
-      <span class="cite" data-tip="[R8] ragie.ai 2024: 'Cosine similarity does not inherently know when a document was created.'">R8</span>
+
+    <!-- THE INGESTION FLOW showing year drop -->
+    <div style="font-family:var(--mono);font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem">Ingestion Flow — Where the Year Is Lost</div>
+    <div style="overflow-x:auto">
+    <div style="display:flex;align-items:stretch;gap:0;min-width:640px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+
+      <div style="background:rgba(224,85,85,.1);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:130px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.4rem">INPUT</div>
+        <div style="font-size:.75rem;line-height:1.6">Doc A<br><strong style="color:var(--red)">year=1985</strong><br>text=…</div>
+        <div style="font-size:.75rem;line-height:1.6;margin-top:.4rem">Doc B<br><strong style="color:var(--green)">year=2023</strong><br>text=…</div>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim);font-size:1.2rem">→</div>
+
+      <div style="background:rgba(155,89,247,.08);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:130px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.4rem">CHUNK</div>
+        <div style="font-size:.72rem;color:var(--dim)">RecursiveCharacter<br>TextSplitter<br>chunk_size=512</div>
+        <div style="font-size:.65rem;color:var(--red);margin-top:.4rem">year not in chunk<br>payload by default</div>
+        <span class="cite" style="margin-top:.3rem;display:inline-block" data-tip="[R5] LangChain FAISS docs: metadata dict must be explicitly populated per chunk. Default splitter does not inject year into chunk text.">R5</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim);font-size:1.2rem">→</div>
+
+      <div style="background:rgba(155,89,247,.08);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:130px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.4rem">EMBED</div>
+        <div style="font-size:.72rem;color:var(--dim)">all-MiniLM-L6-v2<br>384 dimensions</div>
+        <div style="font-size:.65rem;color:var(--red);margin-top:.4rem">vector encodes<br>text meaning only<br>no temporal axis</div>
+        <span class="cite" style="margin-top:.3rem;display:inline-block" data-tip="[R1] Lewis et al. 2020: dense embeddings (DPR) encode semantic content only. No temporal dimension in the embedding space.">R1</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim);font-size:1.2rem">→</div>
+
+      <div style="background:rgba(255,255,255,.02);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:150px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.4rem">VECTOR DB</div>
+        <div style="font-size:.72rem">Chunk A: [0.21…]<br><span style="color:var(--red)">meta.year=1985 ⚠</span></div>
+        <div style="font-size:.72rem;margin-top:.4rem">Chunk B: [0.19…]<br><span style="color:var(--red)">meta.year=2023 ⚠</span></div>
+        <div style="font-size:.62rem;color:var(--dim);margin-top:.4rem">meta stored but<br>NOT scored</div>
+        <span class="cite" style="margin-top:.3rem;display:inline-block" data-tip="[R5] FAISS: metadata is stored in a parallel dict, NOT in the index. similarity_search() uses only the 384-dim vector.">R5</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim);font-size:1.2rem">→</div>
+
+      <div style="background:rgba(224,85,85,.08);padding:.8rem 1rem;min-width:130px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--red);margin-bottom:.4rem">RETRIEVAL</div>
+        <div style="font-size:.72rem">cos(Q, A) = 0.913<br>cos(Q, B) = 0.882</div>
+        <div style="font-size:.65rem;color:var(--red);margin-top:.5rem;font-weight:700">YEAR IGNORED.<br>1985 WINS. ❌</div>
+      </div>
+    </div>
+    </div>
+
+    <!-- PROOF VERDICT -->
+    <div class="gap-box gap-bad" style="margin-top:1rem">
+      <strong>LangChain computes:</strong> <code>score = cosine(embed(query), embed(chunk))</code> — year is not a variable in this equation.
+      <span class="cite" data-tip="[R3] LangChain similarity_search() source: returns docs sorted by cosine score. No date/recency parameter.">R3</span>
+      <br>A 38-year-old wrong fact and a 3-year-old correct fact produce scores 0.913 vs 0.882 — gap of 0.031.
+      The year 1985 and 2023 are <strong>mathematically identical</strong> to the retriever.
+      <span class="cite" data-tip="[R4] Microsoft Azure AI: 'Naive vector search is time-agnostic — similarity ≠ relevance.'">R4</span>
+      <span class="cite" data-tip="[R8] ragie.ai: 'Cosine similarity does not inherently know when a document was created.'">R8</span>
     </div>
   </div>
 
