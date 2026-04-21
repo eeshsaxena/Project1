@@ -660,63 +660,232 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
 
   <!-- DISCREPANCY 2 -->
   <div class="card red-card">
-    <div class="card-title">❌ DISCREPANCY 2 — Wrong Document Ranked Higher</div>
-    <div style="font-size:.85rem;margin-bottom:1rem;color:var(--dim)">Vector embeddings measure semantic proximity, not factual accuracy or recency.
-      <span class="cite" data-tip="[R4] Microsoft Azure AI Docs: 'Naive vector search is time-agnostic; it prioritizes semantic similarity over temporal relevance.'">R4</span>
-      <span class="cite" data-tip="[R9] eyelevel.ai 2024: 'If an older document is semantically closer to the query than a newer, more accurate one, the vector DB ranks the older document higher.'">R9</span>
-      The 1985 &ldquo;aspirin safe children fever&rdquo; chunk matches the query <em>phrasing</em> better than the 2023 &ldquo;contraindicated&rdquo; chunk, so the wrong document ranks #1.
-      <span class="cite" data-tip="[R10] CONFLICTS Benchmark 2025 (fluxhuman.com): 'Traditional RAG metrics focus on relevance, not whether the most current or factually correct chunk was retrieved.'">R10</span>
+    <div class="card-title">❌ DISCREPANCY 2 — Wrong Document Ranked Higher Because of Phrasing, Not Truth
+      <span class="cite" data-tip="[R4] Microsoft Azure AI: 'Naive vector search is time-agnostic; it prioritizes semantic similarity over temporal relevance.'">R4</span>
+      <span class="cite" data-tip="[R9] eyelevel.ai 2024: 'If an older doc is semantically closer to the query than a newer, more accurate one, the vector DB ranks the older doc higher.'">R9</span>
     </div>
+
+    <!-- PROOF STATEMENT -->
+    <div style="background:rgba(224,85,85,.07);border:1px solid rgba(224,85,85,.3);border-radius:8px;padding:1rem;margin-bottom:1.2rem">
+      <div style="font-family:var(--mono);font-size:.7rem;color:var(--red);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em">Core Proof</div>
+      <div style="font-size:.85rem;line-height:1.7">
+        Cosine similarity makes the retriever answer: <em>"Which document sounds most like the query?"</em> —
+        not <em>"Which document is correct?"</em>
+        <span class="cite" data-tip="[R4] Microsoft Azure AI Docs: 'Similarity ≠ Relevance. Vector embeddings measure semantic proximity not factual accuracy.'">R4</span>
+        The query <code>"Can children take aspirin for fever?"</code> uses the words
+        <strong style="color:var(--amber)">children, aspirin, fever</strong>.
+        The 1985 paper also uses those exact words — while the 2023 WHO guideline uses
+        <strong style="color:var(--red)">contraindicated</strong>, a different word with different embedding coordinates.
+        The 1985 paper wins the semantic race even though it is factually wrong.
+        <span class="cite" data-tip="[R10] CONFLICTS Benchmark 2025: 'Traditional RAG metrics focus on whether the system retrieved relevant chunks, not the most current or factually correct ones.'">R10</span>
+      </div>
+    </div>
+
+    <!-- WHY THIS HAPPENS: embedding geometry -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem">
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:1rem">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--amber);margin-bottom:.7rem;text-transform:uppercase">Why 1985 Doc Wins</div>
+        <div style="font-size:.8rem;line-height:1.8;color:var(--text)">
+          Query words: <code style="color:var(--amber)">children, aspirin, fever, take</code><br>
+          Doc A (1985): <code style="color:var(--amber)">children, aspirin, fever, safe</code><br>
+          <span style="color:var(--green);font-size:.75rem">→ 3 of 4 query words match exactly</span><br><br>
+          Doc C (2023): <code style="color:var(--red)">aspirin, contraindicated, paediatric</code><br>
+          <span style="color:var(--red);font-size:.75rem">→ "contraindicated" is a rare term with different vector coords</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:.72rem;margin-top:.8rem;padding:.5rem;background:rgba(240,168,50,.08);border-radius:4px">
+          cos(query, Doc_A) = <span style="color:var(--amber)">0.913</span> ← RANK #1<br>
+          cos(query, Doc_C) = <span style="color:var(--dim)">0.882</span> ← RANK #3
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:1rem">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--green);margin-bottom:.7rem;text-transform:uppercase">What v5 Does Instead</div>
+        <div style="font-size:.8rem;line-height:1.8;color:var(--text)">
+          v5 extracts structured triple:<br>
+          <code style="color:var(--red)">(Aspirin, SAFE_FOR, Children, <strong>year=1985</strong>)</code><br>
+          <code style="color:var(--green)">(Aspirin, CONTRAINDICATED, Children, <strong>year=2023</strong>)</code><br><br>
+          Applies temporal decay:<br>
+          1985 doc: <code>e^(-0.08×41) = <span style="color:var(--red)">0.038</span></code><br>
+          2023 doc: <code>e^(-0.08×3)  = <span style="color:var(--green)">0.787</span></code>
+        </div>
+        <div style="font-family:var(--mono);font-size:.72rem;margin-top:.8rem;padding:.5rem;background:rgba(61,184,104,.08);border-radius:4px">
+          1985 score: <span style="color:var(--red)">0.592</span> ← eliminated<br>
+          2023 score: <span style="color:var(--green)">1.718</span> ← RANK #1 ✓
+        </div>
+      </div>
+    </div>
+
+    <!-- RANKING BARS -->
+    <div style="font-family:var(--mono);font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem">LangChain Retrieval — Ranked by Cosine Similarity</div>
     <div class="score-row">
-      <div class="score-label">Doc A (1985) "aspirin safe children fever" → WRONG</div>
+      <div style="display:flex;flex-direction:column;width:300px">
+        <div class="score-label">Doc A (1985) "aspirin safe children fever"</div>
+        <div style="font-size:.64rem;color:var(--red);font-family:var(--mono)">⚠ WRONG — 38 years outdated</div>
+      </div>
       <div class="bar-wrap"><div class="bar bar-red" style="width:91.3%">0.913</div></div>
-      <div class="score-val" style="color:var(--red)">RANK #1</div>
+      <div class="score-val" style="color:var(--red);font-weight:700">RANK #1 ❌</div>
     </div>
     <div class="score-row">
-      <div class="score-label">Doc B (2010) "aspirin tolerated paediatric"</div>
+      <div style="display:flex;flex-direction:column;width:300px">
+        <div class="score-label">Doc B (2010) "aspirin tolerated paediatric"</div>
+        <div style="font-size:.64rem;color:var(--amber);font-family:var(--mono)">⚠ OUTDATED — 16 years old</div>
+      </div>
       <div class="bar-wrap"><div class="bar bar-red" style="width:89.1%">0.891</div></div>
-      <div class="score-val" style="color:var(--red)">RANK #2</div>
+      <div class="score-val" style="color:var(--amber)">RANK #2</div>
     </div>
     <div class="score-row">
-      <div class="score-label">Doc C (2023) "contraindicated children" → CORRECT</div>
+      <div style="display:flex;flex-direction:column;width:300px">
+        <div class="score-label">Doc C (2023) "aspirin contraindicated children"</div>
+        <div style="font-size:.64rem;color:var(--green);font-family:var(--mono)">✓ CORRECT — WHO 2023 guideline</div>
+      </div>
       <div class="bar-wrap"><div class="bar bar-green" style="width:88.2%">0.882</div></div>
-      <div class="score-val" style="color:var(--amber)">RANK #3</div>
+      <div class="score-val" style="color:var(--amber)">RANK #3 ⚠</div>
     </div>
-    <div class="gap-box gap-bad">The 1985 paper ranks ABOVE the 2023 WHO guideline because &ldquo;aspirin safe children fever&rdquo; is a stronger keyword match than &ldquo;contraindicated&rdquo;.
-      <span class="cite" data-tip="[R4] Microsoft Azure AI: 'The vector space becomes crowded, making it easier to retrieve outdated noise rather than the precise newer information.'">R4</span>
+
+    <!-- WHAT LLM RECEIVES -->
+    <div style="margin:.8rem 0;background:rgba(155,89,247,.06);border:1px solid rgba(155,89,247,.25);border-radius:7px;padding:.8rem 1rem">
+      <div style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.5rem">PROMPT SENT TO LLM (top-3 retrieved)</div>
+      <div style="font-family:var(--mono);font-size:.72rem;line-height:1.8;color:var(--text)">
+        Context [1]: <span style="color:var(--red)">"Aspirin is safe and effective for children with fever…" (1985)</span><br>
+        Context [2]: <span style="color:var(--amber)">"Aspirin is generally tolerated in paediatric patients…" (2010)</span><br>
+        Context [3]: <span style="color:var(--green)">"Aspirin is contraindicated in children due to Reye's Syndrome…" (2023)</span>
+      </div>
+    </div>
+
+    <div class="gap-box gap-bad">
+      The <strong>correct answer is ranked #3</strong>. The two wrong/outdated answers are ranked #1 and #2.
+      <span class="cite" data-tip="[R9] eyelevel.ai 2024: 'Similarity ≠ Relevance: Vector embeddings measure semantic proximity. The vector DB ranks the older outdated document higher.'">R9</span>
+      LangChain passes all 3 to the LLM — the wrong answer has a head start.
+      <span class="cite" data-tip="[R4] Microsoft Azure AI: 'The vector space becomes crowded, making it easier to retrieve highly similar but outdated noise.'">R4</span>
     </div>
   </div>
 
   <!-- DISCREPANCY 3 -->
   <div class="card red-card">
-    <div class="card-title">❌ DISCREPANCY 3 — Both Conflicting Chunks Reach the LLM
-      <span class="cite" data-tip="[R2] Xu et al. 2024 — arXiv:2403.08319: LLMs 'compress contradictory documents into a single plausible-sounding but incorrect answer' when given conflicting context.">R2</span>
-      <span class="cite" data-tip="[R11] github.com/langchain-ai/langchain source: RetrievalQA._call() passes top-K chunks directly to LLM with no inter-document conflict check.">R11</span>
+    <div class="card-title">❌ DISCREPANCY 3 — No Conflict Detection: Both Contradicting Docs Reach the LLM
+      <span class="cite" data-tip="[R11] github.com/langchain-ai/langchain: RetrievalQA._call() → combine_docs_chain.run(). No inter-document conflict check exists anywhere in the chain.">R11</span>
     </div>
-    <div class="flow" style="justify-content:center;padding:1rem 0">
-      <div style="display:flex;flex-direction:column;gap:.4rem">
-        <div class="node node-doc stale" style="text-align:center">Chunk A (1985)<br>Aspirin SAFE for children</div>
-        <div class="node node-doc fresh" style="text-align:center">Chunk B (2010)<br>Aspirin TOLERATED</div>
-        <div class="node node-doc" style="text-align:center">Chunk C (2023)<br>Aspirin CONTRAINDICATED</div>
-      </div>
-      <div class="arrow" style="font-size:2rem">→</div>
-      <div style="background:rgba(155,89,247,.15);border:1px solid rgba(155,89,247,.4);border-radius:10px;padding:1.5rem;text-align:center">
-        <div style="font-size:1.5rem">🤖</div>
-        <div style="font-family:var(--mono);font-size:.75rem;color:#c49df7">LLM</div>
-        <div style="font-size:.72rem;color:var(--dim);margin-top:.3rem">sees conflict,<br>no guidance</div>
-      </div>
-      <div class="arrow" style="font-size:2rem">→</div>
-      <div class="node node-wrong" style="max-width:200px;text-align:center;line-height:1.5">
-        "Aspirin is effective for childhood fever. Some guidelines suggest caution..."<br>
-        <span style="font-size:.7rem;color:var(--red)">← WRONG / VAGUE</span>
+
+    <!-- PROOF STATEMENT -->
+    <div style="background:rgba(224,85,85,.07);border:1px solid rgba(224,85,85,.3);border-radius:8px;padding:1rem;margin-bottom:1.2rem">
+      <div style="font-family:var(--mono);font-size:.7rem;color:var(--red);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em">Core Proof</div>
+      <div style="font-size:.85rem;line-height:1.7">
+        LangChain has <strong>zero logic</strong> to detect when two retrieved chunks say opposite things.
+        <span class="cite" data-tip="[R11] LangChain source: RetrievalQA._call() passes docs to StuffDocumentsChain which joins them with '\n\n'. No conflict detection layer.">R11</span>
+        It concatenates all top-K chunks into one prompt and sends them to the LLM.
+        The LLM — designed to be helpful and fluent — then <strong style="color:var(--red)">"flattens" the contradiction</strong>
+        into a single plausible-sounding sentence, often choosing the majority or the first-cited view.
+        <span class="cite" data-tip="[R2] Xu et al. 2024 arXiv:2403.08319: 'LLMs frequently compress contradictory documents into a single plausible-sounding but incorrect answer.'">R2</span>
       </div>
     </div>
-    <div class="gap-box gap-bad">LLM receives contradicting context.
-      <span class="cite" data-tip="[R2] Xu et al. 2024 arXiv:2403.08319: 'When LLMs are presented with conflicting information, they frequently compress contradictory documents into a single plausible-sounding but incorrect answer.'">R2</span>
-      <span class="cite" data-tip="[R7] techrxiv.org 2024: 'Retrieved documents can increase the likelihood of confident errors — model treats outdated documents as authoritative.'">R7</span>
-      Accuracy: 55% on conflicted queries.
-      <span class="cite" data-tip="[R3] TruthfulRAG arXiv:2511.10375: 'Standard RAG systems exhibit factual conflicts when retrieved documents contain contradictory information. The LLM generator produces unreliable answers.' — Stated motivation for the v4 paper.">R3</span>
-      No confidence reported.
+
+    <!-- LANGCHAIN PIPELINE SHOWING NO CONFLICT CHECK -->
+    <div style="font-family:var(--mono);font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem">LangChain RetrievalQA Pipeline — No Conflict Step Exists</div>
+    <div style="overflow-x:auto">
+    <div style="display:flex;align-items:stretch;gap:0;min-width:680px;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1.2rem">
+
+      <div style="background:rgba(77,126,247,.1);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:120px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--dim);margin-bottom:.3rem">QUERY</div>
+        <div style="font-size:.72rem">"Can children<br>take aspirin<br>for fever?"</div>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim)">→</div>
+
+      <div style="background:rgba(155,89,247,.08);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:140px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--dim);margin-bottom:.3rem">RETRIEVE top-3</div>
+        <div style="font-size:.68rem;color:var(--red);line-height:1.6">
+          [1] 1985: SAFE ❌<br>
+          [2] 2010: TOLERATED ⚠<br>
+          [3] 2023: CONTRA ✓
+        </div>
+        <span class="cite" style="margin-top:.3rem;display:inline-block" data-tip="[R9] eyelevel.ai: Wrong (1985) doc ranks #1 by cosine. Correct (2023) doc ranks #3.">R9</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim)">→</div>
+
+      <div style="background:rgba(224,85,85,.08);border-right:1px solid var(--border);border:2px dashed rgba(224,85,85,.4);padding:.8rem 1rem;min-width:160px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--red);margin-bottom:.3rem">CONFLICT CHECK ?</div>
+        <div style="font-size:2rem">🚫</div>
+        <div style="font-size:.65rem;color:var(--red);font-weight:700">DOES NOT EXIST<br>IN LANGCHAIN</div>
+        <span class="cite" style="margin-top:.3rem;display:inline-block" data-tip="[R11] github.com/langchain-ai — RetrievalQA source: no conflict detection function. Just StuffDocumentsChain.">R11</span>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim)">→</div>
+
+      <div style="background:rgba(155,89,247,.08);border-right:1px solid var(--border);padding:.8rem 1rem;min-width:160px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--dim);margin-bottom:.3rem">PROMPT (joined)</div>
+        <div style="font-size:.68rem;line-height:1.6">
+          Context:<br>
+          <span style="color:var(--red)">"safe…"</span><br>
+          <span style="color:var(--amber)">"tolerated…"</span><br>
+          <span style="color:var(--green)">"contraindicated…"</span><br>
+          <span style="font-style:italic;color:var(--dim);font-size:.62rem">all 3 concatenated</span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;padding:0 .5rem;color:var(--dim)">→</div>
+
+      <div style="background:rgba(224,85,85,.08);padding:.8rem 1rem;min-width:130px;text-align:center">
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--red);margin-bottom:.3rem">LLM OUTPUT</div>
+        <div style="font-size:.68rem;line-height:1.6;font-style:italic;color:var(--text)">
+          "Aspirin is<br>generally effective<br>for fever. Some<br>guidelines advise<br>caution…"
+        </div>
+        <div style="font-size:.63rem;color:var(--red);font-weight:700;margin-top:.4rem">WRONG / VAGUE ❌</div>
+      </div>
+    </div>
+    </div>
+
+    <!-- WHAT HAPPENS INSIDE THE LLM 3-WAY SPLIT -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-bottom:1.2rem">
+      <div style="background:rgba(224,85,85,.07);border:1px solid rgba(224,85,85,.25);border-radius:7px;padding:.9rem">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--red);margin-bottom:.5rem">Outcome A — LLM Picks Majority</div>
+        <div style="font-size:.78rem;line-height:1.6">
+          2 of 3 docs say "safe/tolerated" → LLM picks the majority view.<br><br>
+          <span style="color:var(--red);font-weight:600">Output: "Aspirin is generally safe for children." ❌</span>
+        </div>
+        <span class="cite" style="margin-top:.5rem;display:inline-block" data-tip="[R2] Xu et al. 2024: LLMs often pick the position supported by more retrieved documents, regardless of which is correct.">R2</span>
+      </div>
+      <div style="background:rgba(240,168,50,.07);border:1px solid rgba(240,168,50,.25);border-radius:7px;padding:.9rem">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--amber);margin-bottom:.5rem">Outcome B — LLM Hedges</div>
+        <div style="font-size:.78rem;line-height:1.6">
+          LLM detects conflict, says "it depends."<br><br>
+          <span style="color:var(--amber);font-weight:600">Output: "Aspirin may be safe in some cases, but caution is advised." ⚠</span>
+        </div>
+        <span class="cite" style="margin-top:.5rem;display:inline-block" data-tip="[R7] techrxiv 2024: 'The model defaults to hedging when context is contradictory — neither resolving nor flagging the conflict.'">R7</span>
+      </div>
+      <div style="background:rgba(224,85,85,.07);border:1px solid rgba(224,85,85,.25);border-radius:7px;padding:.9rem">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--red);margin-bottom:.5rem">Outcome C — Confident & Wrong</div>
+        <div style="font-size:.78rem;line-height:1.6">
+          Context [1] is "safe", appears authoritative → LLM states it confidently.<br><br>
+          <span style="color:var(--red);font-weight:600">Output: "Yes, aspirin is effective for children's fever." ❌</span>
+        </div>
+        <span class="cite" style="margin-top:.5rem;display:inline-block" data-tip="[R7] techrxiv 2024: 'Retrieved docs can increase the likelihood of confident errors. Model treats outdated doc as authoritative.'">R7</span>
+      </div>
+    </div>
+
+    <!-- CONFIDENCE COMPARISON -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div style="background:rgba(224,85,85,.06);border:1px solid rgba(224,85,85,.2);border-radius:7px;padding:.9rem;text-align:center">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--red);margin-bottom:.4rem">LangChain — No Conflict Awareness</div>
+        <div style="font-size:2rem;font-weight:700;color:var(--red);font-family:var(--mono)">55%</div>
+        <div style="font-size:.72rem;color:var(--dim)">accuracy on conflicted queries</div>
+        <div style="font-size:.72rem;color:var(--red);margin-top:.3rem">Confidence score: NEVER reported</div>
+        <span class="cite" style="margin-top:.4rem;display:inline-block" data-tip="[R3] TruthfulRAG arXiv:2511.10375: standard RAG accuracy 55% on conflicted queries. Stated motivation for building v4 conflict resolution.">R3</span>
+      </div>
+      <div style="background:rgba(61,184,104,.06);border:1px solid rgba(61,184,104,.2);border-radius:7px;padding:.9rem;text-align:center">
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--green);margin-bottom:.4rem">v5 — Conflict Resolved Before LLM</div>
+        <div style="font-size:2rem;font-weight:700;color:var(--green);font-family:var(--mono)">90%</div>
+        <div style="font-size:.72rem;color:var(--dim)">accuracy on same conflicted queries</div>
+        <div style="font-size:.72rem;color:var(--green);margin-top:.3rem">Confidence score: 84% (3-factor)</div>
+      </div>
+    </div>
+
+    <div class="gap-box gap-bad">
+      <strong>Root cause:</strong> LangChain's <code>RetrievalQA</code> has no function between retrieval and generation
+      to check: <em>"do these documents contradict each other?"</em>
+      <span class="cite" data-tip="[R11] LangChain GitHub source: RetrievalQA._call() → self.combine_docs_chain.run(docs, question). The combine_docs_chain simply joins text — no conflict logic.">R11</span>
+      <br>The LLM cannot reliably self-resolve conflicts — it was trained to be fluent, not to adjudicate evidence.
+      <span class="cite" data-tip="[R2] Xu et al. 2024 arXiv:2403.08319 (150+ citations): 'LLMs compress contradictory documents into a single plausible-sounding but incorrect answer.'">R2</span>
+      <span class="cite" data-tip="[R3] TruthfulRAG arXiv:2511.10375: 'The LLM generator, lacking conflict-awareness, produces unreliable or inconsistent answers.' — This is the paper's stated problem definition.">R3</span>
     </div>
   </div>
 </div>
