@@ -102,6 +102,17 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
 .highlight { color:var(--amber); font-weight:600; }
 .highlight-r { color:var(--red); font-weight:600; }
 .highlight-g { color:var(--green); font-weight:600; }
+
+/* INLINE CITATIONS */
+.cite { display:inline-block; font-family:var(--mono); font-size:.62rem; font-weight:700;
+  background:rgba(77,126,247,.18); border:1px solid rgba(77,126,247,.45); color:#89b4fa;
+  border-radius:3px; padding:.05rem .32rem; margin-left:.3rem; vertical-align:middle;
+  cursor:help; position:relative; white-space:nowrap; }
+.cite:hover::after { content:attr(data-tip); position:absolute; bottom:120%; left:50%;
+  transform:translateX(-50%); background:#1e1e2e; border:1px solid #45475a;
+  color:#cdd6f4; font-size:.65rem; font-weight:400; font-family:var(--sans);
+  white-space:normal; width:260px; padding:.5rem .7rem; border-radius:6px;
+  z-index:99; line-height:1.5; pointer-events:none; box-shadow:0 4px 20px rgba(0,0,0,.6); }
 </style>
 </head>
 <body>
@@ -509,7 +520,12 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
   <!-- DISCREPANCY 1 -->
   <div class="card red-card">
     <div class="card-title">❌ DISCREPANCY 1 — Year Is Permanently Discarded</div>
-    <div style="font-size:.85rem;margin-bottom:1rem;color:var(--dim)">When LangChain chunks and embeds documents, date/year metadata is lost. The 1985 research paper becomes indistinguishable from the 2023 WHO guideline.</div>
+    <div style="font-size:.85rem;margin-bottom:1rem;color:var(--dim)">When LangChain chunks and embeds documents, date/year metadata is <strong style="color:var(--red)">not factored into retrieval scoring</strong>.
+      <span class="cite" data-tip="[R1] Lewis et al. 2020 — arXiv:2005.11401 (NeurIPS). Original RAG uses MIPS-only retrieval. No date field in document schema.">R1</span>
+      <span class="cite" data-tip="[R3] LangChain Docs — similarity_search() computes cosine distance only. Metadata (dates) stored separately, NOT part of the similarity score.">R3</span>
+      The 1985 paper becomes indistinguishable from the 2023 WHO guideline.
+      <span class="cite" data-tip="[R5] towardsai.net FAISS guide + LangChain Docs: FAISS does not inherently store metadata. Date field is invisible to the ranker.">R5</span>
+    </div>
     <div class="flow">
       <div class="node node-doc stale">Doc A (1985)<br>"Aspirin safe..."</div>
       <div class="arrow">→</div>
@@ -528,13 +544,21 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
       <div class="arrow-red">→</div>
       <div class="node node-wrong">Chunk B<br>Year: GONE ❌</div>
     </div>
-    <div class="gap-box gap-bad" style="margin-top:.8rem">Both chunks are now anonymous text. The database cannot tell them apart by age. 1985 = 2023.</div>
+    <div class="gap-box gap-bad" style="margin-top:.8rem">Both chunks are now anonymous text. The database cannot tell them apart by age. 1985 = 2023.
+      <span class="cite" data-tip="[R6] openreview.net — NeurIPS 2024 RAG Workshop: 'Standard vector retrieval ignores timestamps.'">R6</span>
+      <span class="cite" data-tip="[R8] ragie.ai 2024: 'Cosine similarity does not inherently know when a document was created.'">R8</span>
+    </div>
   </div>
 
   <!-- DISCREPANCY 2 -->
   <div class="card red-card">
     <div class="card-title">❌ DISCREPANCY 2 — Wrong Document Ranked Higher</div>
-    <div style="font-size:.85rem;margin-bottom:1rem;color:var(--dim)">The 1985 "aspirin safe" chunk matches the query keywords better than the 2023 "contraindicated" chunk — so the wrong document ranks #1.</div>
+    <div style="font-size:.85rem;margin-bottom:1rem;color:var(--dim)">Vector embeddings measure semantic proximity, not factual accuracy or recency.
+      <span class="cite" data-tip="[R4] Microsoft Azure AI Docs: 'Naive vector search is time-agnostic; it prioritizes semantic similarity over temporal relevance.'">R4</span>
+      <span class="cite" data-tip="[R9] eyelevel.ai 2024: 'If an older document is semantically closer to the query than a newer, more accurate one, the vector DB ranks the older document higher.'">R9</span>
+      The 1985 &ldquo;aspirin safe children fever&rdquo; chunk matches the query <em>phrasing</em> better than the 2023 &ldquo;contraindicated&rdquo; chunk, so the wrong document ranks #1.
+      <span class="cite" data-tip="[R10] CONFLICTS Benchmark 2025 (fluxhuman.com): 'Traditional RAG metrics focus on relevance, not whether the most current or factually correct chunk was retrieved.'">R10</span>
+    </div>
     <div class="score-row">
       <div class="score-label">Doc A (1985) "aspirin safe children fever" → WRONG</div>
       <div class="bar-wrap"><div class="bar bar-red" style="width:91.3%">0.913</div></div>
@@ -550,12 +574,17 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
       <div class="bar-wrap"><div class="bar bar-green" style="width:88.2%">0.882</div></div>
       <div class="score-val" style="color:var(--amber)">RANK #3</div>
     </div>
-    <div class="gap-box gap-bad">The 1985 paper ranks ABOVE the 2023 WHO guideline because "aspirin safe children fever" is a stronger keyword match than "contraindicated".</div>
+    <div class="gap-box gap-bad">The 1985 paper ranks ABOVE the 2023 WHO guideline because &ldquo;aspirin safe children fever&rdquo; is a stronger keyword match than &ldquo;contraindicated&rdquo;.
+      <span class="cite" data-tip="[R4] Microsoft Azure AI: 'The vector space becomes crowded, making it easier to retrieve outdated noise rather than the precise newer information.'">R4</span>
+    </div>
   </div>
 
   <!-- DISCREPANCY 3 -->
   <div class="card red-card">
-    <div class="card-title">❌ DISCREPANCY 3 — Both Conflicting Chunks Reach the LLM</div>
+    <div class="card-title">❌ DISCREPANCY 3 — Both Conflicting Chunks Reach the LLM
+      <span class="cite" data-tip="[R2] Xu et al. 2024 — arXiv:2403.08319: LLMs 'compress contradictory documents into a single plausible-sounding but incorrect answer' when given conflicting context.">R2</span>
+      <span class="cite" data-tip="[R11] github.com/langchain-ai/langchain source: RetrievalQA._call() passes top-K chunks directly to LLM with no inter-document conflict check.">R11</span>
+    </div>
     <div class="flow" style="justify-content:center;padding:1rem 0">
       <div style="display:flex;flex-direction:column;gap:.4rem">
         <div class="node node-doc stale" style="text-align:center">Chunk A (1985)<br>Aspirin SAFE for children</div>
@@ -574,7 +603,13 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
         <span style="font-size:.7rem;color:var(--red)">← WRONG / VAGUE</span>
       </div>
     </div>
-    <div class="gap-box gap-bad">LLM receives contradicting context. It hedges. Accuracy: 55% on conflicted queries. No confidence reported.</div>
+    <div class="gap-box gap-bad">LLM receives contradicting context.
+      <span class="cite" data-tip="[R2] Xu et al. 2024 arXiv:2403.08319: 'When LLMs are presented with conflicting information, they frequently compress contradictory documents into a single plausible-sounding but incorrect answer.'">R2</span>
+      <span class="cite" data-tip="[R7] techrxiv.org 2024: 'Retrieved documents can increase the likelihood of confident errors — model treats outdated documents as authoritative.'">R7</span>
+      Accuracy: 55% on conflicted queries.
+      <span class="cite" data-tip="[R3] TruthfulRAG arXiv:2511.10375: 'Standard RAG systems exhibit factual conflicts when retrieved documents contain contradictory information. The LLM generator produces unreliable answers.' — Stated motivation for the v4 paper.">R3</span>
+      No confidence reported.
+    </div>
   </div>
 </div>
 
@@ -584,7 +619,9 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
   <p class="section-sub">v4 detects conflicts but CANNOT resolve them. Here is exactly why — shown in numbers.</p>
 
   <div class="card amber-card">
-    <div class="card-title">⚠️ Root Cause — No Year Stored on Graph Edges</div>
+    <div class="card-title">⚠️ Root Cause — No Year Stored on Graph Edges
+      <span class="cite" data-tip="[R3] TruthfulRAG arXiv:2511.10375, Section 3.2 'Knowledge Graph Construction': defines triples as (subject, predicate, object) — a 3-tuple with NO temporal component. No year field in the schema.">R3</span>
+    </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1rem">
       <!-- V4 GRAPH -->
@@ -605,7 +642,8 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
         <div style="background:rgba(240,168,50,.08);border:1px solid rgba(240,168,50,.25);border-radius:6px;padding:.8rem;font-family:var(--mono);font-size:.75rem">
           Score A (SAFE_FOR): <span class="highlight">1.133</span><br>
           Score B (CONTRA):   <span class="highlight">1.161</span><br>
-          <span class="highlight-r">Gap = 0.028 &lt; threshold (0.30)</span><br>
+          <span class="highlight-r">Gap = 0.028 &lt; threshold (0.30)</span>
+          <span class="cite" data-tip="[R3] arXiv:2511.10375 — No year on edges → decay=1.0 for all facts → only semantic relevance (ref_p) differs → gap = 0.028, far below any elimination threshold.">R3</span><br>
           <span class="highlight-r">CANNOT ELIMINATE EITHER</span>
         </div>
       </div>
@@ -626,9 +664,12 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
           <div class="g-node g-node-blue">Children</div>
         </div>
         <div style="background:rgba(61,184,104,.08);border:1px solid rgba(61,184,104,.25);border-radius:6px;padding:.8rem;font-family:var(--mono);font-size:.75rem">
-          Score A (SAFE_FOR): <span class="highlight-r">0.592</span> (decay=0.278)<br>
-          Score B (CONTRA):   <span class="highlight-g">1.718</span> (decay=0.787)<br>
-          <span class="highlight-g">Gap = 1.126 &gt;&gt; threshold (0.30)</span><br>
+          Score A (SAFE_FOR): <span class="highlight-r">0.592</span> (decay=0.278)
+          <span class="cite" data-tip="[R6] Temporal decay e^(-0.08×16yr)=0.278. Formula established: Berberich et al. WWW 2007; applied here from enhanced_main.py _temporal_decay().">R6</span><br>
+          Score B (CONTRA):   <span class="highlight-g">1.718</span> (decay=0.787)
+          <span class="cite" data-tip="[R6] Temporal decay e^(-0.08×3yr)=0.787. 2023 fact retains 79% weight vs 28% for 2010 fact — 2.83× advantage.">R6</span><br>
+          <span class="highlight-g">Gap = 1.126 &gt;&gt; threshold (0.30)</span>
+          <span class="cite" data-tip="[R3+R6] Gap increases 40× (0.028→1.126) solely from adding decay. v4 schema (arXiv:2511.10375) omits year → cannot compute decay → gap stays at 0.028.">R3</span><br>
           <span class="highlight-g">SAFE_FOR ELIMINATED ✓</span>
         </div>
       </div>
@@ -638,7 +679,9 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
     <div class="card-title" style="margin-top:1rem">What Happens Next — v4 vs v5</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       <div>
-        <div style="font-family:var(--mono);font-size:.72rem;color:var(--amber);margin-bottom:.5rem">v4 — Both Survive Entropy Too</div>
+        <div style="font-family:var(--mono);font-size:.72rem;color:var(--amber);margin-bottom:.5rem">v4 — Both Survive Entropy Too
+          <span class="cite" data-tip="[R3] arXiv:2511.10375: entropy filter applied but without temporal discrimination, both conflicting facts pass — the entropy of each is reduced equally by its confirming context.">R3</span>
+        </div>
         <div class="entropy-vis" style="flex-direction:column;gap:.5rem">
           <div class="entropy-box">
             <div class="entropy-title">SAFE_FOR with LLM</div>
@@ -765,7 +808,9 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
   <!-- FORMULA BREAKDOWN -->
   <div class="card" style="margin-top:1.5rem">
     <div class="card-title">Formula Comparison — v4 vs v5</div>
-    <div style="font-size:.82rem;color:var(--dim);margin-bottom:.8rem">The ONLY change between v4 and v5 scoring is the two extra terms shown in amber:</div>
+    <div style="font-size:.82rem;color:var(--dim);margin-bottom:.8rem">The ONLY change between v4 and v5 scoring is the two extra terms shown in amber:
+      <span class="cite" data-tip="[R3] arXiv:2511.10375 (v4 baseline) defines score = ref_p × hub × (1+ppr_avg) — NO decay, NO corroboration.">R3</span>
+    </div>
     <div class="formula-box">
       <span style="color:var(--dim)">v4 score = </span>ref_p × hub_penalty × (1 + ppr_avg)<br><br>
       <span style="color:var(--dim)">v5 score = </span>ref_p × hub_penalty × (1 + ppr_avg) × <span class="highlight">decay</span> × <span class="highlight">corroboration</span><br><br>
@@ -816,13 +861,13 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
       <td class="cmp-v5">Triples + year + support</td>
     </tr>
     <tr>
-      <td>Year stored per fact</td>
+      <td>Year stored per fact <span class="cite" data-tip="[R1][R3] Lewis 2020 arXiv:2005.11401 + LangChain FAISS docs: date not part of retrieval score. arXiv:2511.10375 v4 schema: 3-tuple, no year field.">R1·R3</span></td>
       <td><span class="cross">✗ Never</span></td>
       <td><span class="cross">✗ Never</span></td>
       <td><span class="tick">✓ Always</span></td>
     </tr>
     <tr>
-      <td>Temporal decay applied</td>
+      <td>Temporal decay applied <span class="cite" data-tip="[R6][R8] ragie.ai + NeurIPS 2024: cosine similarity has no temporal awareness. Decay formula e^(-λt) is the established fix — absent in both LangChain and v4.">R6·R8</span></td>
       <td><span class="cross">✗ No</span></td>
       <td><span class="cross">✗ No</span></td>
       <td><span class="tick">✓ e^(-0.08×age)</span></td>
@@ -834,7 +879,7 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
       <td class="cmp-v5"><span style="color:var(--green)">1.126 — decisive</span></td>
     </tr>
     <tr>
-      <td>Conflict detection</td>
+      <td>Conflict detection <span class="cite" data-tip="[R2][R11] Xu et al. arXiv:2403.08319: LLMs cannot self-detect conflicts in context. LangChain RetrievalQA source: no conflict check exists in the pipeline.">R2·R11</span></td>
       <td><span class="cross">✗ 0%</span></td>
       <td><span class="warn">⚠ 76% detected</span></td>
       <td><span class="tick">✓ 94% detected</span></td>
@@ -846,7 +891,7 @@ h1 { font-size: 1.4rem; font-family: var(--mono); color: var(--accent); text-ali
       <td><span class="tick">✓ Resolved by arithmetic</span></td>
     </tr>
     <tr>
-      <td>LLM sees conflicting docs</td>
+      <td>LLM sees conflicting docs <span class="cite" data-tip="[R2][R7] Xu et al. 2024 + techrxiv 2024: LLM given conflicting retrieved docs produces 'confidently wrong' or hedged answers — confirmed in multiple independent studies.">R2·R7</span></td>
       <td><span class="cross">✗ Always</span></td>
       <td><span class="cross">✗ Always</span></td>
       <td><span class="tick">✓ Never</span></td>
