@@ -186,9 +186,9 @@ graph TD
     subgraph QRY["2.  Query Processing"]
         QUERY["💬 User Query\n'Can children take aspirin for fever?'"]
 
-        QUERY --> INTENT["🎯 Intent Detection  [C7]\n_detect_intent()\n\nfactual_lookup → tau = 0.30\ntemporal       → tau = 0.25\ncausal         → tau = 0.25"]
+        QUERY --> INTENT["🎯 Intent Detection  [C7]\ndetect_intent()\n\nfactual_lookup → tau = 0.30\ntemporal       → tau = 0.25\ncausal         → tau = 0.25"]
 
-        QUERY --> ENTITIES["🏷 Entity Extraction\n_extract_entities()\n\nseeds = {Aspirin, Children, Fever}\n|seeds| = 3"]
+        QUERY --> ENTITIES["🏷 Entity Extraction\n_keys()\n\nseeds = {Aspirin, Children, Fever}\n|seeds| = 3"]
 
         QUERY --> SNAP["📅 Temporal Snapshot  [N4]\n_extract_query_year()\n\nregex: \\b(19|20)\\d{2}\\b\n'in 1985' → WHERE r.year ≤ 1985\nno year → all edges eligible"]
     end
@@ -245,7 +245,7 @@ graph TD
 
     %% ── ANSWER ─────────────────────────────────────────────────────────────
     subgraph ANS["8.  Final Answer"]
-        CSCR --> LLM["🤖 LLM sees ONLY 3 surviving facts\n\n[1] Aspirin CONTRA Children  [2023, sup:2]\n[2] Aspirin CAUSES  ReySyn   [2023, sup:2]\n[3] Aspirin TREATS  Fever    [2010, sup:2]\n[✗] SAFE_FOR — permanently hidden"]
+        CSCR --> LLM["🤖 LLM sees ONLY 3 of 4 facts\n\n[1] Aspirin CONTRA Children  [2023, sup:2]\n[2] Aspirin CAUSES  ReySyn   [2023, sup:2]\n[3] Aspirin TREATS  Fever    [2010, sup:2]\n[✗] SAFE_FOR — permanently hidden (eliminated pre-LLM)"]
 
         LLM --> OUT(["✅ CORRECT ANSWER\n'No. Aspirin is contraindicated in children.\nReye's Syndrome risk (WHO 2023, FDA 2020).\nUse ibuprofen or paracetamol.'\n\nConfidence: 84%  |  Conflicts resolved: 1"])
     end
