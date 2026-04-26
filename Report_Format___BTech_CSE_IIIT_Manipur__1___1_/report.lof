@@ -1,24 +1,36 @@
 \addvspace {10\p@ }
 \addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces RAG research evolution timeline: 2020--2026, positioning TruthfulRAG v5 in the literature landscape}}{6}{figure.caption.6}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Project development Gantt chart: 15 January 2026 to 24 April 2026 (14 weeks)}}{8}{figure.caption.8}%
 \addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Use case diagram for TruthfulRAG v5. The primary actor (\emph {User}) initiates four interactions. \emph {Ollama LLM} (secondary actor) handles schema inference and answer generation; \emph {Neo4j} handles graph storage and retrieval. Dashed arrows show \textit {include} (mandatory sub-step) and \textit {extend} (optional enrichment) relationships.}}{10}{figure.caption.9}%
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {4.1}{\ignorespaces Six-layer system architecture of TruthfulRAG v5}}{16}{figure.caption.7}%
-\contentsline {figure}{\numberline {4.2}{\ignorespaces Level-0 Context DFD for TruthfulRAG v5}}{17}{figure.caption.8}%
-\contentsline {figure}{\numberline {4.3}{\ignorespaces Level-1 DFD showing the four internal sub-processes}}{17}{figure.caption.9}%
-\contentsline {figure}{\numberline {4.4}{\ignorespaces UML class diagram for \texttt {enhanced\_main.py}}}{18}{figure.caption.11}%
-\contentsline {figure}{\numberline {4.5}{\ignorespaces Conflict resolution decision flowchart (Module C)}}{20}{figure.caption.12}%
-\contentsline {figure}{\numberline {4.6}{\ignorespaces End-to-end sequence diagram for corpus load and query}}{21}{figure.caption.14}%
-\contentsline {figure}{\numberline {4.7}{\ignorespaces TruthfulRAG v5 live chatbot --- dual-panel comparison interface}}{22}{figure.caption.15}%
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Six-layer pipeline architecture of TruthfulRAG v5.}}{14}{figure.caption.11}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces End-to-end pipeline flow of TruthfulRAG v5 (landscape view). Eight stages — \emph {Corpus Ingestion} [A1/N1/N4/N5], \emph {Hybrid Retrieval} [BM25+Semantic], \emph {Query Processing} [B4/C7], \emph {Scoring} [N2], \emph {Conflict Resolution} [SAFE\_FOR elimination], \emph {Adaptive Entropy Filter} [auto-keep], \emph {Confidence Calculation}, and \emph {Final Answer} — are shown with their decision logic and inter-stage data flows. Function identifiers in brackets correspond to the implementation in Chapter~5.}}{16}{figure.caption.12}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces Property graph model for TruthfulRAG v5 (the graph-database equivalent of an ER diagram). \emph {Top}: Schema — one node type \texttt {:Entity} with properties \texttt {name} and \texttt {type}; one relationship type \texttt {RELATED\_TO} carrying the five properties used for scoring and conflict resolution. \emph {Bottom}: Two instance edges from the medical corpus showing the conflicting aspirin facts that the v5 conflict resolver must adjudicate.}}{17}{figure.caption.13}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces Deployment architecture of TruthfulRAG v5. All three components --- the core pipeline, the graph database, and the language model --- run on the same machine with no external network connections. No user data leaves the host at any point.}}{18}{figure.caption.14}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces Activity diagram for query processing in TruthfulRAG v5. The conflict-resolution branch (left) loops back until all contradicting facts are resolved before the surviving evidence is assembled into the final prompt.}}{19}{figure.caption.15}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces State transition diagram for TruthfulRAG v5. Normal execution cycles: \textsc {Idle} $\to $ \textsc {Ingesting} $\to $ \textsc {Ready} $\to $ \textsc {Retrieving} $\to $ \textsc {Resolving} $\to $ \textsc {Generating} $\to $ \textsc {Ready}. Any runtime error transitions the system to \textsc {Error}; a process restart resets it to \textsc {Idle}.}}{20}{figure.caption.16}%
+\contentsline {figure}{\numberline {4.7}{\ignorespaces Level-0 Context DFD for TruthfulRAG v5. The circle is the complete system; rectangles are external entities. Solid arrows = inputs; dashed = outputs.}}{22}{figure.caption.17}%
+\contentsline {figure}{\numberline {4.8}{\ignorespaces Level-1 DFD: the four internal sub-processes of TruthfulRAG v5 and their external service interactions. Each row is fully independent; solid arrows are requests, dashed arrows are responses.}}{23}{figure.caption.18}%
+\contentsline {figure}{\numberline {4.9}{\ignorespaces End-to-end sequence diagram for corpus load and query}}{25}{figure.caption.19}%
 \addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Pseudocode for the temporal decay function used in Layer 3 (Retrieval).}}{31}{figure.caption.23}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Pseudocode for composite path scoring combining PPR, temporal decay, and corroboration.}}{31}{figure.caption.25}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces Pseudocode for Shannon entropy estimation over sampled LLM answers.}}{32}{figure.caption.27}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces Pseudocode for the three-factor calibrated confidence score.}}{32}{figure.caption.29}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces Worked example of the three-factor confidence score (Algorithm 4). The entropy signal, corroboration bonus, and recency weight sum to give the final confidence percentage displayed to the user.}}{32}{figure.caption.30}%
+\contentsline {figure}{\numberline {5.6}{\ignorespaces Pseudocode for the robust JSON extraction wrapper applied to all LLM calls.}}{33}{figure.caption.32}%
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {6.1}{\ignorespaces Project development Gantt chart: 15 January 2026 to 24 April 2026 (14 weeks)}}{32}{figure.caption.24}%
-\contentsline {figure}{\numberline {6.2}{\ignorespaces Answer accuracy across all three system generations and question types}}{34}{figure.caption.27}%
-\contentsline {figure}{\numberline {6.3}{\ignorespaces Six-dimension capability radar chart: LangChain RAG vs.\ TruthfulRAG v5}}{35}{figure.caption.28}%
-\contentsline {figure}{\numberline {6.4}{\ignorespaces How a fact's retrieval weight decays as it ages ($\lambda = 0.08$)}}{35}{figure.caption.29}%
-\contentsline {figure}{\numberline {6.5}{\ignorespaces Score gap between conflicting facts: v4 (tied) vs.\ v5 (gap created by decay)}}{36}{figure.caption.30}%
-\contentsline {figure}{\numberline {6.6}{\ignorespaces Corroboration bonus as a function of source support count [N1]}}{36}{figure.caption.31}%
-\contentsline {figure}{\numberline {6.7}{\ignorespaces [N5] Calibrated confidence score breakdown across four evaluation queries}}{36}{figure.caption.32}%
-\contentsline {figure}{\numberline {6.8}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline across all domains}}{37}{figure.caption.33}%
-\contentsline {figure}{\numberline {6.9}{\ignorespaces Side-by-side comparison: LC RAG vs.\ TruthfulRAG v5 on conflicted medical query}}{37}{figure.caption.34}%
-\contentsline {figure}{\numberline {6.10}{\ignorespaces Claim Verification Mode [N6] --- REFUTED verdict with graph evidence}}{37}{figure.caption.35}%
+\contentsline {figure}{\numberline {6.1}{\ignorespaces HaluEval: Hallucination Rejection Rate vs.\ Exact Match across three systems (200 samples)}}{37}{figure.caption.35}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Conflict Detection Rate: LangChain and v4 = 25\% (random baseline); v5 = 50\% (2$\times $ improvement)}}{38}{figure.caption.37}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces Complete benchmark summary: HRR\%, CDR\%, and Temporal Accuracy\% across all three systems}}{38}{figure.caption.38}%
+\contentsline {figure}{\numberline {6.4}{\ignorespaces Answer accuracy by question type across three systems}}{40}{figure.caption.41}%
+\contentsline {figure}{\numberline {6.5}{\ignorespaces Six-dimension capability radar: LangChain vs.\ v5}}{40}{figure.caption.41}%
+\contentsline {figure}{\numberline {6.6}{\ignorespaces Fact retrieval weight vs.\ age ($\lambda = 0.08$). A 2006 discovery retains $\approx $20\% weight by 2026.}}{40}{figure.caption.42}%
+\contentsline {figure}{\numberline {6.7}{\ignorespaces Conflict resolution comparison. In v4 (left), both facts score near equally ($\Delta = 0.028 < 0.30$) and both reach the LLM, causing a hedged answer. In v5 (right), temporal decay widens the gap to $1.126 \gg 0.30$; the stale 2010 fact is discarded before the LLM is called, yielding a correct answer.}}{41}{figure.caption.44}%
+\contentsline {figure}{\numberline {6.8}{\ignorespaces Score gap comparison: LangChain\,=\,0.000, v4\,=\,0.028, v5\,=\,1.126}}{41}{figure.caption.45}%
+\contentsline {figure}{\numberline {6.9}{\ignorespaces Corroboration bonus vs.\ source support count}}{42}{figure.caption.46}%
+\contentsline {figure}{\numberline {6.10}{\ignorespaces Confidence score breakdown across four queries}}{42}{figure.caption.46}%
+\contentsline {figure}{\numberline {6.11}{\ignorespaces Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline across all domains}}{42}{figure.caption.47}%
 \addvspace {10\p@ }

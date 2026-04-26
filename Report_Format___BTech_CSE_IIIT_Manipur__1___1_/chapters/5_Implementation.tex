@@ -1,21 +1,18 @@
-﻿
+
 % ================================================================
 % CHAPTER 5: IMPLEMENTATION
 % ================================================================
 
 \section{Development Environment}
 
-\subsection{Programming Language: Python 3.11}
+\subsection{Programming Language: Python 3.x}
 
-The project is implemented entirely in Python 3.11. The choice of Python was
-not arbitrary. Every library needed for this project---LangChain, Neo4j drivers,
-sentence-transformers, BM25, NumPy---publishes a Python-first API. Attempting
+The project is implemented in Python (version 3.11 or above). The choice of Python was
+not arbitrary. Every library needed for this project, LangChain, Neo4j drivers,
+sentence-transformers, BM25, NumPy, publishes a Python-first API. Attempting
 to replicate this stack in Java or Go would mean either writing driver wrappers
 from scratch or forgoing the LangChain abstractions entirely, which would
-significantly increase development time without any algorithmic benefit. Python
-3.11 specifically was chosen over 3.12 because the version of LangChain used
-(0.3.x) had a known compatibility issue with Python 3.12's stricter type
-annotations at the time of development.
+significantly increase development time without any algorithmic benefit.
 
 \subsection{IDE: Visual Studio Code}
 
@@ -42,6 +39,7 @@ offending change in under two minutes.
 \caption{Software stack and version details}
 \label{tab:deps}
 \resizebox{\textwidth}{!}{%
+\footnotesize
 \begin{tabular}{|l|l|l|}
 \hline
 \textbf{Component} & \textbf{Package} & \textbf{Purpose} \\
@@ -58,12 +56,12 @@ Environment Loader  & \texttt{python-dotenv}                                 & C
 \end{table}
 
 \textbf{Why LangChain?}
-LangChain provides two features that would otherwise require significant
-custom code: the \texttt{Neo4jGraph} Bolt connection wrapper and the
-\texttt{LLMGraphTransformer} class that translates raw text into graph triples.
-Writing a Neo4j Bolt client and an LLM-powered triple extractor from scratch is
-feasible but would add approximately 400--600 lines of boilerplate. LangChain's
-abstractions reduced this to roughly 20 lines of configuration.
+LangChain provides two things that would otherwise require writing a lot of
+boilerplate: the \texttt{Neo4jGraph} Bolt connection wrapper and the
+\texttt{LLMGraphTransformer} class that turns raw text into graph triples.
+Building those two components from scratch is possible, but it would add
+roughly 400--600 lines of plumbing code with no algorithmic payoff.
+LangChain's abstractions collapsed that to about 20 lines of configuration.
 
 \textbf{Why Neo4j over a Vector Store (such as Chroma or FAISS)?}
 Vector stores store chunks of text as numerical embeddings and retrieve them
@@ -71,8 +69,8 @@ by cosine similarity. This approach has one fundamental limitation: it cannot
 represent \emph{relationships} between facts. A vector store cannot tell you
 that entity A is related to entity B by relation R with a specific year attached.
 Neo4j's property graph model stores exactly this structure natively. The ability
-to attach \texttt{year} and \texttt{support} as properties on an edge---and then
-query them with Cypher---is what makes temporal decay and corroboration scoring
+to attach \texttt{year} and \texttt{support} as properties on an edge, and then
+query them with Cypher, is what makes temporal decay and corroboration scoring
 possible at all. No vector store supports this without external bookkeeping.
 
 \textbf{Why Neo4j Community Edition specifically?}
@@ -117,8 +115,8 @@ benchmark performance.
 Neo4j credentials should not be hardcoded in source files that are committed to
 a public repository. \texttt{python-dotenv} reads a \texttt{.env} file at
 runtime and injects its values as environment variables. This is a standard,
-well-understood pattern. The alternative---command-line arguments for every
-credential---would make the system harder to run and easier to accidentally
+well-understood pattern. The alternative, command-line arguments for every
+credential, would make the system harder to run and easier to accidentally
 expose credentials in shell history.
 
 % ----------------------------------------------------------------
@@ -188,12 +186,14 @@ it to make the right choice. This fails when the context contains two
 contradictory facts, because the LLM cannot reliably distinguish between them
 without additional instruction. The entropy approach, taken from arXiv:2511.10375,
 instead measures whether a given piece of context \emph{reduces the LLM's
-uncertainty} about the query. If $\Delta H = H_{\text{context}} - H_{\text{param}}
-< 0$, the context made the LLM less confused, so it is useful. If $\Delta H > 0$,
-the context made the LLM more confused, so it is likely contradictory or
-irrelevant. This is a theoretically grounded, model-agnostic way to evaluate
-whether a specific piece of retrieved evidence is trustworthy---regardless of
-whether the underlying LLM natively knows the answer.
+uncertainty} about the query. If the augmented entropy $H_{\text{aug}}$ is less
+than the parametric entropy $H_{\text{param}}$, the context reduced the LLM's
+uncertainty, so it is useful ($\Delta H = H_{\text{param}} - H_{\text{aug}} > 0$
+means the context helps). If $\Delta H < 0$, the context made the LLM more
+confused, so it is likely contradictory or irrelevant. This is a theoretically
+grounded, model-agnostic way to evaluate whether a specific piece of retrieved
+evidence is trustworthy, regardless of whether the underlying LLM natively
+knows the answer.
 
 % ----------------------------------------------------------------
 \section{Code Implementation}
@@ -215,108 +215,217 @@ The source code is organised into ten logical sections within
     \texttt{if \_\_name\_\_ ==} entry point
 \end{enumerate}
 
-\subsection{Key Code Snippets}
+\subsection{Key Algorithm Pseudocodes}
 
-\subsubsection{Temporal Decay [N2]}
-The exponential decay function reduces the retrieval score of older facts:
-\begin{verbatim}
-def _temporal_decay(self, year):
-    if not self.cfg["use_temporal_decay"] or not year:
-        return 1.0
-    lam = self.cfg["temporal_decay_lambda"]  # 0.08
-    return math.exp(-lam * max(0, CURRENT_YEAR - year))
-\end{verbatim}
+\subsubsection{Algorithm 1: Temporal Decay [N2]}
 
-\subsubsection{Combined Path Scoring}
-All five scoring components are multiplied in a single expression:
-\begin{verbatim}
-corroborate = math.log(1 + sc) * self.cfg["corroboration_weight"]
-decay       = self._temporal_decay(yr)
-combined    = (ref_p * hub_pen) * (1 + ppr_avg) * decay * (1 + corroborate)
-\end{verbatim}
+The exponential decay function reduces the retrieval weight of older facts. A fact published in year $t$ receives weight $e^{-\lambda(Y_{\text{now}}-t)}$, where $\lambda=0.08$ gives a half-life of 8.7 years. If no year is recorded, the fact is treated as maximally fresh ($w=1.0$).
 
-\subsubsection{Shannon Entropy Calculation}
-\begin{verbatim}
-def _H_str(answers):
-    c = Counter(answers); n = len(answers); h = 0.0
-    for v in c.values():
-        p = v / n; h -= p * math.log(p + 1e-9)
-    return h
-\end{verbatim}
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.82\textwidth}
+\hrule\vspace{4pt}
+\textbf{Algorithm 1:} Temporal Decay Weight $w(t)$
+\vspace{4pt}\hrule\vspace{6pt}
+\textbf{Input:} year $t$ (publication year of fact, may be NULL)\\
+\textbf{Output:} decay weight $w \in (0,1]$\\[4pt]
+\textbf{if} temporal\_decay is disabled \textbf{or} $t$ is NULL \textbf{then}\\
+\hspace*{1.2em}\textbf{return} $1.0$\\
+\textbf{end if}\\
+$\lambda \leftarrow 0.08$\hfill\textit{// configurable; default gives half-life $\approx$ 8.7 yr}\\
+$Y_{\text{ref}} \leftarrow$ extract query year from $Q$ if present, else $Y_{\text{now}}$\\
+$\delta \leftarrow \max(0,\; Y_{\text{ref}} - t)$\\
+\textbf{return} $e^{-\lambda \cdot \delta}$
+\vspace{6pt}\hrule
+\end{minipage}
+\caption{Pseudocode for the temporal decay function used in Layer 3 (Retrieval).}
+\label{alg:decay}
+\end{figure}
 
-\subsubsection{Calibrated Confidence Score [N7]}
-\begin{verbatim}
-def _confidence(self, delta_h, tau, support, year_gap):
-    w      = self.cfg["confidence_weights"]
-    h_sig  = min(abs(delta_h) / (tau + 1e-9), 2.0) / 2.0
-    sup_s  = min(math.log(1 + support) / math.log(6), 1.0)
-    rec_s  = math.exp(-0.05 * max(0, year_gap))
-    return round(min(w["h"]*h_sig + w["sup"]*sup_s + w["rec"]*rec_s, 1.0), 3)
-\end{verbatim}
+\subsubsection{Algorithm 2: Combined Path Scoring}
 
-\subsubsection{Schema Inference JSON Parsing [A4+]}
-LLM output may include markdown code fences; stripping them is mandatory:
-\begin{verbatim}
-raw   = cached_invoke(self.llm, SCHEMA_INFER_PROMPT.format(...))
-clean = re.sub(r'```(?:json)?\s*', '', raw).strip()
-m     = re.search(r'\{.*\}', clean, re.DOTALL)
-data  = json.loads(m.group(0) if m else clean)
-\end{verbatim}
+Each retrieved graph path is assigned a single composite score that combines graph topology, recency, and source corroboration:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.82\textwidth}
+\hrule\vspace{4pt}
+\textbf{Algorithm 2:} Composite Path Score
+\vspace{4pt}\hrule\vspace{6pt}
+\textbf{Input:} path $p$, PPR score $r_p$, hub penalty $h_p$, support count $s$, year $t$\\
+\textbf{Output:} composite score $\sigma$\\[4pt]
+$w_{\text{decay}} \leftarrow \text{TemporalDecay}(t)$\hfill\textit{// Algorithm 1}\\
+$w_{\text{corr}} \leftarrow \log(1 + s) \times c_{\text{weight}}$\hfill\textit{// corroboration bonus}\\
+$\sigma \leftarrow (r_p \times h_p) \times (1 + \bar{r}_{\text{PPR}}) \times w_{\text{decay}} \times (1 + w_{\text{corr}})$\\
+\textbf{return} $\sigma$
+\vspace{6pt}\hrule
+\end{minipage}
+\caption{Pseudocode for composite path scoring combining PPR, temporal decay, and corroboration.}
+\label{alg:score}
+\end{figure}
+
+\subsubsection{Algorithm 3: Shannon Entropy Estimation [C2]}
+
+Semantic entropy is estimated by sampling the LLM $n=3$ times at temperature $T=0.7$ and computing the token-diversity entropy of the resulting answers:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.82\textwidth}
+\hrule\vspace{4pt}
+\textbf{Algorithm 3:} Entropy Estimation $H(A)$
+\vspace{4pt}\hrule\vspace{6pt}
+\textbf{Input:} answer list $A = [a_1, a_2, \ldots, a_n]$\\
+\textbf{Output:} entropy $H \geq 0$\\[4pt]
+Count unique answers: $C \leftarrow \{a : \text{count}(a, A)\}$\\
+$n \leftarrow |A|$,\quad $H \leftarrow 0$\\
+\textbf{for each} distinct answer $a$ \textbf{in} $C$ \textbf{do}\\
+\hspace*{1.2em}$p \leftarrow C[a] / n$\\
+\hspace*{1.2em}$H \leftarrow H - p \cdot \log(p + \varepsilon)$\hfill\textit{// $\varepsilon = 10^{-9}$ for numerical stability}\\
+\textbf{end for}\\
+\textbf{return} $H$
+\vspace{6pt}\hrule
+\end{minipage}
+\caption{Pseudocode for Shannon entropy estimation over sampled LLM answers.}
+\label{alg:entropy}
+\end{figure}
+
+\subsubsection{Algorithm 4: Calibrated Confidence Score [N7]}
+
+The three-factor confidence score combines entropy reduction, source support, and recency into a single number in $[0,1]$:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.82\textwidth}
+\hrule\vspace{4pt}
+\textbf{Algorithm 4:} Confidence Score $\kappa$
+\vspace{4pt}\hrule\vspace{6pt}
+\textbf{Input:} $\Delta H$, threshold $\tau$, support $s$, year gap $g$, weights $w_h, w_s, w_r$\\
+\textbf{Output:} confidence $\kappa \in [0,1]$\\[4pt]
+$s_H \leftarrow \min\!\left(\dfrac{|\Delta H|}{\tau + \varepsilon},\; 2\right) \big/ 2$\hfill\textit{// entropy signal, capped at 1}\\[6pt]
+$s_S \leftarrow \min\!\left(\dfrac{\log(1+s)}{\log 6},\; 1\right)$\hfill\textit{// support signal}\\[6pt]
+$s_R \leftarrow e^{-0.05 \cdot \max(0,\, g)}$\hfill\textit{// recency signal}\\[6pt]
+$\kappa \leftarrow \min(w_h \cdot s_H + w_s \cdot s_S + w_r \cdot s_R,\; 1.0)$\\
+\textbf{return} $\kappa$
+\vspace{6pt}\hrule
+\end{minipage}
+\caption{Pseudocode for the three-factor calibrated confidence score.}
+\label{alg:confidence}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\resizebox{0.88\textwidth}{!}{%
+\begin{tikzpicture}[
+  comp/.style={rectangle, draw=black, thick, fill=white,
+               minimum width=3.8cm, minimum height=2.0cm,
+               align=center, font=\small},
+  res/.style={rectangle, draw=black, very thick, fill=black!8,
+              minimum width=8.0cm, minimum height=1.1cm,
+              align=center, font=\small\bfseries},
+  arr/.style={->, >=stealth, thick},
+]
+\node[font=\small\bfseries] at (0,1.8) {Example: Confidence Score $= 84\%$};
+\node[comp] (ent)  at (-5.0, 0) {Entropy Signal\\$h_{\mathrm{sig}} = 1.000$\\weight $= 0.40$\\\textit{contributes} $0.400$};
+\node[comp] (corr) at ( 0.0, 0) {Corroboration\\$\mathrm{sup\_s} = 0.613$\\weight $= 0.30$\\\textit{contributes} $0.184$};
+\node[comp] (rec)  at ( 5.0, 0) {Recency\\$\mathrm{rec\_s} = 0.861$\\weight $= 0.30$\\\textit{contributes} $0.258$};
+\node[res]  (result) at (0,-2.4) {$0.400 + 0.184 + 0.258 \;=\; 0.842 \;\longrightarrow\; \mathbf{84\%\text{ confidence}}$};
+\draw[arr] (ent.south)  -- (result.north west);
+\draw[arr] (corr.south) -- (result.north);
+\draw[arr] (rec.south)  -- (result.north east);
+\end{tikzpicture}}
+\caption{Worked example of the three-factor confidence score (Algorithm 4).
+The entropy signal, corroboration bonus, and recency weight sum to give the
+final confidence percentage displayed to the user.}
+\label{fig:confidence_flow}
+\end{figure}
+
+\subsubsection{Algorithm 5: Schema Inference JSON Parsing [A4+]}
+
+Because the LLM wraps its JSON output in markdown fences, a robust stripping step is required before parsing:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.82\textwidth}
+\hrule\vspace{4pt}
+\textbf{Algorithm 5:} Robust LLM JSON Extraction
+\vspace{4pt}\hrule\vspace{6pt}
+\textbf{Input:} raw LLM string response $R$\\
+\textbf{Output:} parsed dictionary $D$, or error\\[4pt]
+$R' \leftarrow$ strip markdown fences from $R$\hfill\textit{// remove \texttt{```json...```}}\\
+$R' \leftarrow$ trim whitespace from $R'$\\
+\textbf{if} $R'$ contains a JSON object $\{\ldots\}$ \textbf{then}\\
+\hspace*{1.2em}$D \leftarrow$ parse the first $\{\ldots\}$ match\\
+\textbf{else}\\
+\hspace*{1.2em}$D \leftarrow$ attempt to parse full $R'$\\
+\textbf{end if}\\
+\textbf{return} $D$\hfill\textit{// raises JSONDecodeError if all attempts fail}
+\vspace{6pt}\hrule
+\end{minipage}
+\caption{Pseudocode for the robust JSON extraction wrapper applied to all LLM calls.}
+\label{alg:json}
+\end{figure}
 
 % ----------------------------------------------------------------
 \section{Testing}
 
 \subsection{Unit Testing}
 
-Each major method was tested in isolation using direct Python calls before the
-full pipeline was assembled. Key unit-level verifications:
+Each major method was tested in isolation before the full pipeline was assembled.
+Four unit-level verifications were done:
 
-\begin{itemize}
+\begin{enumerate}
     \item \texttt{\_temporal\_decay(2014)}: Expected $\approx 0.38$; verified
     against manual calculation $e^{-0.08 \times 12} = 0.382$.
-    \item \texttt{\_H\_str(["A","A","B"])}: Expected $\approx 0.636$; verified
-    against Shannon entropy formula.
+    \item \texttt{\_H\_str(["A","A","B"])}: Expected $\approx 0.636$; checked
+    against the Shannon entropy formula by hand.
     \item \texttt{\_confidence(delta\_h=0, tau=0.25, support=1, year\_gap=2)}:
-    Expected $\approx 0.35$.
-    \item LLM cache: Repeated call with identical prompt and temperature returns
-    cached result in $< 1$\,ms.
-\end{itemize}
+    Expected $\approx 0.35$. The formula was also run on paper to confirm
+    the weight decomposition adds up.
+    \item LLM cache: A repeated call with the same prompt and temperature
+    must return the cached result in $< 1$\,ms rather than calling Ollama.
+\end{enumerate}
 
 \subsection{Integration Testing}
 
-Integration tests verified the interaction between the LLM (Ollama), the
-graph database (Neo4j), and the Python layer:
+Integration tests verified that the three external services (Ollama, Neo4j, Python)
+actually talk to each other correctly:
 
-\begin{itemize}
-    \item Schema inference: Verified that \texttt{cfg["schema\_entity\_types"]}
-    is non-empty after \texttt{\_infer\_schema()}.
-    \item Triple storage: Verified that \texttt{MATCH ()-[r]->() RETURN count(r)}
-    returns a non-zero count after \texttt{\_store\_all()}.
-    \item Disambiguation: Verified that nodes with 85\%+ similar names are
-    reduced to a single node (confirmed via \texttt{MATCH (n) RETURN count(n)}).
-\end{itemize}
+\begin{enumerate}
+    \item Schema inference: after \texttt{\_infer\_schema()} runs, the
+    \texttt{cfg["schema\_entity\_types"]} list must be non-empty.
+    \item Triple storage: a Cypher \texttt{MATCH ()-[r]->() RETURN count(r)}
+    query must return a non-zero count after \texttt{\_store\_all()} completes.
+    \item Disambiguation: nodes with 85\%+ similar names must merge into one,
+    confirmed by \texttt{MATCH (n) RETURN count(n)} before and after the pass.
+\end{enumerate}
 
 \subsection{System Testing}
 
-A full end-to-end run on the 6-document political corpus with 2 queries
-served as the system test. Pass criteria:
-\begin{itemize}
-    \item Exit code 0.
+A full end-to-end run on the 6-document political corpus with 2 queries served
+as the system test. The four pass criteria were:
+
+\begin{enumerate}
+    \item Exit code 0 (no unhandled exception).
     \item At least one contradiction detected and removed.
-    \item Confidence score printed for each query.
-    \item Answer text non-empty for each query.
-\end{itemize}
-All criteria were met in the validation run (see Chapter~6).
+    \item A confidence score printed for each query.
+    \item Non-empty answer text for each query.
+\end{enumerate}
 
-\subsection{User Testing}
+All four were met in the validation run documented in Chapter~6.
 
-The CLI was tested with all four input modes:
-\begin{itemize}
-    \item \texttt{--corpus}: Verified JSON loading from file.
-    \item \texttt{--docs / --queries}: Verified inline string injection.
-    \item \texttt{--interactive}: Verified terminal input prompts function correctly.
-    \item No arguments: Verified auto-generation of \texttt{corpus.json} template.
-\end{itemize}
+\subsection{User Acceptance Testing}
+
+The CLI was tested across all four input modes:
+
+\begin{enumerate}
+    \item \texttt{--corpus}: JSON loading from a file path.
+    \item \texttt{--docs / --queries}: Inline string injection on the
+    command line, bypassing the file entirely.
+    \item \texttt{--interactive}: Terminal prompts the user for a query at
+    runtime, verified on Windows and confirmed UTF-8 safe.
+    \item No arguments: The system auto-generates a \texttt{corpus.json}
+    template and exits with a usage hint.
+\end{enumerate}
 
 % ----------------------------------------------------------------
 \section{Challenges and Solutions}

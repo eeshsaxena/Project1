@@ -1,46 +1,372 @@
-﻿
+
 % ================================================================
 % CHAPTER 4: SYSTEM DESIGN
 % ================================================================
 
 \section{System Architecture}
 
-TruthfulRAG v5 follows a strictly layered pipeline architecture. Each layer
-communicates only through its defined input and output contracts, which ensures
-that any individual module can be replaced or upgraded without affecting the
-others.
+TruthfulRAG v5 is built as a six-layer pipeline in which each layer has a
+strictly defined role. A document corpus enters at Layer~0 and an audited,
+confidence-annotated answer exits at Layer~5. Because adjacent layers
+communicate only through well-defined data structures, any single layer can
+be swapped or upgraded without touching the rest of the system.
 
-\begin{itemize}
-    \item \textbf{Layer 0 --- Data Layer}: A \texttt{corpus.json} file containing
-    raw document strings and suggested query strings. Five pre-built corpora are
-    provided covering medical, legal, Indian science, space science, and historical
-    domains.
-    \item \textbf{Layer 1 --- Schema Layer}: \texttt{\_infer\_schema()} produces
-    the domain-specific entity and relation vocabulary, written to the shared
-    \texttt{CFG} dictionary at runtime. No manual configuration is required.
-    \item \textbf{Layer 2 --- Graph Layer}: A Neo4j property graph storing typed
-    entity nodes and directed relation edges, each annotated with a \texttt{year}
-    integer and a \texttt{support} count.
-    \item \textbf{Layer 3 --- Retrieval Layer}: \texttt{EnhancedGraphRetriever}
-    produces an ordered list of \texttt{KnowledgePath} objects, ranked by
-    temporal decay and corroboration score.
-    \item \textbf{Layer 4 --- Resolution Layer}: \texttt{EnhancedConflictResolver}
-    consumes \texttt{KnowledgePath} objects and produces a final answer string
-    plus a \texttt{meta} dictionary containing confidence, conflict count, and
-    the explanation chain.
-    \item \textbf{Layer 5 --- Presentation Layer}: A Flask REST API and
-    dual-panel HTML/JavaScript web interface expose all pipeline outputs in real
-    time, with visual confidence bars and knowledge-path displays.
-\end{itemize}
+The six layers and their responsibilities are described below and illustrated
+in Figure~\ref{fig:arch}.
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: TruthfulRAG v5 --- Six-Layer Architecture Diagram]}\\
-\textit{Layers 0--5 shown as horizontal bands with data-flow arrows between them.}
-\vspace{1.0cm}}}
-\caption{Six-layer system architecture of TruthfulRAG v5}
+\usetikzlibrary{patterns}
+\resizebox{0.88\textwidth}{!}{%
+\begin{tikzpicture}[
+  every node/.style={font=\small},
+  layer/.style={draw=black, thick, rounded corners=5pt,
+                minimum width=13cm, minimum height=1.1cm,
+                text centered, text width=12.5cm,
+                fill=white},
+  arrow/.style={->, >=stealth, thick},
+]
+
+\node[layer] (L0) at (0,0) {%
+  \textbf{Layer 0 \textemdash{} Data Layer}\\[2pt]
+  \small The pipeline ingests a \texttt{corpus.json} file containing raw
+  document text and an optional list of suggested queries.};
+
+\node[layer] (L1) at (0,-1.9) {%
+  \textbf{Layer 1 \textemdash{} Schema Inference Layer}\\[2pt]
+  \small The LLM autonomously identifies which entity types and relation
+  types exist in the corpus; no manual configuration is needed.};
+
+\node[layer] (L2) at (0,-3.8) {%
+  \textbf{Layer 2 \textemdash{} Knowledge Graph Layer}\\[2pt]
+  \small Facts are stored in Neo4j as typed edges annotated with the source
+  year and a count of how many documents corroborate each claim.};
+
+\node[layer] (L3) at (0,-5.7) {%
+  \textbf{Layer 3 \textemdash{} Retrieval Layer}\\[2pt]
+  \small Personalised PageRank and hybrid BM25+semantic search surface the
+  most relevant facts; temporal decay down-weights older evidence.};
+
+\node[layer] (L4) at (0,-7.6) {%
+  \textbf{Layer 4 \textemdash{} Conflict Resolution Layer}\\[2pt]
+  \small Contradicting facts are discarded by year-based supersession;
+  entropy sampling confirms the remaining evidence actually helps the LLM.};
+
+\node[layer] (L5) at (0,-9.5) {%
+  \textbf{Layer 5 \textemdash{} Presentation Layer}\\[2pt]
+  \small A Flask REST API and a dual-panel web interface deliver the final
+  answer together with a confidence score and a full audit trail.};
+
+\draw[arrow] (L0.south) -- (L1.north);
+\draw[arrow] (L1.south) -- (L2.north);
+\draw[arrow] (L2.south) -- (L3.north);
+\draw[arrow] (L3.south) -- (L4.north);
+\draw[arrow] (L4.south) -- (L5.north);
+
+\end{tikzpicture}}
+\caption{Six-layer pipeline architecture of TruthfulRAG v5.}
 \label{fig:arch}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Layer 0 --- Data.} The entry point is a \texttt{corpus.json} file
+    that bundles raw document strings together with an optional list of suggested
+    queries. Five pre-built corpora are provided (medical, legal, Indian science,
+    space science, and political history), but any plain-text collection in the
+    same format will work without code changes.
+
+    \item \textbf{Layer 1 --- Schema.} Before a single document is processed, the
+    \texttt{\_infer\_schema()} function samples a handful of documents and asks the
+    LLM what entity types and relation types appear in the text. The answer
+    is written into the shared \texttt{CFG} dictionary and drives all subsequent
+    extraction. This is what makes the pipeline domain-agnostic: switching from a
+    medical corpus to a legal one requires no code changes at all.
+
+    \item \textbf{Layer 2 --- Graph.} Every document is processed to extract
+    subject-predicate-object triples. Each triple is stored as a directed edge in
+    Neo4j, carrying the publication year of the source fact and a count of how many
+    independent documents assert the same claim.
+
+    \item \textbf{Layer 3 --- Retrieval.} At query time, Personalised PageRank seeds
+    from the query's key entities and walks the graph to find structurally relevant
+    facts. A cosine-similarity filter removes edges unrelated to the query's relation
+    keywords, and an exponential temporal decay formula down-weights older facts.
+
+    \item \textbf{Layer 4 --- Resolution.} The retrieved facts are checked for
+    contradictions: if two facts share the same relation and object but differ on
+    the subject, the one with the older year is discarded. Entropy sampling then
+    verifies that the remaining facts actually reduce the LLM's uncertainty before
+    they are included in the final prompt.
+
+    \item \textbf{Layer 5 --- Presentation.} A Flask REST API serves the pipeline
+    over HTTP at \texttt{http://localhost}. A web interface allows a user to
+    submit queries and view the answer together with the confidence score,
+    conflict count, and the audit trail of facts used or removed.
+\end{itemize}
+
+\subsection{End-to-End Pipeline Flow}
+
+Before examining each module in isolation, it helps to see the whole system
+at once. Figure~\ref{fig:pipeline} shows how a document corpus enters at one
+end and a confidence-annotated answer comes out the other, passing through
+eight clearly labelled stages. The function identifiers shown in the
+diagram --- \texttt{A1}, \texttt{B4}, \texttt{N2}, \texttt{C7}, and so on ---
+are the actual Python function names from the implementation, so the diagram
+can be cross-referenced directly against the code walkthrough in Chapter~5.
+
+\begin{landscape}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.97\linewidth,
+                 height=0.82\textheight,
+                 keepaspectratio]{report_file/pipeline_diagram}
+\caption{End-to-end pipeline flow of TruthfulRAG v5 (landscape view).
+Eight stages — \emph{Corpus Ingestion} [A1/N1/N4/N5],
+\emph{Hybrid Retrieval} [BM25+Semantic], \emph{Query Processing} [B4/C7],
+\emph{Scoring} [N2], \emph{Conflict Resolution} [SAFE\_FOR elimination],
+\emph{Adaptive Entropy Filter} [auto-keep], \emph{Confidence Calculation},
+and \emph{Final Answer} — are shown with their decision logic and
+inter-stage data flows. Function identifiers in brackets correspond to
+the implementation in Chapter~5.}
+\label{fig:pipeline}
+\end{figure}
+\end{landscape}
+
+% ----------------------------------------------------------------
+\subsection{Knowledge Graph Data Model}
+
+Anyone familiar with relational databases will recognise the Entity-Relationship
+(ER) diagram --- the standard tool for sketching out tables, columns, and
+foreign-key links before writing a single line of SQL. Neo4j is not a relational
+database; its native equivalent is the \textbf{Property Graph Model} diagram,
+which describes node labels, relationship types, and the properties each can carry.
+
+The schema chosen for TruthfulRAG v5 is deliberately small: one node type and
+one relationship type. That simplicity is intentional --- short Cypher queries,
+no join complexity --- but the five properties on every edge do considerable work
+behind the scenes, carrying everything the scoring and conflict-resolution logic
+needs to make a decision.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.80\textwidth}{!}{%
+\begin{tikzpicture}[
+  nd/.style={circle, draw=black, thin, fill=black!6,
+             minimum size=1.5cm, align=center, font=\small\bfseries},
+  inst/.style={circle, draw=black, thin, fill=black!10,
+               minimum size=1.4cm, align=center, font=\scriptsize},
+  prop/.style={rectangle, draw=black!40, thin, fill=white,
+               font=\scriptsize, align=left, inner sep=4pt,
+               rounded corners=2pt},
+  rel/.style={->, >=stealth, thick},
+  rlbl/.style={rectangle, draw=black, thin, fill=white,
+               font=\small\bfseries, inner sep=3pt, align=center},
+  rprp/.style={rectangle, draw=black!35, thin, fill=white,
+               font=\scriptsize, align=center, inner sep=2pt},
+]
+%% ── SCHEMA LEVEL ────────────────────────────────────────────────
+\node[font=\small\bfseries\itshape] at (4.5,1.5) {Schema};
+\draw[thin,black!20] (-0.5,1.3) -- (9.5,1.3);
+\node[nd] (s1) at (1.2,0) {:Entity};
+\node[nd] (s2) at (7.8,0) {:Entity};
+\node[prop,below=0.12cm of s1]{\texttt{name} : string\\[1pt]\texttt{type} : string};
+\node[prop,below=0.12cm of s2]{\texttt{name} : string\\[1pt]\texttt{type} : string};
+\draw[rel] (s1.east) -- node[rlbl,above=3pt]{RELATED\_TO}
+  node[rprp,below=3pt]{\texttt{relation} : string\\ \texttt{year}\quad\quad\ : int\\ \texttt{weight}\quad : float\\ \texttt{support}\;\; : int\\ \texttt{source}\quad : string}
+  (s2.west);
+%% ── INSTANCE LEVEL ──────────────────────────────────────────────
+\node[font=\small\bfseries\itshape] at (4.5,-3.0) {Example Instances};
+\draw[thin,black!20] (-0.5,-3.2) -- (9.5,-3.2);
+\node[inst] (i1a) at (1.2,-4.4) {:Drug\\Aspirin};
+\node[inst] (i1b) at (7.8,-4.4) {:Condition\\Adults};
+\draw[rel] (i1a.east) -- node[rlbl,above=2pt]{SAFE\_FOR}
+  node[rprp,below=2pt]{year=1985\ w=0.278\ support=2} (i1b.west);
+\node[inst] (i2a) at (1.2,-6.2) {:Drug\\Aspirin};
+\node[inst] (i2b) at (7.8,-6.2) {:Condition\\Children};
+\draw[rel] (i2a.east) -- node[rlbl,above=2pt]{CONTRAINDICATED}
+  node[rprp,below=2pt]{year=2023\ w=0.787\ support=1} (i2b.west);
+\end{tikzpicture}}
+\caption{Property graph model for TruthfulRAG v5 (the graph-database
+equivalent of an ER diagram).
+\emph{Top}: Schema — one node type \texttt{:Entity} with properties
+\texttt{name} and \texttt{type}; one relationship type \texttt{RELATED\_TO}
+carrying the five properties used for scoring and conflict resolution.
+\emph{Bottom}: Two instance edges from the medical corpus showing the
+conflicting aspirin facts that the v5 conflict resolver must adjudicate.}
+\label{fig:pgm}
+\end{figure}
+
+One detail worth noting: \texttt{weight} is never written to the database.
+It is recalculated fresh at every query using $w = e^{-0.08 \times \text{age}}$,
+where \emph{age} is the number of years elapsed since the stored \texttt{year}.
+The \texttt{support} counter works the other way --- it accumulates
+permanently, incrementing each time a new source document confirms the same
+fact through the Cypher \texttt{MERGE} operation.
+
+% ----------------------------------------------------------------
+\subsection{Deployment Architecture}
+
+TruthfulRAG v5 runs entirely on one machine with no external network
+dependencies. Figure~\ref{fig:deploy} shows the three co-located
+processes and how they communicate exclusively over localhost ports.
+This fully-offline design is the key privacy and cost advantage over
+cloud-based RAG systems.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.78\textwidth}{!}{%
+\begin{tikzpicture}[
+  proc/.style={rectangle,draw=black,thin,fill=black!5,rounded corners=4pt,
+               minimum width=3.2cm,minimum height=1.5cm,align=center,font=\small},
+  arr/.style={<->,>=stealth,thin},
+  ext/.style={rectangle,draw=black,thin,fill=white,rounded corners=4pt,
+              minimum width=2.8cm,minimum height=1.0cm,align=center,font=\small},
+]
+\draw[thick,rounded corners=6pt] (-6.0,-1.0) rectangle (6.0,4.6);
+\node[font=\small\bfseries] at (0,4.3) {Single-Machine Deployment (No Cloud)};
+\node[proc] (neo) at (-4.0,2.6)
+  {\textbf{Neo4j}\\{\scriptsize Graph Database}};
+\node[proc,minimum width=3.8cm] (py) at (0,2.6)
+  {\textbf{TruthfulRAG v5}\\{\scriptsize Core Pipeline}};
+\node[proc] (oll) at (4.0,2.6)
+  {\textbf{Ollama}\\{\scriptsize LLM Engine}\\{\scriptsize (Qwen2.5)}};
+\node[font=\scriptsize,above] at (-2.0,3.1) {Cypher queries};
+\draw[arr] (neo.east) -- (py.west);
+\node[font=\scriptsize,above] at (2.0,3.1)  {REST calls};
+\draw[arr] (py.east)  -- (oll.west);
+\node[ext] (user) at (0,-2.6) {\textbf{User}\\{\scriptsize Web Browser}};
+\draw[arr] (py.south) -- node[right,font=\scriptsize,xshift=3pt]{HTTP} (user.north);
+\end{tikzpicture}}
+\caption{Deployment architecture of TruthfulRAG v5. All three components ---
+the core pipeline, the graph database, and the language model ---
+run on the same machine with no external network connections.
+No user data leaves the host at any point.}
+\label{fig:deploy}
+\end{figure}
+
+% ----------------------------------------------------------------
+\subsection{Activity Diagram --- Query Lifecycle}
+
+Figure~\ref{fig:activity} shows the sequence of activities the system
+performs from the moment a query arrives to the moment a confidence-annotated
+answer is returned. The conflict-resolution loop repeats until no further
+conflicting triples remain in the candidate set.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.65\textwidth}{!}{%
+\begin{tikzpicture}[
+  act/.style={rectangle,rounded corners=4pt,draw=black,thin,fill=black!5,
+              minimum width=6.2cm,minimum height=0.80cm,align=center,font=\small},
+  dec/.style={diamond,aspect=3.2,draw=black,thin,fill=white,
+              align=center,font=\small},
+  arr/.style={->,>=stealth,thin},
+  lbl/.style={font=\scriptsize\itshape,fill=white,inner sep=1pt},
+]
+% Start bullet
+\fill[black] (0,0) circle(0.20);
+% Activities (gap = 1.4 units each)
+\node[act] (q)   at (0,-1.2)  {Parse Query and Temporal Snapshot};
+\node[act] (ppr) at (0,-2.6)  {Personalised PageRank and Hybrid Retrieval};
+\node[act] (td)  at (0,-4.0)  {Apply Temporal Decay Scoring};
+\node[dec] (cd)  at (0,-5.6)  {Conflicts detected?};
+% Conflict branch (left side)
+\node[act,minimum width=4.2cm,text width=4.0cm] (res)
+      at (-5.4,-5.6) {Entropy Test and\\Eliminate Conflict};
+% Continue path
+\node[act] (bp)  at (0,-7.2)  {Assemble Final Prompt};
+\node[act] (ga)  at (0,-8.6)  {Generate Answer via Language Model};
+\node[act] (cc)  at (0,-10.0) {Compute Confidence Score};
+% End bullet
+\draw[thick] (0,-11.4) circle(0.20); \fill[black] (0,-11.4) circle(0.12);
+% Connections
+\draw[arr] (0,-0.20) -- (q);
+\draw[arr] (q)   -- (ppr);
+\draw[arr] (ppr) -- (td);
+\draw[arr] (td)  -- (cd);
+% Conflict yes branch
+\draw[arr] (cd.west) -- node[lbl,above]{Yes} (res.east);
+\draw[arr] (res.north) -- ++(0,0.5) -- ++(5.4,0) -- (cd.north);
+% No branch
+\draw[arr] (cd.south) -- node[lbl,right]{No} (bp.north);
+\draw[arr] (bp) -- (ga);
+\draw[arr] (ga) -- (cc);
+\draw[arr] (cc) -- ++(0,-1.20);
+\end{tikzpicture}}
+\caption{Activity diagram for query processing in TruthfulRAG v5.
+The conflict-resolution branch (left) loops back until all contradicting
+facts are resolved before the surviving evidence is assembled into the
+final prompt.}
+\label{fig:activity}
+\end{figure}
+
+% ----------------------------------------------------------------
+\subsection{System State Transition Diagram}
+
+Figure~\ref{fig:state} models the runtime states of the TruthfulRAG v5
+process. The system starts in \textsc{Idle}, transitions to
+\textsc{Ready} after corpus ingestion, and cycles through three
+query-handling states before returning to \textsc{Ready}. Any
+unhandled exception drives the system to \textsc{Error}, from which
+a restart returns it to \textsc{Idle}.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.60\textwidth}{!}{%
+\begin{tikzpicture}[
+  st/.style={circle,draw=black,thin,fill=black!5,
+             minimum size=1.9cm,align=center,font=\small\bfseries},
+  arr/.style={->,>=stealth,thin},
+  lbl/.style={font=\scriptsize\itshape,fill=white,inner sep=1pt},
+]
+%% ── Vertical chain ────────────────────────────────────────────
+\node[st] (idle)  at (0,   0)   {IDLE};
+\node[st] (ing)   at (0,  -3.2) {INGESTING};
+\node[st] (ready) at (0,  -6.4) {READY};
+\node[st] (ret)   at (0,  -9.6) {RETRIEVING};
+\node[st] (res)   at (0, -12.8) {RESOLVING};
+\node[st] (gen)   at (0, -16.0) {GENERATING};
+%% ── ERROR (right, vertically centred) ─────────────────────────
+\node[st,fill=black!15,minimum size=1.8cm] (err) at (5.5,-8.0) {ERROR};
+%% ── Initial arrow ─────────────────────────────────────────────
+\draw[arr,very thick] (-2.0,0) -- (idle.west);
+%% ── Main flow ─────────────────────────────────────────────────
+\draw[arr] (idle.south)  -- node[lbl,right]{load\_corpus} (ing.north);
+\draw[arr] (ing.south)   -- node[lbl,right]{done}         (ready.north);
+\draw[arr] (ready.south) -- node[lbl,right]{query}        (ret.north);
+\draw[arr] (ret.south)   -- node[lbl,right]{done}         (res.north);
+\draw[arr] (res.south)   -- node[lbl,right]{done}         (gen.north);
+%% ── Done loop: GENERATING → READY (LEFT curved arc) ──────────
+\draw[arr] (gen.west)
+  to[out=180,in=180,looseness=0.55]
+  node[lbl,left]{done}
+  (ready.west);
+%% ── Error arcs: smooth curves to RIGHT ───────────────────────
+\draw[arr] (ing.east)
+  to[out=0,in=110]
+  node[lbl,above right,pos=0.4]{error}
+  (err.north west);
+\draw[arr] (ret.east)
+  to[out=0,in=180]
+  node[lbl,above,pos=0.5]{error}
+  (err.west);
+\draw[arr] (gen.east)
+  to[out=0,in=250]
+  node[lbl,below right,pos=0.4]{error}
+  (err.south);
+%% ── Reset: ERROR → IDLE (curve over top) ─────────────────────
+\draw[arr] (err.north)
+  to[out=90,in=0,looseness=0.7]
+  node[lbl,above]{reset}
+  (idle.east);
+\end{tikzpicture}}
+\caption{State transition diagram for TruthfulRAG v5. Normal execution
+cycles: \textsc{Idle} $\to$ \textsc{Ingesting} $\to$ \textsc{Ready}
+$\to$ \textsc{Retrieving} $\to$ \textsc{Resolving} $\to$
+\textsc{Generating} $\to$ \textsc{Ready}. Any runtime error transitions
+the system to \textsc{Error}; a process restart resets it to
+\textsc{Idle}.}
+\label{fig:state}
 \end{figure}
 
 % ----------------------------------------------------------------
@@ -51,12 +377,12 @@ others.
 At the highest level, TruthfulRAG v5 has three external entities:
 
 \begin{itemize}
-    \item \textbf{User}: Provides a corpus file (documents and queries via the web
-    interface) and receives the final answer with confidence score.
-    \item \textbf{Ollama (LLM Runtime)}: An external process on localhost providing
-    LLM inference via HTTP on port 11434.
-    \item \textbf{Neo4j (Graph Database)}: An external process on localhost providing
-    graph storage and Cypher query services via the Bolt protocol on port 7687.
+    \item \textbf{User}: Provides a corpus file and receives the final answer
+    with confidence score.
+    \item \textbf{Ollama (LLM Runtime)}: An external process running locally,
+    providing LLM inference.
+    \item \textbf{Neo4j (Graph Database)}: An external process running locally,
+    providing graph storage and Cypher query services.
 \end{itemize}
 
 Data flows at Level 0:
@@ -73,11 +399,61 @@ Data flows at Level 0:
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Level-0 Context DFD]}\\
-\textit{Central process bubble with data flows to/from User, Ollama, and Neo4j.}
-\vspace{1.0cm}}}
-\caption{Level-0 Context DFD for TruthfulRAG v5}
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[
+  sys/.style={circle, draw=black, very thick, fill=white,
+              minimum size=5.0cm, align=center, font=\small\bfseries,
+              text width=4.0cm},
+  ext/.style={rectangle, draw=black, thick, fill=black!8,
+              minimum width=3.2cm, minimum height=1.0cm,
+              align=center, font=\small\bfseries},
+  fwd/.style={->, >=stealth, thick},
+  ret/.style={->, >=stealth, thick, dashed},
+  lbl/.style={font=\scriptsize, fill=white, inner sep=3pt, align=center},
+]
+
+%% Positions:
+%%   System circle : (0, 0)
+%%   User          : (-9, 0)   -- far left, clear of circle
+%%   Ollama        : (0,  8)   -- directly above
+%%   Neo4j         : (0, -8)   -- directly below
+
+\node[sys] (Sys) at (0, 0) {TruthfulRAG v5\\[4pt]System Pipeline};
+
+\node[ext] (User)   at (-9.5,  0) {User};
+\node[ext] (Ollama) at ( 0,    8) {Ollama\\(LLM)};
+\node[ext] (Neo4j)  at ( 0,   -8) {Neo4j\\(Graph DB)};
+
+%% ── User <-> System  (horizontal, separated by yshift) ──────────
+\draw[fwd] ([yshift= 8pt]User.east) --
+  node[lbl,above]{corpus documents and queries}
+  ([yshift= 8pt]Sys.west);
+
+\draw[ret] ([yshift=-8pt]Sys.west) --
+  node[lbl,below]{answer $\cdot$ confidence\% $\cdot$ conflict count $\cdot$ audit trail}
+  ([yshift=-8pt]User.east);
+
+%% ── System <-> Ollama  (vertical, separated by xshift) ──────────
+\draw[fwd] ([xshift= 10pt]Sys.north) --
+  node[lbl,right]{schema inference prompt\\triple extraction prompt\\entropy sampling prompt\\answer generation prompt}
+  ([xshift= 10pt]Ollama.south);
+
+\draw[ret] ([xshift=-10pt]Ollama.south) --
+  node[lbl,left]{LLM text responses\\(JSON / plain text)}
+  ([xshift=-10pt]Sys.north);
+
+%% ── System <-> Neo4j  (vertical, separated by xshift) ───────────
+\draw[fwd] ([xshift= 10pt]Sys.south) --
+  node[lbl,right]{Cypher WRITE\\MERGE node/edge\\APOC calls}
+  ([xshift= 10pt]Neo4j.north);
+
+\draw[ret] ([xshift=-10pt]Neo4j.north) --
+  node[lbl,left]{Cypher READ\\paths and node IDs}
+  ([xshift=-10pt]Sys.south);
+
+\end{tikzpicture}}
+\caption{Level-0 Context DFD for TruthfulRAG v5. The circle is the complete
+system; rectangles are external entities. Solid arrows = inputs; dashed = outputs.}
 \label{fig:dfd0}
 \end{figure}
 
@@ -85,67 +461,122 @@ Data flows at Level 0:
 
 The Level 1 DFD decomposes the central system into four sub-processes:
 \textbf{P1 Schema Inference}, \textbf{P2 Graph Construction}, \textbf{P3 Graph
-Retrieval}, and \textbf{P4 Conflict Resolution}.
+Retrieval}, and \textbf{P4 Conflict Resolution}. Each process communicates
+with the LLM (Ollama) and, where needed, with the graph database (Neo4j).
+The diagram below uses one row per process so that no arrows overlap.
 
+% -------------------------------------------------------------------
+%  LEVEL-1 DFD
+%  Layout (all units in cm):
+%    Processes   x = 4,   y = 0 / -3.5 / -7 / -10.5
+%    Ollama      x = 12,  same y as its process  (one box per row)
+%    Neo4j       x = 18,  same y as P2 / P3 rows
+%    User In     x = -3,  y = 0
+%    User Out    x = -3,  y = -10.5
+% -------------------------------------------------------------------
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Level-1 DFD]}\\
-\textit{Four process bubbles (P1--P4) with data stores: Neo4j Graph and CFG Dictionary.}
-\vspace{1.0cm}}}
-\caption{Level-1 DFD showing the four internal sub-processes}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  proc/.style={rectangle, draw=black, very thick, rounded corners=5pt,
+               fill=white, minimum width=5.5cm, minimum height=1.1cm,
+               align=center, font=\small\bfseries},
+  ext/.style={rectangle, draw=black, thick, fill=black!8,
+              minimum width=3.2cm, minimum height=0.9cm,
+              align=center, font=\small\bfseries},
+  fwd/.style={->, >=stealth, thick},
+  ret/.style={->, >=stealth, thick, dashed},
+  lbl/.style={font=\scriptsize, fill=white, inner sep=2pt},
+]
+
+% --- Processes ---
+\node[proc] (P1) at (4,     0) {P1\quad Schema Inference};
+\node[proc] (P2) at (4,  -3.5) {P2\quad Graph Construction};
+\node[proc] (P3) at (4,  -7.0) {P3\quad Graph Retrieval};
+\node[proc] (P4) at (4, -10.5) {P4\quad Conflict Resolution};
+
+% --- User ---
+\node[ext] (Uin)  at (-3,     0) {User / Browser\\(Input)};
+\node[ext] (Uout) at (-3, -10.5) {User / Browser\\(Output)};
+
+% --- Ollama: ONE box PER process row (same y, x=12) ---
+\node[ext] (O1) at (12,     0) {Ollama (LLM)};
+\node[ext] (O2) at (12,  -3.5) {Ollama (LLM)};
+\node[ext] (O3) at (12,  -7.0) {Ollama (LLM)};
+\node[ext] (O4) at (12, -10.5) {Ollama (LLM)};
+
+% --- Neo4j: only P2 and P3 rows (x=18) ---
+\node[ext] (N2) at (18, -3.5) {Neo4j\\(Graph DB)};
+\node[ext] (N3) at (18, -7.0) {Neo4j\\(Graph DB)};
+
+% --- Vertical pipeline backbone (left side of processes) ---
+\draw[fwd] (P1.south) -- node[lbl,left]{docs + schema}   (P2.north);
+\draw[fwd] (P2.south) -- node[lbl,left]{graph ready}     (P3.north);
+\draw[fwd] (P3.south) -- node[lbl,left]{KnowledgePaths}  (P4.north);
+
+% --- User arrows ---
+% corpus.json: Uin -> P1 straight horizontal
+\draw[fwd] (Uin.east) -- node[lbl,above]{corpus.json} (P1.west);
+
+% query string: Uin.south DOWN to y of P3 (-7.0), then RIGHT into P3.west
+\draw[fwd] (Uin.south) -- ++(0,-6.65)
+           -- node[lbl,above]{query string}
+           (P3.west);
+
+% answer: P4.south DOWN 1.0, then LEFT to Uout x, then UP to Uout.south
+% P4 at x=4, Uout at x=-3, difference = 7.0
+\draw[ret] (P4.south) -- ++(0,-1.0)
+           -- node[lbl,below]{answer + confidence + audit trail}
+           ++(-7.0,0)
+           -- (Uout.south);
+
+% --- P1 row: SCHEMA_INFER (straight horizontal) ---
+\draw[fwd] ([yshift= 5pt]P1.east) --
+  node[lbl,above]{SCHEMA\_INFER prompt}
+  ([yshift= 5pt]O1.west);
+\draw[ret] ([yshift=-5pt]O1.west) --
+  node[lbl,below]{entity / relation JSON}
+  ([yshift=-5pt]P1.east);
+
+% --- P2 row: TRIPLE_EXTRACT + MERGE (straight horizontal) ---
+\draw[fwd] ([yshift= 5pt]P2.east) --
+  node[lbl,above]{TRIPLE\_EXTRACT prompt}
+  ([yshift= 5pt]O2.west);
+\draw[ret] ([yshift=-5pt]O2.west) --
+  node[lbl,below]{triples JSON with year}
+  ([yshift=-5pt]P2.east);
+\draw[fwd] (O2.east) --
+  node[lbl,above]{MERGE nodes/edges (APOC)}
+  (N2.west);
+
+% --- P3 row: intent + MATCH/edge list (straight horizontal) ---
+\draw[fwd] ([yshift= 5pt]P3.east) --
+  node[lbl,above]{\_keys() + intent prompt}
+  ([yshift= 5pt]O3.west);
+\draw[ret] ([yshift=-5pt]O3.west) --
+  node[lbl,below]{seed entities + intent}
+  ([yshift=-5pt]P3.east);
+\draw[fwd] ([yshift= 5pt]O3.east) --
+  node[lbl,above]{MATCH edges RETURN r}
+  ([yshift= 5pt]N3.west);
+\draw[ret] ([yshift=-5pt]N3.west) --
+  node[lbl,below]{full edge list}
+  ([yshift=-5pt]O3.east);
+
+% --- P4 row: entropy + answer (straight horizontal) ---
+\draw[fwd] ([yshift= 5pt]P4.east) --
+  node[lbl,above]{entropy + answer prompt}
+  ([yshift= 5pt]O4.west);
+\draw[ret] ([yshift=-5pt]O4.west) --
+  node[lbl,below]{answer string}
+  ([yshift=-5pt]P4.east);
+
+\end{tikzpicture}}
+\caption{Level-1 DFD: the four internal sub-processes of TruthfulRAG v5 and their
+external service interactions. Each row is fully independent; solid arrows are
+requests, dashed arrows are responses.}
 \label{fig:dfd1}
 \end{figure}
-
-% ----------------------------------------------------------------
-\section{Class Diagrams}
-
-The main classes and their relationships in \texttt{enhanced\_main.py} are
-summarised in Table~\ref{tab:classes}.
-
-\begin{table}[H]
-\centering
-\caption{Class overview and key attributes}
-\label{tab:classes}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{|l|p{5.5cm}|l|}
-\hline
-\textbf{Class} & \textbf{Key Attributes} & \textbf{Key Methods} \\
-\hline
-\texttt{LLMCache}                 & \texttt{\_s: Dict}, hits, misses            & \texttt{get, set, stats} \\
-\texttt{HybridRetriever}          & bm25, embedder, doc\_vecs                   & \texttt{retrieve} \\
-\texttt{TripleRecord}             & head, relation, tail, year, support\_count  & dataclass only \\
-\texttt{EnhancedGraphConstructor} & llm, graph, cfg, \_triple\_bank             & \texttt{build, \_infer\_schema, \_extract} \\
-\texttt{KnowledgePath}            & context, score, max\_year, delta\_h         & dataclass only \\
-\texttt{EnhancedGraphRetriever}   & llm, graph, embedder, cfg, \_deg            & \texttt{retrieve, \_ppr, \_filter\_edges} \\
-\texttt{EnhancedConflictResolver} & llm, llm\_s, emb, cfg                      & \texttt{resolve, \_entropy, \_confidence} \\
-\texttt{EnhancedPipeline}         & cfg, constructor, retriever, resolver       & \texttt{ingest, query, verify} \\
-\hline
-\end{tabular}}
-\end{table}
-
-\begin{figure}[htbp]
-\centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: UML Class Diagram]}\\
-\textit{EnhancedPipeline composes Constructor, Retriever, and Resolver.}\\
-\textit{Shared Neo4jGraph and SentenceTransformer embedder shown as associations.}
-\vspace{1.0cm}}}
-\caption{UML class diagram for \texttt{enhanced\_main.py}}
-\label{fig:class}
-\end{figure}
-
-Relationships:
-\begin{itemize}
-    \item \texttt{EnhancedPipeline} \emph{composes} one instance each of Constructor,
-    Retriever, and Resolver.
-    \item Constructor and Retriever hold a reference to the same
-    \texttt{Neo4jGraph} instance to avoid opening multiple Bolt connections.
-    \item Retriever and Resolver share the same \texttt{SentenceTransformer} embedder
-    to avoid loading the 90\,MB model twice into memory.
-    \item All classes read from the shared \texttt{CFG} dictionary populated by schema
-    inference before any other module is initialised.
-\end{itemize}
 
 % ----------------------------------------------------------------
 \section{Module Design}
@@ -158,128 +589,62 @@ with \texttt{SCHEMA\_INFER\_PROMPT}, parse the JSON response, strip markdown fen
 and write the inferred entity types and relation types to \texttt{cfg}.\\
 \textbf{Output}: Updated \texttt{cfg[``schema\_entity\_types'']} and
 \texttt{cfg[``schema\_relation\_types'']}\\[0.3cm]
-\textbf{Example output} for a medical corpus:
-\begin{verbatim}
-Entity types  : ["DRUG", "ORGANIZATION", "DATE", "DOCTOR"]
-Relation types: ["APPROVED_BY", "REPLACED_BY", "RECOMMENDED_FOR"]
-\end{verbatim}
+\textbf{Why this module exists}: Without schema inference, the extraction prompts
+contain generic placeholder type names that produce inconsistent triples.
+Inferred schema names (e.g., ``Pathogen'', ``causes'') produce tightly typed graphs
+that PPR can traverse more accurately.
 
-\subsection{Module: Knowledge Graph Construction (Module A)}
+\subsection{Module: EnhancedGraphConstructor}
 
-\textbf{Input}: All document strings, updated \texttt{cfg} (schema populated)\\
-\textbf{Sub-steps}:
+\textbf{Input}: Document list, CFG, Neo4j connection, LLM\\
+\textbf{Process}:
 \begin{enumerate}
-    \item Clear the Neo4j graph (\texttt{MATCH (n) DETACH DELETE n}).
-    \item Run LangChain's \texttt{LLMGraphTransformer} for broad entity-relation
-    extraction (first pass).
-    \item Run custom \texttt{\_extract()} and \texttt{\_accumulate()} for schema-guided,
-    year-annotated, corroboration-counted extraction (second pass).
-    \item \texttt{\_store\_all()}: Cypher \texttt{MERGE} writes all accumulated triples
-    into Neo4j.
-    \item \texttt{\_disambiguate()}: APOC merge of entity nodes whose names are
-    $\geq 85\,\%$ similar (e.g.\ ``ISRO'' and ``Indian Space Research Organisation'').
-    \item \texttt{\_normalize()}: LLM-assisted relation label canonicalisation
-    (e.g.\ ``founded by'' $\to$ \texttt{FOUNDED\_BY}).
+  \item Call \texttt{LLMGraphTransformer} (LangChain) to extract a first pass of triples.
+  \item For each document, call \texttt{TRIPLE\_EXTRACT\_PROMPT} directly and accumulate
+        typed, year-annotated \texttt{TripleRecord} objects.
+  \item Write all records to Neo4j with \texttt{MERGE} (idempotent).
+  \item Run entity disambiguation via APOC similarity merge.
+  \item Normalise relation labels to canonical forms via a second LLM call.
 \end{enumerate}
-\textbf{Output}: Neo4j property graph with $N$ entity nodes and $E$ typed relation edges.
+\textbf{Output}: A populated Neo4j knowledge graph.
 
-\subsection{Module: Graph Retrieval (Module B)}
+\subsection{Module: HybridRetriever [N3]}
 
-\textbf{Input}: User query string, Neo4j graph\\
-\textbf{Sub-steps}:
+\textbf{Input}: Query string, Neo4j graph, embedding model, BM25 index\\
+\textbf{Process}: Rank graph edges by hybrid BM25 + cosine similarity score;
+return top-$k$ edges as candidate triples.\\
+\textbf{Output}: Filtered edge list for PPR seeding.
+
+\subsection{Module: EnhancedGraphRetriever}
+
+\textbf{Input}: Query string, candidate edge list, CFG\\
+\textbf{Process}:
 \begin{enumerate}
-    \item \texttt{\_keys()}: LLM extracts seed entities $E$ and relation keywords $R_{kw}$.
-    \item \texttt{detect\_intent()}: LLM classifies query intent into one of
-    \{\textit{factual\_lookup, temporal, comparison, causal}\}; sets decay parameter $\tau$.
-    \item \texttt{\_edges()}: Fetch all graph edges via Cypher.
-    \item \texttt{\_filter\_edges()}: Cosine-similarity filter retains only edges whose
-    relation type is semantically close to $R_{kw}$.
-    \item \texttt{\_ppr()}: 20-iteration power-method Personalised PageRank from seed
-    entities, yielding a relevance score per node.
-    \item Score every surviving edge: $s = e^{-\lambda t} \cdot \log(1 + \text{support})$.
-    \item Return the top-$k$ \texttt{KnowledgePath} objects.
+  \item Extract seed entities and relation keywords via \texttt{\_keys()}.
+  \item Classify query intent via \texttt{detect\_intent()}.
+  \item Retrieve all edges from Neo4j.
+  \item Filter by cosine similarity to relation keywords.
+  \item Run 20-iteration Personalised PageRank.
+  \item Apply temporal decay and corroboration weighting.
+  \item Detect and remove contradictions.
 \end{enumerate}
 \textbf{Output}: Ranked list of \texttt{KnowledgePath} objects.
 
-\subsection{Module: Conflict Resolution and Answer Generation (Module C)}
+\subsection{Module: EnhancedConflictResolver}
 
-\textbf{Input}: User query, list of \texttt{KnowledgePath} objects, detected intent.\\
-\textbf{Sub-steps}:
-\begin{enumerate}
-    \item \texttt{\_detect\_contradictions()}: Year-based supersession --- for any pair
-    of paths sharing the same relation and tail but disagreeing on head, the older path
-    is discarded.
-    \item \texttt{\_entropy()}: Sample the base LLM $n$ times to compute the parametric
-    entropy $H_{\text{param}}$.
-    \item Select retrieval strategy: \textit{conflict} or \textit{grounding} based on
-    the magnitude of $H_{\text{param}}$ relative to $H_{\max}$.
-    \item For each surviving path: compute $\Delta H$; select paths where $\Delta H > \tau$.
-    \item \texttt{\_build\_chain()}: Format selected and rejected paths as a human-readable
-    audit trail.
-    \item Generate the final answer via \texttt{EXPLAIN\_PROMPT} (if contradictions existed)
-    or \texttt{RAG\_PROMPT} (if grounding only).
-    \item \texttt{\_confidence()}: Compute the three-factor confidence score.
-\end{enumerate}
-\textbf{Output}: Answer string, \texttt{meta} dictionary with confidence, conflict count,
-and the explanation chain.
-
-\begin{figure}[htbp]
-\centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Module C --- Conflict Resolution Flowchart]}\\
-\textit{Decision diamond: contradictions found? Yes \textrightarrow{} EXPLAIN\_PROMPT.}\\
-\textit{No \textrightarrow{} Entropy check \textrightarrow{} RAG\_PROMPT.}
-\vspace{1.0cm}}}
-\caption{Conflict resolution decision flowchart (Module C)}
-\label{fig:conflict}
-\end{figure}
+\textbf{Input}: \texttt{KnowledgePath} list, LLM, CFG\\
+\textbf{Process}: For each path, compute $\Delta H = H_{\text{param}} - H_{\text{aug}}$
+by sampling the LLM three times. Paths with $\Delta H < 0$ are excluded.
+The remaining paths are assembled into the final prompt, and a confidence
+score $\kappa$ is computed.\\
+\textbf{Output}: Answer string, confidence score, conflict count, audit trail.
 
 % ----------------------------------------------------------------
-\section{Database Design}
+\section{System Sequence Diagram}
 
-\subsection{Neo4j Graph Schema}
-
-The knowledge graph uses a universal node label and domain-dynamic edge labels:
-
-\begin{itemize}
-    \item \textbf{Node}: \texttt{:Entity \{id: String\}}
-    \item \textbf{Edge}: \texttt{:RELATION\_TYPE \{year: Integer, support: Integer\}}
-\end{itemize}
-
-Relation type names are dynamic (inferred per-corpus by Module A4+). Representative
-examples from tested corpora:
-
-\begin{table}[H]
-\centering
-\caption{Sample relation types across tested domains}
-\begin{tabular}{|l|l|}
-\hline
-\textbf{Domain} & \textbf{Sample Relation Types} \\
-\hline
-Medical         & \texttt{RECOMMENDED\_FOR}, \texttt{REPLACED\_BY}, \texttt{APPROVED\_BY} \\
-Legal           & \texttt{ENACTED\_BY}, \texttt{REPEALED\_BY}, \texttt{AMENDED\_AS} \\
-Indian Science  & \texttt{FOUNDED\_BY}, \texttt{LAUNCHED\_BY}, \texttt{SUCCEEDED\_BY} \\
-Space Science   & \texttt{OPERATED\_BY}, \texttt{DISCOVERED\_AT}, \texttt{REPLACED\_BY} \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Corpus JSON Schema}
-
-\begin{verbatim}
-{
-  "docs":    ["string", ...],
-  "queries": ["string", ...]
-}
-\end{verbatim}
-
-Both keys are optional at load time. The system displays a warning if
-\texttt{``queries''} is absent and proceeds with ingestion only.
-
-% ----------------------------------------------------------------
-\section{Sequence Diagram}
-
-The end-to-end interaction for a single user query proceeds as follows:
+A typical user session breaks into two phases: corpus loading followed by
+query execution. The steps below trace those phases in the order they actually
+happen:
 
 \begin{enumerate}
     \item User selects a corpus and clicks \emph{Load and Build Graph} in the web interface.
@@ -308,13 +673,97 @@ The end-to-end interaction for a single user query proceeds as follows:
     \item JSON response returns to browser; confidence bar and path display rendered.
 \end{enumerate}
 
-\begin{figure}[htbp]
+\begin{figure}[p]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: End-to-End Sequence Diagram]}\\
-\textit{Lifelines: Browser, Flask Server, EnhancedPipeline, Ollama, Neo4j.}\\
-\textit{Ingest sequence followed by query sequence with return messages.}
-\vspace{1.0cm}}}
+\resizebox{0.97\textwidth}{!}{%
+\begin{tikzpicture}[
+  actor/.style={rectangle, draw=black, thick, fill=white,
+                minimum width=2.5cm, minimum height=0.7cm,
+                align=center, font=\small\bfseries},
+  life/.style={dashed, black!30, thin},
+  msg/.style={->, >=stealth, semithick},
+  ret/.style={->, >=stealth, dashed, semithick},
+  note/.style={draw=black!50, fill=gray!8, rounded corners=2pt,
+               font=\scriptsize, align=left, inner sep=5pt},
+  lbl/.style={font=\scriptsize, inner sep=2pt},
+  phase/.style={font=\small\itshape, text=black!55},
+]
+
+%%  Actor x-positions
+\def\xB{0}       % Browser
+\def\xF{4.2}     % Flask server.py
+\def\xP{9.0}     % Enhanced Pipeline
+\def\xO{13.8}    % Ollama (LLM)
+\def\xN{18.6}    % Neo4j (Graph DB)
+
+%%  Actor boxes
+\node[actor] at (\xB,  0) {Browser};
+\node[actor] at (\xF,  0) {Flask\\server.py};
+\node[actor] at (\xP,  0) {Enhanced\\Pipeline};
+\node[actor] at (\xO,  0) {Ollama\\(LLM)};
+\node[actor] at (\xN,  0) {Neo4j\\(Graph DB)};
+
+%%  Lifelines
+\foreach \x in {\xB,\xF,\xP,\xO,\xN}{
+  \draw[life] (\x,-0.38) -- (\x,-28.5);
+}
+
+%%  PHASE 1: Corpus Load
+\draw[black!25, thin] (-0.6,-0.85) -- (19.5,-0.85);
+\node[phase] at (9.3,-1.2) {--- Phase 1: Corpus Load ---};
+
+\draw[msg]  (\xB,-1.8)  -- node[lbl,above]{POST /api/load}                                     (\xF,-1.8);
+\draw[msg]  (\xF,-2.7)  -- node[lbl,above]{ingest(docs)}                                       (\xP,-2.7);
+\draw[msg]  (\xP,-3.6)  -- node[lbl,above]{\texttt{\_infer\_schema()} prompt}                  (\xO,-3.6);
+\draw[ret]  (\xO,-4.5)  -- node[lbl,above]{entity\_types / relation\_types JSON}               (\xP,-4.5);
+\draw[msg]  (\xP,-5.4)  -- node[lbl,above]{DETACH DELETE (clear graph)}                        (\xN,-5.4);
+\draw[msg]  (\xP,-6.3)  -- node[lbl,above]{LLMGraphTransformer prompts (per doc)}              (\xO,-6.3);
+\draw[ret]  (\xO,-7.2)  -- node[lbl,above]{raw triples (head, relation, tail)}                 (\xP,-7.2);
+\draw[msg]  (\xP,-8.1)  -- node[lbl,above]{\texttt{\_extract()} TRIPLE\_EXTRACT\_PROMPT} (\xO,-8.1);
+\draw[ret]  (\xO,-9.0)  -- node[lbl,above]{JSON triples with year field}                       (\xP,-9.0);
+\draw[msg]  (\xP,-9.9)  -- node[lbl,above]{MERGE :Entity-[:REL\{year,support\}]->:Entity}      (\xN,-9.9);
+\draw[msg]  (\xP,-10.8) -- node[lbl,above]{APOC merge nodes $\geq$85\% similar}               (\xN,-10.8);
+\draw[msg]  (\xP,-11.7) -- node[lbl,above]{\texttt{\_normalize()} prompt}                      (\xO,-11.7);
+\draw[ret]  (\xO,-12.6) -- node[lbl,above]{canonical relation labels}                          (\xP,-12.6);
+\draw[msg]  (\xP,-13.5) -- node[lbl,above]{APOC setType(rel, canonical\_label)}                (\xN,-13.5);
+\draw[ret]  (\xF,-14.4) -- node[lbl,above]{\{status:``ok'', nodes:N, edges:E\}}                (\xB,-14.4);
+
+%%  PHASE 2: Query Execution
+\draw[black!25, thin] (-0.6,-15.2) -- (19.5,-15.2);
+\node[phase] at (9.3,-15.6) {--- Phase 2: Query Execution ---};
+
+\draw[msg]  (\xB,-16.2) -- node[lbl,above]{POST /api/query/v5}                                 (\xF,-16.2);
+\draw[msg]  (\xF,-17.1) -- node[lbl,above]{query(q)}                                           (\xP,-17.1);
+\draw[msg]  (\xP,-18.0) -- node[lbl,above]{\texttt{\_keys()} prompt}                           (\xO,-18.0);
+\draw[ret]  (\xO,-18.9) -- node[lbl,above]{seed entities + relation keywords}                  (\xP,-18.9);
+\draw[msg]  (\xP,-19.8) -- node[lbl,above]{\texttt{detect\_intent()} prompt}                  (\xO,-19.8);
+\draw[ret]  (\xO,-20.7) -- node[lbl,above]{intent class}                                       (\xP,-20.7);
+\draw[msg]  (\xP,-21.6) -- node[lbl,above]{MATCH (a)-[r]->(b) RETURN r}                       (\xN,-21.6);
+\draw[ret]  (\xN,-22.5) -- node[lbl,above]{full edge list}                                     (\xP,-22.5);
+
+\node[note, text width=5.0cm] at (5.0,-23.5) {%
+  \textbf{local (no LLM call):}\\[2pt]
+  \textbullet\ \texttt{\_filter\_edges()} cosine sim\\
+  \textbullet\ \texttt{\_ppr()} 20-iter power method\\
+  \textbullet\ \texttt{\_detect\_contradictions()}
+};
+
+\draw[msg]  (\xP,-24.5) -- node[lbl,above]{\texttt{\_entropy()}: 3$\times$ samples at $T{=}0.7$} (\xO,-24.5);
+\draw[ret]  (\xO,-25.4) -- node[lbl,above]{3 answer strings $\rightarrow H_{\mathrm{param}}$ computed} (\xP,-25.4);
+
+\node[note, text width=4.8cm] at (\xP+0.8,-26.2) {%
+  \textbf{local:}\ \texttt{\_build\_chain()}\\
+  selects EXPLAIN\_PROMPT if conflict detected};
+
+\draw[msg]  (\xP,-27.1) -- node[lbl,above]{EXPLAIN\_PROMPT (conflict detected)}                (\xO,-27.1);
+\draw[ret]  (\xO,-28.0) -- node[lbl,above]{final answer string}                                (\xP,-28.0);
+
+\node[note, text width=2.8cm] at (\xP+0.4,-28.8) {\textbf{local:}\ \texttt{\_confidence()}};
+
+\draw[ret]  (\xF,-29.7) -- node[lbl,above,text width=8cm,align=center]
+  {(answer, confidence\%, conflicts\_removed, paths\_used, audit\_trail)} (\xB,-29.7);
+
+\end{tikzpicture}}
 \caption{End-to-end sequence diagram for corpus load and query}
 \label{fig:seq}
 \end{figure}
@@ -327,34 +776,24 @@ The end-to-end interaction for a single user query proceeds as follows:
 TruthfulRAG v5 includes a production-quality web interface consisting of a
 Flask REST API server (\texttt{server.py}) and a custom HTML/JavaScript dual-panel
 interface (\texttt{chatbot\_live.html}). The interface is accessible at
-\texttt{http://localhost:5000} once the server is started.
+\texttt{http://localhost} once the server is started.
 
-\subsection{Interface Layout}
 
-The interface is divided into five horizontal zones:
+\subsection{REST API Endpoints}
 
-\begin{enumerate}
-    \item \textbf{Navigation bar}: System name, status chips (Ollama / Neo4j / LC / v5),
-    and navigation links.
-    \item \textbf{Corpus bar}: Dropdown for selecting any of the five pre-built corpora,
-    a \emph{Load and Build Graph} button, and a status message.
-    \item \textbf{Document preview strip}: Automatically populated with the first 90
-    characters of each document in the selected corpus as soon as the user selects it from
-    the dropdown --- before loading begins.
-    \item \textbf{Suggested queries}: Per-corpus query chips drawn from the loaded corpus
-    JSON; click to auto-fill.
-    \item \textbf{Dual chat panels}: Left panel shows LangChain RAG responses; right
-    panel shows TruthfulRAG v5 responses with confidence bar, knowledge paths used,
-    and conflicts removed.
-\end{enumerate}
-
-\begin{figure}[htbp]
+\begin{table}[H]
 \centering
-\fbox{\parbox{0.88\linewidth}{\centering\vspace{1.0cm}
-\textit{[Figure: Live Chatbot Screenshot --- Both Pipelines Running]}\\
-\textit{Left panel: LangChain RAG. Right panel: TruthfulRAG v5 with confidence bar.}\\
-\textit{Same query, different answers, visible conflict resolution.}
-\vspace{1.0cm}}}
-\caption{TruthfulRAG v5 live chatbot --- dual-panel comparison interface}
-\label{fig:ui}
-\end{figure}
+\caption{Flask REST API endpoints}
+\label{tab:api}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Endpoint} & \textbf{Method} & \textbf{Description} \\
+\hline
+\texttt{/api/load}      & POST & Load corpus and build knowledge graph \\
+\texttt{/api/query/v5}  & POST & Run TruthfulRAG v5 query \\
+\texttt{/api/query/lc}  & POST & Run baseline LangChain RAG query \\
+\texttt{/api/status}    & GET  & Return graph node/edge counts \\
+\hline
+\end{tabular}}
+\end{table}

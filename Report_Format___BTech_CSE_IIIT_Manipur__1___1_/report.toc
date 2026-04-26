@@ -1,115 +1,109 @@
-\contentsline {chapter}{List of Figures}{5}{chapter*.3}%
-\contentsline {chapter}{List of Tables}{6}{chapter*.4}%
-\contentsline {chapter}{\numberline {1}Introduction}{7}{chapter.1}%
-\contentsline {section}{\numberline {1.1}Outline}{7}{section.1.1}%
-\contentsline {subsection}{\numberline {1.1.1}General System}{7}{subsection.1.1.1}%
-\contentsline {subsection}{\numberline {1.1.2}Overall Project Flow}{7}{subsection.1.1.2}%
-\contentsline {subsection}{\numberline {1.1.3}Important Features of the Application}{8}{subsection.1.1.3}%
-\contentsline {section}{\numberline {1.2}Problem Statement}{8}{section.1.2}%
-\contentsline {subsection}{\numberline {1.2.1}Rationale for Research}{8}{subsection.1.2.1}%
-\contentsline {subsection}{\numberline {1.2.2}Barriers to Effective Research}{8}{subsection.1.2.2}%
-\contentsline {subsection}{\numberline {1.2.3}Challenges in Modern Research Workflows}{9}{subsection.1.2.3}%
-\contentsline {subsection}{\numberline {1.2.4}Project Objectives}{9}{subsection.1.2.4}%
-\contentsline {section}{\numberline {1.3}Motivation}{9}{section.1.3}%
-\contentsline {subsection}{\numberline {1.3.1}Purpose}{9}{subsection.1.3.1}%
-\contentsline {chapter}{\numberline {2}Literature Survey}{10}{chapter.2}%
-\contentsline {section}{\numberline {2.1}Existing Solution Introduction}{10}{section.2.1}%
-\contentsline {section}{\numberline {2.2}Relevant Theories and Models}{10}{section.2.2}%
-\contentsline {subsection}{\numberline {2.2.1}Knowledge Graphs for QA}{10}{subsection.2.2.1}%
-\contentsline {subsection}{\numberline {2.2.2}Temporal Knowledge Graphs}{10}{subsection.2.2.2}%
-\contentsline {subsection}{\numberline {2.2.3}Entropy and Uncertainty in LLMs}{10}{subsection.2.2.3}%
-\contentsline {section}{\numberline {2.3}Comparison of Similar Projects}{11}{section.2.3}%
-\contentsline {section}{\numberline {2.4}Identified Gaps in the Literature}{11}{section.2.4}%
-\contentsline {section}{\numberline {2.5}Conclusion of Survey}{11}{section.2.5}%
-\contentsline {chapter}{\numberline {3}Requirement Engineering}{12}{chapter.3}%
-\contentsline {section}{\numberline {3.1}Feasibility Study}{12}{section.3.1}%
-\contentsline {subsection}{\numberline {3.1.1}Technical Feasibility}{12}{subsection.3.1.1}%
-\contentsline {subsection}{\numberline {3.1.2}Operational and Economic Feasibility}{12}{subsection.3.1.2}%
-\contentsline {subsection}{\numberline {3.1.3}Legal Feasibility}{12}{subsection.3.1.3}%
-\contentsline {section}{\numberline {3.2}Requirement Elicitation and Analysis}{12}{section.3.2}%
-\contentsline {subsection}{\numberline {3.2.1}Objective}{12}{subsection.3.2.1}%
-\contentsline {subsection}{\numberline {3.2.2}Methods Used for Elicitation}{12}{subsection.3.2.2}%
-\contentsline {subsection}{\numberline {3.2.3}Modeling}{13}{subsection.3.2.3}%
-\contentsline {section}{\numberline {3.3}Software Requirement Specification (SRS)}{13}{section.3.3}%
-\contentsline {subsection}{\numberline {3.3.1}Purpose of the SRS}{13}{subsection.3.3.1}%
-\contentsline {subsection}{\numberline {3.3.2}Functional Requirements}{13}{subsection.3.3.2}%
-\contentsline {subsection}{\numberline {3.3.3}Non-Functional Requirements}{14}{subsection.3.3.3}%
-\contentsline {subsection}{\numberline {3.3.4}Assumptions and Dependencies}{14}{subsection.3.3.4}%
-\contentsline {subsection}{\numberline {3.3.5}Constraints}{14}{subsection.3.3.5}%
-\contentsline {section}{\numberline {3.4}Software Requirement Validation}{14}{section.3.4}%
-\contentsline {subsection}{\numberline {3.4.1}Review Process}{14}{subsection.3.4.1}%
-\contentsline {subsection}{\numberline {3.4.2}Validation Approach}{15}{subsection.3.4.2}%
-\contentsline {subsection}{\numberline {3.4.3}Completeness and Consistency}{15}{subsection.3.4.3}%
-\contentsline {section}{\numberline {3.5}Software Requirement Management}{15}{section.3.5}%
-\contentsline {subsection}{\numberline {3.5.1}Version Control}{15}{subsection.3.5.1}%
-\contentsline {chapter}{\numberline {4}System Design}{16}{chapter.4}%
-\contentsline {section}{\numberline {4.1}System Architecture}{16}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Data Flow Diagrams (DFD)}{17}{section.4.2}%
-\contentsline {subsection}{\numberline {4.2.1}Level 0 Data Flow Diagram (Context Diagram)}{17}{subsection.4.2.1}%
-\contentsline {subsection}{\numberline {4.2.2}Level 1 Data Flow Diagram}{17}{subsection.4.2.2}%
-\contentsline {section}{\numberline {4.3}Class Diagrams}{18}{section.4.3}%
-\contentsline {section}{\numberline {4.4}Module Design}{18}{section.4.4}%
-\contentsline {subsection}{\numberline {4.4.1}Module: Pre-Pipeline Schema Inference [A4+]}{18}{subsection.4.4.1}%
-\contentsline {subsection}{\numberline {4.4.2}Module: Knowledge Graph Construction (Module A)}{19}{subsection.4.4.2}%
-\contentsline {subsection}{\numberline {4.4.3}Module: Graph Retrieval (Module B)}{19}{subsection.4.4.3}%
-\contentsline {subsection}{\numberline {4.4.4}Module: Conflict Resolution and Answer Generation (Module C)}{19}{subsection.4.4.4}%
-\contentsline {section}{\numberline {4.5}Database Design}{20}{section.4.5}%
-\contentsline {subsection}{\numberline {4.5.1}Neo4j Graph Schema}{20}{subsection.4.5.1}%
-\contentsline {subsection}{\numberline {4.5.2}Corpus JSON Schema}{20}{subsection.4.5.2}%
-\contentsline {section}{\numberline {4.6}Sequence Diagram}{21}{section.4.6}%
-\contentsline {section}{\numberline {4.7}Web Interface Design}{21}{section.4.7}%
-\contentsline {subsection}{\numberline {4.7.1}Overview}{21}{subsection.4.7.1}%
-\contentsline {subsection}{\numberline {4.7.2}Interface Layout}{22}{subsection.4.7.2}%
-\contentsline {chapter}{\numberline {5}Implementation}{23}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Development Environment}{23}{section.5.1}%
-\contentsline {subsection}{\numberline {5.1.1}Programming Language: Python 3.11}{23}{subsection.5.1.1}%
-\contentsline {subsection}{\numberline {5.1.2}IDE: Visual Studio Code}{23}{subsection.5.1.2}%
-\contentsline {subsection}{\numberline {5.1.3}Version Control: Git and GitHub}{23}{subsection.5.1.3}%
-\contentsline {subsection}{\numberline {5.1.4}Libraries and Frameworks}{24}{subsection.5.1.4}%
-\contentsline {section}{\numberline {5.2}System Architecture Implementation}{25}{section.5.2}%
-\contentsline {subsection}{\numberline {5.2.1}Why a Layered Pipeline Architecture?}{25}{subsection.5.2.1}%
-\contentsline {subsection}{\numberline {5.2.2}Why a Single Python File?}{25}{subsection.5.2.2}%
-\contentsline {subsection}{\numberline {5.2.3}Why Share the Embedding Model Across Classes?}{25}{subsection.5.2.3}%
-\contentsline {subsection}{\numberline {5.2.4}Why an In-Memory LLM Cache?}{25}{subsection.5.2.4}%
-\contentsline {subsection}{\numberline {5.2.5}Why PPR (Personalised PageRank) for Graph Retrieval?}{25}{subsection.5.2.5}%
-\contentsline {subsection}{\numberline {5.2.6}Why Entropy as the Conflict Resolution Signal?}{26}{subsection.5.2.6}%
-\contentsline {section}{\numberline {5.3}Code Implementation}{26}{section.5.3}%
-\contentsline {subsection}{\numberline {5.3.1}Key Code Snippets}{26}{subsection.5.3.1}%
-\contentsline {subsubsection}{Temporal Decay [N2]}{26}{section*.17}%
-\contentsline {subsubsection}{Combined Path Scoring}{27}{section*.18}%
-\contentsline {subsubsection}{Shannon Entropy Calculation}{27}{section*.19}%
-\contentsline {subsubsection}{Calibrated Confidence Score [N7]}{27}{section*.20}%
-\contentsline {subsubsection}{Schema Inference JSON Parsing [A4+]}{27}{section*.21}%
-\contentsline {section}{\numberline {5.4}Testing}{27}{section.5.4}%
-\contentsline {subsection}{\numberline {5.4.1}Unit Testing}{27}{subsection.5.4.1}%
-\contentsline {subsection}{\numberline {5.4.2}Integration Testing}{28}{subsection.5.4.2}%
-\contentsline {subsection}{\numberline {5.4.3}System Testing}{28}{subsection.5.4.3}%
-\contentsline {subsection}{\numberline {5.4.4}User Testing}{28}{subsection.5.4.4}%
-\contentsline {section}{\numberline {5.5}Challenges and Solutions}{28}{section.5.5}%
-\contentsline {subsection}{\numberline {5.5.1}Challenges}{28}{subsection.5.5.1}%
-\contentsline {subsection}{\numberline {5.5.2}Solutions}{29}{subsection.5.5.2}%
-\contentsline {chapter}{\numberline {6}Results}{30}{chapter.6}%
-\contentsline {section}{\numberline {6.1}System Output Evaluation}{30}{section.6.1}%
-\contentsline {subsection}{\numberline {6.1.1}Functional Evaluation}{30}{subsection.6.1.1}%
-\contentsline {section}{\numberline {6.2}Project Development Timeline}{31}{section.6.2}%
-\contentsline {section}{\numberline {6.3}Performance Metrics}{33}{section.6.3}%
-\contentsline {section}{\numberline {6.4}Screenshots and System Interface}{33}{section.6.4}%
-\contentsline {subsection}{\numberline {6.4.1}Indian Science Domain Results}{33}{subsection.6.4.1}%
-\contentsline {subsection}{\numberline {6.4.2}Key System Output Charts}{34}{subsection.6.4.2}%
-\contentsline {subsection}{\numberline {6.4.3}Web Interface Screenshots}{34}{subsection.6.4.3}%
-\contentsline {subsection}{\numberline {6.4.4}The Space Telescope Query: A Notable Result}{34}{subsection.6.4.4}%
-\contentsline {section}{\numberline {6.5}Comparison Against Requirements}{34}{section.6.5}%
-\contentsline {subsection}{\numberline {6.5.1}Functional Requirements Fulfillment}{34}{subsection.6.5.1}%
-\contentsline {subsection}{\numberline {6.5.2}Non-Functional Requirements Fulfillment}{38}{subsection.6.5.2}%
-\contentsline {section}{\numberline {6.6}Future Enhancements}{38}{section.6.6}%
-\contentsline {subsection}{\numberline {6.6.1}Known Limitation: Temporal Decay Reference Year}{38}{subsection.6.6.1}%
-\contentsline {subsection}{\numberline {6.6.2}Limitation: Negation-Blind Triple Extraction}{39}{subsection.6.6.2}%
-\contentsline {subsection}{\numberline {6.6.3}Limitation: Fixed Decay Rate $\lambda $ Across All Domains}{39}{subsection.6.6.3}%
-\contentsline {subsection}{\numberline {6.6.4}Limitation: Low-Variance Entropy Estimate from $n=3$ Samples}{39}{subsection.6.6.4}%
-\contentsline {subsection}{\numberline {6.6.5}Limitation: Undated Triples Receive Implicitly Maximum Recency}{40}{subsection.6.6.5}%
-\contentsline {subsection}{\numberline {6.6.6}Limitation: PPR and Edge Retrieval Capped at 200 Records}{40}{subsection.6.6.6}%
-\contentsline {chapter}{\numberline {7}Conclusion}{41}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Contributions to the Field}{41}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Future Enhancements}{42}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Final Thoughts}{42}{section.7.3}%
-\contentsline {chapter}{Bibliography}{44}{chapter*.36}%
+\contentsline {chapter}{List of Figures}{v}{chapter*.3}%
+\contentsline {chapter}{List of Tables}{1}{chapter*.4}%
+\contentsline {chapter}{\numberline {1}Introduction}{2}{chapter.1}%
+\contentsline {section}{\numberline {1.1}System Overview}{2}{section.1.1}%
+\contentsline {subsection}{\numberline {1.1.1}General System}{2}{subsection.1.1.1}%
+\contentsline {subsection}{\numberline {1.1.2}Overall Project Flow}{2}{subsection.1.1.2}%
+\contentsline {subsection}{\numberline {1.1.3}Key Features}{2}{subsection.1.1.3}%
+\contentsline {section}{\numberline {1.2}Problem Statement}{3}{section.1.2}%
+\contentsline {subsection}{\numberline {1.2.1}Rationale for Research}{3}{subsection.1.2.1}%
+\contentsline {subsection}{\numberline {1.2.2}Gaps in Existing Tools}{3}{subsection.1.2.2}%
+\contentsline {subsection}{\numberline {1.2.3}Challenges in Document-Based QA}{3}{subsection.1.2.3}%
+\contentsline {subsection}{\numberline {1.2.4}Project Objectives}{3}{subsection.1.2.4}%
+\contentsline {section}{\numberline {1.3}Motivation}{4}{section.1.3}%
+\contentsline {subsection}{\numberline {1.3.1}Why This Matters}{4}{subsection.1.3.1}%
+\contentsline {chapter}{\numberline {2}Literature Survey}{5}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Existing Solution Introduction}{5}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Relevant Theories and Models}{5}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Knowledge Graphs for QA}{5}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}Temporal Knowledge Graphs}{5}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}Entropy and Uncertainty in LLMs}{6}{subsection.2.2.3}%
+\contentsline {section}{\numberline {2.3}Comparison of Similar Projects}{6}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Comparison with Recent Systems (2023--2025)}{6}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Identified Gaps in the Literature}{7}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Project Development Timeline}{7}{section.2.6}%
+\contentsline {chapter}{\numberline {3}Requirement Engineering}{9}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Feasibility Study}{9}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1}Technical Feasibility}{9}{subsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.1.2}Operational and Economic Feasibility}{9}{subsection.3.1.2}%
+\contentsline {subsection}{\numberline {3.1.3}Legal Feasibility}{9}{subsection.3.1.3}%
+\contentsline {section}{\numberline {3.2}Requirement Elicitation and Analysis}{9}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}Objective}{9}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}Methods Used for Elicitation}{9}{subsection.3.2.2}%
+\contentsline {subsection}{\numberline {3.2.3}Modeling}{10}{subsection.3.2.3}%
+\contentsline {section}{\numberline {3.3}Software Requirement Specification (SRS)}{11}{section.3.3}%
+\contentsline {subsection}{\numberline {3.3.1}Purpose of the SRS}{11}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3.2}Functional Requirements}{11}{subsection.3.3.2}%
+\contentsline {subsection}{\numberline {3.3.3}Non-Functional Requirements}{11}{subsection.3.3.3}%
+\contentsline {subsection}{\numberline {3.3.4}Assumptions and Dependencies}{12}{subsection.3.3.4}%
+\contentsline {subsection}{\numberline {3.3.5}Constraints}{12}{subsection.3.3.5}%
+\contentsline {section}{\numberline {3.4}Software Requirement Validation}{12}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}Review Process}{12}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}Validation Approach}{13}{subsection.3.4.2}%
+\contentsline {subsection}{\numberline {3.4.3}Completeness and Consistency}{13}{subsection.3.4.3}%
+\contentsline {chapter}{\numberline {4}System Design}{14}{chapter.4}%
+\contentsline {section}{\numberline {4.1}System Architecture}{14}{section.4.1}%
+\contentsline {subsection}{\numberline {4.1.1}End-to-End Pipeline Flow}{15}{subsection.4.1.1}%
+\contentsline {subsection}{\numberline {4.1.2}Knowledge Graph Data Model}{17}{subsection.4.1.2}%
+\contentsline {subsection}{\numberline {4.1.3}Deployment Architecture}{17}{subsection.4.1.3}%
+\contentsline {subsection}{\numberline {4.1.4}Activity Diagram --- Query Lifecycle}{18}{subsection.4.1.4}%
+\contentsline {subsection}{\numberline {4.1.5}System State Transition Diagram}{19}{subsection.4.1.5}%
+\contentsline {section}{\numberline {4.2}Data Flow Diagrams (DFD)}{20}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Level 0 Data Flow Diagram (Context Diagram)}{20}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}Level 1 Data Flow Diagram}{21}{subsection.4.2.2}%
+\contentsline {section}{\numberline {4.3}Module Design}{21}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Module: Pre-Pipeline Schema Inference [A4+]}{21}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Module: EnhancedGraphConstructor}{21}{subsection.4.3.2}%
+\contentsline {subsection}{\numberline {4.3.3}Module: HybridRetriever [N3]}{23}{subsection.4.3.3}%
+\contentsline {subsection}{\numberline {4.3.4}Module: EnhancedGraphRetriever}{23}{subsection.4.3.4}%
+\contentsline {subsection}{\numberline {4.3.5}Module: EnhancedConflictResolver}{24}{subsection.4.3.5}%
+\contentsline {section}{\numberline {4.4}System Sequence Diagram}{24}{section.4.4}%
+\contentsline {section}{\numberline {4.5}Web Interface Design}{24}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}Overview}{24}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}REST API Endpoints}{26}{subsection.4.5.2}%
+\contentsline {chapter}{\numberline {5}Implementation}{27}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Development Environment}{27}{section.5.1}%
+\contentsline {subsection}{\numberline {5.1.1}Programming Language: Python 3.x}{27}{subsection.5.1.1}%
+\contentsline {subsection}{\numberline {5.1.2}IDE: Visual Studio Code}{27}{subsection.5.1.2}%
+\contentsline {subsection}{\numberline {5.1.3}Version Control: Git and GitHub}{27}{subsection.5.1.3}%
+\contentsline {subsection}{\numberline {5.1.4}Libraries and Frameworks}{28}{subsection.5.1.4}%
+\contentsline {section}{\numberline {5.2}System Architecture Implementation}{29}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Why a Layered Pipeline Architecture?}{29}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Why a Single Python File?}{29}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Why Share the Embedding Model Across Classes?}{29}{subsection.5.2.3}%
+\contentsline {subsection}{\numberline {5.2.4}Why an In-Memory LLM Cache?}{29}{subsection.5.2.4}%
+\contentsline {subsection}{\numberline {5.2.5}Why PPR (Personalised PageRank) for Graph Retrieval?}{30}{subsection.5.2.5}%
+\contentsline {subsection}{\numberline {5.2.6}Why Entropy as the Conflict Resolution Signal?}{30}{subsection.5.2.6}%
+\contentsline {section}{\numberline {5.3}Code Implementation}{30}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Key Algorithm Pseudocodes}{31}{subsection.5.3.1}%
+\contentsline {subsubsection}{Algorithm 1: Temporal Decay [N2]}{31}{section*.22}%
+\contentsline {subsubsection}{Algorithm 2: Combined Path Scoring}{31}{section*.24}%
+\contentsline {subsubsection}{Algorithm 3: Shannon Entropy Estimation [C2]}{31}{section*.26}%
+\contentsline {subsubsection}{Algorithm 4: Calibrated Confidence Score [N7]}{32}{section*.28}%
+\contentsline {subsubsection}{Algorithm 5: Schema Inference JSON Parsing [A4+]}{33}{section*.31}%
+\contentsline {section}{\numberline {5.4}Testing}{33}{section.5.4}%
+\contentsline {subsection}{\numberline {5.4.1}Unit Testing}{33}{subsection.5.4.1}%
+\contentsline {subsection}{\numberline {5.4.2}Integration Testing}{33}{subsection.5.4.2}%
+\contentsline {subsection}{\numberline {5.4.3}System Testing}{34}{subsection.5.4.3}%
+\contentsline {subsection}{\numberline {5.4.4}User Acceptance Testing}{34}{subsection.5.4.4}%
+\contentsline {section}{\numberline {5.5}Challenges and Solutions}{34}{section.5.5}%
+\contentsline {subsection}{\numberline {5.5.1}Challenges}{34}{subsection.5.5.1}%
+\contentsline {subsection}{\numberline {5.5.2}Solutions}{35}{subsection.5.5.2}%
+\contentsline {chapter}{\numberline {6}Results}{36}{chapter.6}%
+\contentsline {section}{\numberline {6.1}System Output Evaluation}{36}{section.6.1}%
+\contentsline {subsection}{\numberline {6.1.1}Functional Evaluation}{36}{subsection.6.1.1}%
+\contentsline {section}{\numberline {6.2}HaluEval Benchmark --- External Validation}{37}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Performance Metrics}{39}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Domain Results and Analysis}{39}{section.6.4}%
+\contentsline {subsection}{\numberline {6.4.1}Indian Science Domain Results}{39}{subsection.6.4.1}%
+\contentsline {subsection}{\numberline {6.4.2}Key System Output Charts}{40}{subsection.6.4.2}%
+\contentsline {subsection}{\numberline {6.4.3}Proof: LangChain Cannot Differentiate Between Time}{40}{subsection.6.4.3}%
+\contentsline {subsection}{\numberline {6.4.4}The Space Telescope Query: A Notable Result}{42}{subsection.6.4.4}%
+\contentsline {section}{\numberline {6.5}Comparison Against Requirements}{42}{section.6.5}%
+\contentsline {subsection}{\numberline {6.5.1}Functional Requirements Fulfillment}{42}{subsection.6.5.1}%
+\contentsline {subsection}{\numberline {6.5.2}Non-Functional Requirements Fulfillment}{43}{subsection.6.5.2}%
+\contentsline {chapter}{\numberline {7}Conclusion}{44}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Summary of Contributions}{44}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Directions for Further Work}{45}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Closing Remarks}{45}{section.7.3}%
+\contentsline {chapter}{Bibliography}{46}{chapter*.48}%

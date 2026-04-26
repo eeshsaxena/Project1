@@ -1,16 +1,18 @@
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {2.1}{\ignorespaces Comparison of knowledge-graph RAG systems}}{11}{table.caption.5}%
+\contentsline {table}{\numberline {2.1}{\ignorespaces Comparison of knowledge-graph RAG systems}}{6}{table.caption.5}%
+\contentsline {table}{\numberline {2.2}{\ignorespaces Comparison with recent state-of-the-art systems (2023--2025)}}{7}{table.caption.7}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {3.1}{\ignorespaces Requirement-to-implementation traceability}}{15}{table.caption.6}%
+\contentsline {table}{\numberline {3.1}{\ignorespaces Requirement-to-implementation traceability}}{13}{table.caption.10}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {4.1}{\ignorespaces Class overview and key attributes}}{18}{table.caption.10}%
-\contentsline {table}{\numberline {4.2}{\ignorespaces Sample relation types across tested domains}}{20}{table.caption.13}%
+\contentsline {table}{\numberline {4.1}{\ignorespaces Flask REST API endpoints}}{26}{table.caption.20}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {5.1}{\ignorespaces Software stack and version details}}{24}{table.caption.16}%
+\contentsline {table}{\numberline {5.1}{\ignorespaces Software stack and version details}}{28}{table.caption.21}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {6.1}{\ignorespaces Functional requirements verification results}}{31}{table.caption.22}%
-\contentsline {table}{\numberline {6.2}{\ignorespaces Project phase calendar (Jan 15 -- Apr 24, 2026)}}{31}{table.caption.23}%
-\contentsline {table}{\numberline {6.3}{\ignorespaces Pipeline performance across all four test domains}}{33}{table.caption.25}%
-\contentsline {table}{\numberline {6.4}{\ignorespaces Auto-inferred schemas across all four domains}}{33}{table.caption.26}%
+\contentsline {table}{\numberline {6.1}{\ignorespaces Functional requirements verification results}}{36}{table.caption.33}%
+\contentsline {table}{\numberline {6.2}{\ignorespaces HaluEval benchmark results (200 samples)}}{37}{table.caption.34}%
+\contentsline {table}{\numberline {6.3}{\ignorespaces Multi-dataset evaluation: ConflictQA + WebQuestions + SQuAD v2 (125 queries)}}{38}{table.caption.36}%
+\contentsline {table}{\numberline {6.4}{\ignorespaces Pipeline performance across all four test domains}}{39}{table.caption.39}%
+\contentsline {table}{\numberline {6.5}{\ignorespaces Auto-inferred schemas across all four domains}}{39}{table.caption.40}%
+\contentsline {table}{\numberline {6.6}{\ignorespaces Three-level proof of LangChain's temporal blindness}}{41}{table.caption.43}%
 \addvspace {10\p@ }

@@ -3,133 +3,94 @@
 % CHAPTER 7: CONCLUSION
 % ================================================================
 
-\section{Contributions to the Field}
+\section{Summary of Contributions}
 
-This project makes the following contributions:
+The starting point for this project was a paper on arXiv (2511.10375) describing
+a knowledge-graph RAG pipeline called TruthfulRAG v4. The goal here was
+not just to reproduce that system but to push it further: to fix the gaps that
+even v4 left open.
 
-\begin{enumerate}
-    \item \textbf{Faithful implementation of TruthfulRAG v4}: The three-module
-    architecture (Graph Construction, Graph Retrieval, Conflict Resolution) of
-    arXiv:2511.10375 is implemented faithfully in Python using open-source tools,
-    providing a reproducible reference implementation for the academic community.
+The result is TruthfulRAG v5, a fully local, domain-agnostic, conflict-resolving
+question-answering pipeline. The core contributions are:
 
-    \item \textbf{Six novel algorithmic extensions}:
-    \begin{itemize}
-        \item \textbf{[N1] Cross-document corroboration scoring}: Retrieval score
-        reflects the number of independent sources attesting a fact, via
-        logarithmic weighting stored as a \texttt{support} property on each graph edge.
-        Facts agreed upon by multiple documents score proportionally higher.
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item \textbf{Faithful v4 re-implementation}: The three-module architecture
+    from arXiv:2511.10375 is reproduced in Python using open-source tools,
+    giving the academic community a testable reference implementation.
 
-        \item \textbf{[N2] Exponential temporal decay}: Facts are penalised by
-        age using $e^{-\lambda t}$ with $\lambda = 0.08$, encoding an 8.7-year
-        half-life for general knowledge. The decay is applied at query time so
-        the graph remains revision-free.
+    \item \textbf{Nine algorithmic extensions}:
+    \begin{enumerate}\itemsep0pt\parsep0pt
+        \item[\textbf{C1}] \textbf{Temporal decay}: $e^{-\lambda t}$ with
+        $\lambda = 0.08$, giving an 8.7-year knowledge half-life applied at query time.
+        \item[\textbf{C2}] \textbf{Year-per-triple storage}: Every graph edge
+        carries the year the underlying fact was published.
+        \item[\textbf{C3}] \textbf{Cross-document corroboration}: A
+        logarithmic bonus ($1 + \ln(1+n) \times 0.8$) rewards facts attested
+        by multiple independent sources.
+        \item[\textbf{C4}] \textbf{Hybrid BM25 + semantic retrieval (RRF)}:
+        Keyword and dense-embedding rankings are fused via Reciprocal Rank Fusion.
+        \item[\textbf{C5}] \textbf{Gap-threshold conflict elimination}:
+        When the score gap between conflicting facts exceeds 0.30, the weaker
+        fact is removed before the LLM sees the prompt (gap: 0.028 in v4 vs 1.126 in v5).
+        \item[\textbf{C6}] \textbf{Adaptive entropy skip}: Between 24\,\% and
+        40\,\% of LLM calls are skipped when parametric entropy is already low
+        (measured across all four test domains).
+        \item[\textbf{C7}] \textbf{Calibrated confidence score}: A
+        three-component score (entropy reduction, source support, temporal
+        recency) replaces the fixed-100\,\% certainty of standard RAG.
+        \item[\textbf{C8}] \textbf{Explanation audit trail}: Every conflict
+        resolution decision is logged with the specific numerical reason.
+        \item[\textbf{C9}] \textbf{Automatic schema inference}: An LLM call
+        discovers entity and relation vocabulary from the corpus itself.
+    \end{enumerate}
 
-        \item \textbf{[N3] Hybrid BM25 + Semantic retrieval (RRF)}: Keyword and
-        semantic rankings are fused via Reciprocal Rank Fusion for more robust
-        retrieval, replacing single-modality cosine-only search and capturing
-        queries that dense embeddings alone miss.
-
-        \item \textbf{[N4] Explanation chain answer generation}: When contradictions
-        are resolved, the system produces a structured audit trail of which knowledge
-        paths were kept and which were removed, rendered visibly in the web interface
-        alongside every answer.
-
-        \item \textbf{[N5] Calibrated confidence score}: A three-component
-        (entropy change, corroboration support, temporal recency) score gives users
-        a calibrated uncertainty estimate as a percentage rather than false certainty.
-
-        \item \textbf{[N6] Claim Verification Mode}: Given a declarative claim,
-        the system queries its knowledge graph and returns a structured verdict
-        of \texttt{SUPPORTED}, \texttt{REFUTED}, or \texttt{UNCERTAIN}, together
-        with a confidence score and the specific graph evidence used. This is
-        not possible in standard LangChain RAG.
-    \end{itemize}
-
-    \item \textbf{Automatic schema inference [A4+]}: A pre-pipeline LLM call
-    discovers the entity and relation vocabulary from the corpus itself,
-    eliminating the only remaining configuration requirement of TruthfulRAG v4
-    and making the system fully domain-agnostic across medical, legal, scientific,
-    and historical corpora.
-
-    \item \textbf{Production-quality live web demonstration}: A Flask API server
-    paired with a custom HTML/JavaScript dual-panel interface provides a
-    side-by-side comparison of standard LangChain RAG against TruthfulRAG v5 on
-    any user-supplied query. The interface renders knowledge paths, confidence bars,
-    conflict counters, and claim verification results in real time.
-
-    \item \textbf{Robustness hardening}: Apostrophe injection in Neo4j Cypher
-    strings, \texttt{KnowledgePath} attribute serialisation, corpus dropdown
-    activation state, Windows UTF-8 encoding, and APOC availability failure
-    modes are all handled gracefully, making the codebase suitable for deployment
-    beyond a research prototype.
+    \item \textbf{Production hardening}: Apostrophe injection in Cypher
+    strings, malformed LLM JSON, Windows UTF-8 mismatches, APOC absence,
+    and corpus dropdown state issues are all handled gracefully.
 \end{enumerate}
 
 % ----------------------------------------------------------------
-\section{Future Enhancements}
+\section{Directions for Further Work}
 
-\begin{itemize}
-    \item \textbf{Multi-hop graph reasoning}: Current retrieval operates on
-    single edges. Future work should implement path-following retrieval (BFS or
-    PPR on paths of length $> 1$) to answer complex multi-relation queries such
-    as ``Who founded the company that acquired Twitter?''
+Four directions stand out as the highest-priority extensions:
 
-    \item \textbf{Persistent, accumulative knowledge base}: Rather than clearing
-    and rebuilding the Neo4j graph on each corpus load, future versions should
-    maintain a persistent graph where new documents add facts and contradictions
-    update old facts with a validity end timestamp rather than deleting them.
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item \textbf{Multi-hop graph reasoning.} The retriever currently operates
+    on single edges. BFS or PPR path-following retrieval would handle two-edge
+    questions at the cost of higher query latency.
 
-    \item \textbf{LangGraph agentic loop}: Wrapping the pipeline as a LangGraph
-    node would enable an agent to retry retrieval with a broadened query if
-    confidence falls below a configurable threshold.
+    \item \textbf{Domain-adaptive decay rate.} The $\lambda = 0.08$ half-life
+    is reasonable for general knowledge but wrong for medical guidelines or
+    constitutional law. Auto-selecting $\lambda$ from the inferred domain
+    class would make the decay meaningful.
 
-    \item \textbf{Cross-encoder re-ranking}: After PPR scoring, a cross-encoder
-    model (e.g., \texttt{ms-marco-MiniLM-L-12-v2}) could be used as a final
-    re-ranking step to push the most precisely relevant path to the top.
+    \item \textbf{Persistent, accumulative graph.} Currently, loading a new
+    corpus clears Neo4j entirely. A better design would timestamp old facts
+    rather than deleting them, enabling long-term knowledge-base maintenance.
 
-    \item \textbf{Multilingual corpus support}: Replacing
-    \texttt{all-MiniLM-L6-v2} with \texttt{paraphrase-multilingual-MiniLM-L12-v2}
-    and a multilingual LLM (e.g.\ Aya-23) would extend the system to Hindi,
-    Tamil, Meitei, and other regional languages without any architectural change.
-
-    \item \textbf{Cross-corpus graph persistence}: Currently, loading a new
-    corpus clears the previous graph. A future version should support
-    named, coexisting graph partitions, allowing simultaneous retrieval
-    across medical, legal, and scientific domains in a single query.
-
-    \item \textbf{Year-anchored temporal decay} (\emph{resolved in v5 final}):
-    An early version computed decay relative to the current calendar year for
-    all queries, which incorrectly penalised facts from the target year when
-    the user asked a year-specific question (e.g.\ ``Who was the CEO in 2020?'').
-    The final implementation detects the target year from the query text and
-    anchors the decay reference to that year, so facts from exactly the target
-    year receive full weight ($w = 1.0$) rather than being discarded as stale.
-\end{itemize}
+    \item \textbf{Cross-encoder re-ranking and multilingual support.} A
+    cross-encoder after PPR scoring would surface the best evidence regardless
+    of graph position. A multilingual sentence encoder would extend the system
+    to Hindi, Meitei, Tamil, and other regional languages without
+    architectural change.
+\end{enumerate}
 
 % ----------------------------------------------------------------
-\section{Final Thoughts}
+\section{Closing Remarks}
 
-TruthfulRAG v5 demonstrates that academically rigorous, conflict-aware RAG is
-achievable using entirely open-source components on consumer hardware. The
-combination of structured knowledge representation (Neo4j), entropy-guided
-conflict resolution (adapted from arXiv:2511.10375), and calibrated uncertainty
-quantification produces a system that is not only more accurate than standard
-RAG on temporally-conflicted corpora, but also more transparent and honest
-about the limits of its own knowledge.
+Standard RAG systems present every answer with the same implicit confidence:
+maximum. That is dishonest. When evidence is contradictory, or retrieved facts
+are thirty years old, a system that still says ``here is the answer'' without
+qualification is not helpful, it is misleading.
 
-The live demonstration interface makes this difference concrete and visible.
-When both systems receive the same query against a corpus containing a temporal
-conflict, standard LangChain RAG returns an answer with no qualification.
-TruthfulRAG v5 returns the same factual content, adds a confidence percentage,
-shows which facts were retained and which were filtered, and offers a claim
-verification endpoint that returns a structured verdict rather than free-form
-prose. These are not cosmetic differences; they represent a fundamental shift
-in what a retrieval-augmented system is accountable for.
+TruthfulRAG v5 takes the opposite position: honesty is a feature, not a
+limitation. A 42\,\% confidence score in a high-stakes domain is more useful
+than a system that quietly swallows its own uncertainty.
 
-The most important design insight of this project is that \emph{honesty is a
-feature, not a limitation}. A system that reports ``42\,\% confidence'' when its
-internal certainty is low is more valuable in a high-stakes setting than one
-that confidently outputs a stale or incorrect answer. TruthfulRAG v5 is a
-step towards AI systems that know when they do not know.
-
-
+Perhaps the more unexpected finding is that building such a system does not
+require industry-scale resources. This was built by one student, on a laptop,
+using freely downloadable tools, without sending a single document to an
+external server. The organisations that most need trustworthy AI --- public
+hospitals, lower courts, government archives --- are exactly the ones that cannot
+afford cloud AI subscriptions. A system like this could run for them today,
+on hardware they already own.

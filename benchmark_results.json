@@ -1,0 +1,58 @@
+[
+  {
+    "query_id": 1,
+    "query": "What is the current first-line treatment for fever in children?",
+    "answer": "The current first-line treatment for fever in children is acetaminophen or ibuprofen, typically not aspirin due to potential risks, though aspirin was previously approved by the FDA in 1950 for other uses.",
+    "confidence": "0.123",
+    "time_s": 22.28
+  },
+  {
+    "query_id": 2,
+    "query": "Which drug is used for Type 2 Diabetes management?",
+    "answer": "Aspirin is not used for Type 2 Diabetes management; drugs like metformin are typically prescribed for that purpose.",
+    "confidence": "0.123",
+    "time_s": 28.45
+  },
+  {
+    "query_id": 3,
+    "query": "Which law currently governs murder charges in India?",
+    "answer": "The current law that governs murder charges in India is the Indian Penal Code (IPC). This code has been in effect since 1860 and remains the primary legal framework for criminal offenses, including murder, in India. The Bharatiya Nyaya Sanhita mentioned in the evidence is not a currently applicable law, as it was recommended based on another source with a lower score.\n\nThe Indian Evidence Act of 2024 (which replaced the Bharatiya Sakshya Adhiniyam of 2024) deals with rules of evidence and does not govern murder charges directly. Therefore, the Indian Penal Code is the correct answer for the current law governing murder charges in India.",
+    "confidence": "0.416",
+    "time_s": 19.31
+  },
+  {
+    "query_id": 4,
+    "query": "Is digital evidence admissible in Indian courts?",
+    "answer": "Digital evidence has been considered admissible in Indian courts since 2000 with the enforcement of the Information Technology Act.",
+    "confidence": "0.416",
+    "time_s": 19.74
+  },
+  {
+    "query_id": 5,
+    "query": "How many planets are in our solar system?",
+    "answer": "There are 8 planets in our solar system as of the current understanding, with the last update occurring in 2006 when Pluto was reclassified from a planet to a dwarf planet.",
+    "confidence": "0.374",
+    "time_s": 15.33
+  },
+  {
+    "query_id": 6,
+    "query": "Which is NASA's current primary space telescope?",
+    "answer": "The James Webb Space Telescope, approved by NASA in 2021, is currently NASA's primary space telescope.",
+    "confidence": "0.35",
+    "time_s": 18.37
+  },
+  {
+    "query_id": 7,
+    "query": "Who is the father of the Indian space programme?",
+    "answer": "The father of the Indian space programme is Dr. Vikram Sarabhai, who played a crucial role in establishing the Indian Space Research Organisation (ISRO) in 1969.",
+    "confidence": "0.123",
+    "time_s": 19.27
+  },
+  {
+    "query_id": 8,
+    "query": "Which ISRO mission first confirmed water on the Moon?",
+    "answer": "ISRO's Chandrayaan-1 mission first confirmed the presence of water on the Moon in 2009.",
+    "confidence": "0.416",
+    "time_s": 18.2
+  }
+]

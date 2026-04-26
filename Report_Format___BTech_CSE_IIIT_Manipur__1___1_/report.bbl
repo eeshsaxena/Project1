@@ -1,8 +1,31 @@
-\begin{thebibliography}{1}
+\begin{thebibliography}{10}
+
+\bibitem{madam2024}
+Anonymous.
+\newblock Madam-rag: Multi-agent debate for accurate retrieval-augmented
+  generation, 2024.
+
+\bibitem{asai2023selfrag}
+Akari Asai, Zeqiu Wu, Yizhong Wang, Avirup Sil, and Hannaneh Hajishirzi.
+\newblock Self-rag: Learning to retrieve, generate, and critique through
+  self-reflection, 2023.
 
 \bibitem{chase2022langchain}
 Harrison Chase.
 \newblock Langchain, 2022.
+
+\bibitem{rrf2009}
+Gordon~V Cormack, Charles L~A Clarke, and Stefan Buettcher.
+\newblock Reciprocal rank fusion outperforms condorcet and individual rank
+  learning methods.
+\newblock In {\em Proceedings of the 32nd International ACM SIGIR Conference},
+  pages 758--759, 2009.
+
+\bibitem{dasgupta2018tkg}
+Shib~Sankar Dasgupta, Swayambhu~Nath Ray, and Partha Talukdar.
+\newblock {HyTE}: Hyperplane-based temporally aware knowledge graph embedding.
+\newblock In {\em Proceedings of the 2018 Conference on Empirical Methods in
+  Natural Language Processing}, pages 2001--2011, 2018.
 
 \bibitem{edge2024graphrag}
 Darren Edge, Ha~Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody,
@@ -10,11 +33,23 @@ Darren Edge, Ha~Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody,
 \newblock From local to global: A graph {RAG} approach to query-focused
   summarization, 2024.
 
+\bibitem{gao2023ragsurvey}
+Yunfan Gao, Yun Xiong, Xinyu Gao, Kangxiang Jia, Jinliu Pan, Yuxi Bi, Yi~Dai,
+  Jiawei Sun, and Haofen Wang.
+\newblock Retrieval-augmented generation for large language models: A survey,
+  2023.
+
 \bibitem{he2024gretriever}
 Xiaoxin He, Yijun Tian, Yifei Sun, Nitesh~V Chawla, Thomas Laurent, Yann LeCun,
   Xavier Bresson, and Bryan Hooi.
 \newblock G-retriever: Retrieval-augmented generation for textual graph
   understanding and question answering, 2024.
+
+\bibitem{ji2023survey}
+Ziwei Ji, Nayeon Lee, Rita Frieske, Tiezheng Yu, Dan Su, Yan Xu, Etsuko Ishii,
+  Ye~Jin Bang, Andrea Madotto, and Pascale Fung.
+\newblock Survey of hallucination in natural language generation.
+\newblock {\em ACM Computing Surveys}, 55(12):1--38, 2023.
 
 \bibitem{lacroix2020temporal}
 Timoth\'ee Lacroix, Guillaume Obozinski, and Nicolas Usunier.
@@ -29,13 +64,47 @@ Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir
 \newblock {\em Advances in Neural Information Processing Systems},
   33:9459--9474, 2020.
 
+\bibitem{halueval2023}
+Junyi Li, Xiaoxue Cheng, Wayne~Xin Zhao, Jian-Yun Nie, and Ji-Rong Wen.
+\newblock Halueval: A large-scale hallucination evaluation benchmark for large
+  language models, 2023.
+
+\bibitem{neo4japoc2023}
+{Neo4j Inc.}
+\newblock {APOC}: A package of component procedures for {Neo4j}, 2023.
+
+\bibitem{ollama2023}
+{Ollama Inc.}
+\newblock Ollama: Run large language models locally, 2023.
+
 \bibitem{pagerank1998}
 Lawrence Page, Sergey Brin, Rajeev Motwani, and Terry Winograd.
 \newblock The pagerank citation ranking: Bringing order to the web, 1998.
+
+\bibitem{pan2024kg}
+Shirui Pan, Linhao Luo, Yufei Wang, Chen Chen, Jiapu Wang, and Xindong Wu.
+\newblock Unifying large language models and knowledge graphs: A roadmap.
+\newblock {\em IEEE Transactions on Knowledge and Data Engineering}, 2024.
+
+\bibitem{reimers2019sbert}
+Nils Reimers and Iryna Gurevych.
+\newblock Sentence-{BERT}: Sentence embeddings using siamese {BERT}-networks.
+\newblock In {\em Proceedings of the 2019 Conference on Empirical Methods in
+  Natural Language Processing}, pages 3982--3992, 2019.
+
+\bibitem{robertson2009bm25}
+Stephen Robertson and Hugo Zaragoza.
+\newblock The probabilistic relevance framework: {BM25} and beyond.
+\newblock {\em Foundations and Trends in Information Retrieval}, 3(4):333--389,
+  2009.
 
 \bibitem{truthfulrag2024}
 Zhen Wang et~al.
 \newblock Truthfulrag: Improving factual accuracy in rag by resolving knowledge
   conflicts, 2024.
+
+\bibitem{yan2024crag}
+Shi-Qi Yan, Jia-Chen Gu, Yun Zhu, and Zhen-Hua Ling.
+\newblock Corrective retrieval augmented generation, 2024.
 
 \end{thebibliography}

@@ -1,163 +1,130 @@
-﻿
+
 % ================================================================
-% CHAPTER 1: INTRODUCTION  (humanised rewrite)
+% CHAPTER 1: INTRODUCTION
 % ================================================================
 
-\section{Outline}
+\section{System Overview}
 
 \subsection{General System}
 
-Imagine you ask an AI assistant: ``Who is the current Prime Minister of India?''
-The AI confidently says ``Narendra Modi.'' But your document collection says
-something different---a newer document says a different leader has taken over.
-Who should the system believe? This is exactly the problem that TruthfulRAG v5
-tries to solve.
+Imagine asking an AI assistant: ``Who is the current Prime Minister of India?''
+The AI confidently replies ``Narendra Modi.'' Your document collection, however,
+contains a more recent article saying a different leader has taken over.
+Which source should the system trust? That tension between what the model
+``remembers'' from training and what the documents actually say is the
+core problem TruthfulRAG v5 was built to solve.
 
-TruthfulRAG v5 is a Knowledge-Graph based question-answering pipeline. It reads
-a collection of documents, builds a structured map of the facts in those
-documents (a Knowledge Graph), and then---when a user asks a question---it does
-not just search for keywords. It reasons over the graph, detects if two facts
-contradict each other, figures out which one is more trustworthy based on how
-recent it is and how many documents agree with it, and then gives a final answer
-along with a score saying how confident it is.
-
-The whole system runs on your own machine. There is no cloud, no subscription,
-and no data leaving your computer. The LLM used is Qwen2.5-7B-Instruct, served
-locally via Ollama. The graph database is Neo4j Community Edition.
+TruthfulRAG v5 is a Knowledge-Graph based question-answering pipeline that builds
+a structured map of every fact in the document collection, spots contradictions,
+decides which side of the conflict is more trustworthy (based on age and source
+agreement), and hands the LLM a clean, conflict-free prompt. A confidence
+percentage accompanies every answer. Everything runs locally — no cloud, no
+subscription, using Qwen2.5-7B-Instruct via Ollama and Neo4j Community Edition.
 
 \subsection{Overall Project Flow}
 
-The system runs in four stages, one after the other:
-
-\begin{enumerate}
-    \item \textbf{Schema Inference} --- Before the system even starts building
-    the graph, it reads a few sample documents and asks the LLM: ``What kinds
-    of things are in these documents?'' The LLM figures out that the documents
-    are about, say, Indian scientists, and returns categories like
-    \texttt{PERSON}, \texttt{ORGANIZATION}, and \texttt{MISSION}. No manual
-    setup is needed.
-
-    \item \textbf{Graph Construction (Module A)} --- The system reads all the
-    documents, pulls out facts (e.g., ``ISRO launched Chandrayaan-3 in 2023''),
-    and stores them as nodes and arrows in a Neo4j database. It also keeps track
-    of \emph{which year} each fact is from, and \emph{how many documents} said
-    the same thing.
-
-    \item \textbf{Graph Retrieval (Module B)} --- When the user asks a question,
-    the system searches the graph. It does not just look for matching words; it
-    uses a type of graph walking algorithm called Personalised PageRank to find
-    facts that are \emph{close to} the topic in the graph. It also applies
-    score penalties to older facts so that recent information is preferred.
-
-    \item \textbf{Conflict Resolution (Module C)} --- Sometimes the graph
-    contains two facts that contradict each other. The system detects this,
-    throws away the older, superseded fact, and checks whether the remaining
-    facts actually help the LLM give a better answer. It measures this using
-    entropy---if giving the LLM a fact makes it less confused, the fact is
-    judged useful. A final confidence score is printed alongside the answer.
+The pipeline runs in four sequential stages:
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item \textbf{Schema Inference}: The LLM samples a handful of documents and
+    identifies entity and relation types automatically — no developer configuration.
+    \item \textbf{Graph Construction (Module A)}: Facts are extracted and stored
+    as typed, timestamped, weighted edges in Neo4j.
+    \item \textbf{Graph Retrieval (Module B)}: Personalised PageRank finds
+    structurally nearby facts; temporal decay penalises older information.
+    \item \textbf{Conflict Resolution (Module C)}: Contradicting facts are
+    compared by score gap and entropy; the weaker is discarded with a logged reason.
 \end{enumerate}
 
-\subsection{Important Features of the Application}
+\subsection{Key Features}
 
-\begin{itemize}
-    \item \textbf{No configuration needed} --- You literally just give it
-    documents and ask questions. The schema figures itself out.
-    \item \textbf{Time-aware} --- Knowing that a 2023 fact is more reliable
-    than a 1990 fact is built into the scoring math.
-    \item \textbf{Honest} --- If the system is not sure about an answer, it
-    says so. A confidence score of 42\% means ``I found an answer in your
-    documents, but my AI model is not fully convinced.''
-    \item \textbf{Explainable} --- When the system removes a conflicting fact,
-    it tells you: ``I discarded this because it was superseded in 2024 by a
-    newer fact.''
-    \item \textbf{Multi-domain} --- The same code, zero changes, works on medical
-    documents, legal documents, space science, and politics.
-\end{itemize}
+Five properties distinguish this system from standard RAG:
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item \textbf{Zero configuration}: Schema is discovered automatically from the corpus.
+    \item \textbf{Time-awareness}: Temporal decay $e^{-0.08 \times \text{age}}$ is
+    applied at retrieval so newer facts outrank older ones on the same topic.
+    \item \textbf{Calibrated honesty}: A three-factor confidence score replaces
+    the implicit 100\,\% certainty of standard RAG.
+    \item \textbf{Explainability}: Every conflict removal is logged with the
+    numerical reason.
+    \item \textbf{Domain independence}: The same code handles medical, legal,
+    space-science, and political corpora without modification.
+\end{enumerate}
 
 % ----------------------------------------------------------------
 \section{Problem Statement}
 
 \subsection{Rationale for Research}
 
-Large language models---the kind that power ChatGPT, Gemini, and similar
-tools---have a frozen memory. Everything they know was learnt during training.
-If something changed after that training cutoff, the model does not know. Worse,
-it will often answer confidently as if it does know, which is dangerous.
+Large language models have a frozen memory. Everything they know was baked in
+during training, and if the world changed after the cutoff date, the model does
+not know, but it will often answer confidently regardless. Standard RAG was
+meant to close that gap by supplying documents at query time, but real document
+collections are messy: a hospital's records may contain both a 1990 guideline
+and a 2023 update for the same drug. Standard RAG passes both to the LLM,
+which has no principled way to choose and either hedges or picks arbitrarily.
+The motivating observation is simple: a careful human reader would compare
+dates, weight the newer source, and check for corroboration. A software system
+can and should do the same.
 
-Standard Retrieval-Augmented Generation (RAG) was designed to fix this. You
-give the LLM your own documents at question time. But here is the catch: if your
-document collection contains two articles that say different things (which is
-very common in news archives, medical research, and legal databases), standard
-RAG hands both conflicting pieces of text to the LLM and hopes for the best.
-The LLM has no principled way to decide which one to trust.
+\subsection{Gaps in Existing Tools}
 
-This project was motivated by one observation: \emph{a well-designed system
-should be able to look at two conflicting facts, compare their dates, count
-their sources, and make a reasoned decision about which to trust}---exactly the
-way a trained researcher or lawyer would.
+Four concrete gaps exist in current open-source RAG tools:
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item No tool detects conflicts between retrieved documents — LangChain,
+    LlamaIndex, and GraphRAG pass whatever they retrieve directly to the LLM.
+    \item KG-RAG systems require manual entity/relation specification; switching
+    domains means rewriting configuration files.
+    \item No system attaches a confidence score — every response is presented
+    with equal certainty regardless of evidence quality.
+    \item Conflict resolution, when it occurs at all, is silent — no audit trail
+    explains what was kept, what was discarded, and why.
+\end{enumerate}
 
-\subsection{Barriers to Effective Research}
+\subsection{Challenges in Document-Based QA}
 
-\begin{itemize}
-    \item No open-source RAG framework detects conflicts between retrieved
-    documents. LangChain, LlamaIndex---none of them do this.
-    \item Knowledge-graph RAG tools require the developer to manually type out all
-    the entity categories before the system will work. If you switch from politics
-    to medicine, you have to rewrite configuration files.
-    \item None of these systems report any confidence level. Every answer is
-    presented at maximum confidence---which is simply not honest.
-    \item When contradictions are resolved internally, the user is never told.
-    There is no audit trail.
-\end{itemize}
-
-\subsection{Challenges in Modern Research Workflows}
-
-The documents that researchers, students, and professionals work with tend to
-have three characteristics that trip up standard RAG:
-
-\begin{enumerate}
-    \item \textbf{Facts change over time.} The chairman of ISRO in 1975 is not
-    the chairman today. The first-line drug for diabetes in 1960 is not the
-    recommended drug today. A system that does not track time will give wrong
-    answers to questions about current state.
-
-    \item \textbf{Important facts appear in multiple places.} If the same fact
-    (e.g., ``Chandrayaan-3 landed on August 23, 2023'') appears in five documents,
-    that is stronger evidence than if it appeared in only one. The system should
-    reward multiply-attested facts.
-
-    \item \textbf{Domains change completely.} A system designed for one topic
-    should not break when pointed at a completely different topic. Needing to
-    rewrite config files every time defeats the purpose of an intelligent system.
+Three properties of real-world document collections consistently challenge
+retrieval pipelines:
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item \textbf{Facts are time-sensitive.} A system with no concept of time
+    answers current-state questions using whatever it retrieves first, regardless of age.
+    \item \textbf{Agreement across sources matters.} Seven independent documents
+    confirming a fact constitute far stronger evidence than one; retrieval
+    scores should reflect this.
+    \item \textbf{Domains vary wildly.} Any manual setup step is a barrier that
+    limits real-world deployment across heterogeneous document collections.
 \end{enumerate}
 
 \subsection{Project Objectives}
 
-\begin{enumerate}
-    \item Re-implement the TruthfulRAG v4 pipeline (arXiv:2511.10375) using
-    Python, LangChain, Ollama, and Neo4j.
-    \item Extend it with six improvements addressing the shortcomings listed above.
-    \item Remove the one remaining manual step (schema configuration) by adding
-    automatic schema inference.
-    \item Test the system on multiple real-world domains---including Indian
-    science, law, and medicine---to prove domain-agnosticism.
-    \item Evaluate quantitatively against the v4 baseline using retrieval scores
-    and conflict-detection rates.
+The five concrete objectives of this project were:
+\begin{enumerate}\itemsep0pt\parsep0pt
+    \item Faithfully re-implement the KG-RAG v4 pipeline (arXiv:2511.10375)
+    in Python using LangChain, Ollama, and Neo4j.
+    \item Extend that baseline with nine novel contributions addressing the
+    gaps above, particularly temporal scoring and corroboration weighting.
+    \item Eliminate the last remaining manual step in v4 (schema configuration)
+    by adding automatic domain inference before graph construction.
+    \item Validate the system on four real-world domains: Indian political
+    history, Indian science, Indian law, and space science.
+    \item Evaluate performance against both the v4 baseline and standard
+    LangChain RAG using benchmark datasets and conflict-detection metrics.
 \end{enumerate}
 
 % ----------------------------------------------------------------
 \section{Motivation}
 
-\subsection{Purpose}
+\subsection{Why This Matters}
 
-The motivation behind this project is straightforward: an AI system that can
-say ``I am only 42\% confident in this answer'' is more useful for serious work
-than one that always sounds 100\% confident. Real research, real legal work, and
-real medical decisions require knowing when to trust a source and when to be
-sceptical.
+A system that says ``I am 42\,\% confident in this answer'' is more useful in
+a hospital or a courtroom than one that always sounds completely sure.
+Overconfident AI answers in high-stakes settings are not just wrong, they are
+dangerous. This project sets out to show that honest, conflict-aware QA does
+not require a well-funded research lab: it can be built by a final-year
+undergraduate student on a laptop using freely downloadable, open-source tools,
+without sending a single document to an external server. The organisations
+that most need trustworthy AI — public hospitals, lower courts, government
+archives — are exactly those that cannot afford cloud subscriptions or
+proprietary knowledge-base software.
 
-This project demonstrates that building a \emph{trustworthy} RAG system is not
-a research-only endeavour. It can be built by a student, from open-source tools,
-without a supercomputer, and without sending anyone's data to an external server.
-If it can be done here, it can be deployed in hospitals, courts, and government
-offices that cannot afford commercial AI subscriptions.
+
+

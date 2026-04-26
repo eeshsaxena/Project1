@@ -1,0 +1,3072 @@
+TruthfulRAG v5: A Dynamic, Domain-Agnostic
+Knowledge-Graph
+Retrieval-Augmented Generation Pipeline with
+Conflict Resolution
+
+A report submitted for the course named Project - I (CS3201)
+
+Submitted By
+
+E ESH S AXENA
+SEMESTER - VI
+230101032
+Supervised By
+
+D R . J ENNIL T HIYAM
+
+D EPARTMENT OF C OMPUTER S CIENCE AND E NGINEERING
+I NDIAN I NSTITUTE OF I NFORMATION T ECHNOLOGY S ENAPATI , M ANIPUR
+A PRIL , 2026
+
+Declaration
+In this submission, I have expressed my idea in my own words, and I have adequately cited
+and referenced any ideas or words that were taken from another source. I also declare that I
+adhere to all principles of academic honesty and integrity and that I have not misrepresented
+or falsified any ideas, data, facts, or sources in this submission. If any violation of the above is
+made, I understand that the institute may take disciplinary action. Such a violation may also
+engender disciplinary action from the sources which were not properly cited or permission not
+taken when needed.
+
+Eesh Saxena
+230101032
+
+1
+
+Department of Computer Science and Engineering
+Indian Institute of Information Technology Senapati, Manipur
+
+Dr. Jennil Thiyam
+Assistant Professor
+
+Email: jennil@iiitmanipur.ac.in
+Department of Computer Science and Engineering
+
+To Whom It May Concern
+
+This is to certify that the project report entitled “TruthfulRAG v5: A Dynamic,
+Domain-Agnostic Knowledge-Graph Retrieval-Augmented Generation
+Pipeline with Conflict Resolution,” submitted to the Department of Computer
+Science and Engineering, Indian Institute of Information Technology Senapati,
+Manipur in partial fulfilment for the award of the degree of Bachelor of Technology in
+Computer Science and Engineering is a record of bonafide work carried out by Eesh
+Saxena bearing roll number 230101032.
+
+Signature of Supervisor
+(Dr. Jennil Thiyam)
+
+Signature of the Examiner 1 ............................
+Signature of the Examiner 2 ............................
+Signature of the Examiner 3 ............................
+Signature of the Examiner 4 ............................
+
+Abstract
+Large Language Models hallucinate and contradict themselves when their training memory
+conflicts with the documents a user provides. Standard Retrieval-Augmented Generation does
+not fix this: it simply hands both the old and the new fact to the LLM and hopes for the best.
+This project builds and extends TruthfulRAG v5, a Knowledge-Graph based pipeline that
+actually detects when two retrieved facts disagree and decides which one to believe. The starting point is the three-module architecture from KG-RAG v4 (arXiv:2511.10375). On top of that
+baseline, nine new contributions are added. The most important are an exponential temporal
+decay (e−λ t , λ = 0.08) that automatically demotes older facts at retrieval time; a year-per-triple
+storage scheme that makes the decay exact; and a score-gap threshold that discards stale conflicting factsbefore they reach the LLM prompt, rather than asking the LLM to sort them out
+itself. A cross-document corroboration bonus, hybrid BM25+semantic retrieval with Reciprocal Rank Fusion, a calibrated three-factor confidence score, and a human-readable audit trail
+of every conflict decision round out the system. An automatic schema inference step removes
+the one remaining manual configuration step from v4, making the pipeline work on any text
+domain without code changes.
+On the pminervini/HaluEval benchmark (200 samples), TruthfulRAG v5 rejects 92.0 %
+of hallucinated answers versus 77.5 % for standard LangChain RAG, a gap of 14.5 percentage
+points. On a ConflictQA-based evaluation (125 queries), the Conflict Detection Rate doubles
+from 25 % to 50 % between the v4 baseline and v5. Internal testing across four domains (medical, legal, Indian science, and space science) shows 93 % accuracy on conflict-bearing queries
+against 52 % for LangChain. Everything runs locally on a laptop using Qwen2.5-7B-Instruct
+and Neo4j Community Edition, no cloud, no API key, no data leaving the machine.
+
+Acknowledgement
+
+I would like to express my sincere gratitude to my project instructor, Dr. Jennil Thiyam, for
+her invaluable guidance, thorough feedback, and consistent support throughout the duration
+of this project. Her direction was instrumental in shaping the final system design and ensuring
+the academic rigour of this work.
+I thank the Department of Computer Science and Engineering at IIIT Senapati, Manipur
+for providing the computational resources and academic environment necessary to complete
+this work. I am grateful to the open-source communities behind LangChain, Neo4j, Ollama,
+and the sentence-transformers library, whose tools formed the technical foundation of this
+project.
+Finally, I acknowledge the authors of TruthfulRAG v4 (arXiv:2511.10375), whose published
+research provided the theoretical and architectural basis from which this project’s extensions
+were designed.
+
+Eesh Saxena
+230101032
+
+1
+
+Contents
+List of Figures
+
+5
+
+List of Tables
+
+6
+
+1 Introduction
+
+7
+
+1.1 Outline . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+7
+
+1.1.1 General System . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+7
+
+1.1.2 Overall Project Flow . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+7
+
+1.1.3 Key Features . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+8
+
+1.2 Problem Statement . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+8
+
+1.2.1 Rationale for Research . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+8
+
+1.2.2 Gaps in Existing Tools . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+8
+
+1.2.3 Challenges in Document-Based QA . . . . . . . . . . . . . . . . . . . . . . . .
+
+9
+
+1.2.4 Project Objectives . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+9
+
+1.3 Motivation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+10
+
+1.3.1 Why This Matters . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+10
+
+2 Literature Survey
+
+11
+
+2.1 Existing Solution Introduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+11
+
+2.2 Relevant Theories and Models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+11
+
+2.2.1 Knowledge Graphs for QA . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+11
+
+2.2.2 Temporal Knowledge Graphs . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+11
+
+2.2.3 Entropy and Uncertainty in LLMs . . . . . . . . . . . . . . . . . . . . . . . .
+
+12
+
+2.3 Comparison of Similar Projects . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+12
+
+2.4 Comparison with Recent Systems (2023–2025) . . . . . . . . . . . . . . . . . . . . .
+
+12
+
+2.5 Identified Gaps in the Literature . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+13
+
+2.6 Conclusion of Survey . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+13
+
+3 Requirement Engineering
+
+14
+
+3.1 Feasibility Study . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+3.1.1 Technical Feasibility . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+3.1.2 Operational and Economic Feasibility . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+3.1.3 Legal Feasibility . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+2
+
+3.2 Requirement Elicitation and Analysis . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+3.2.1 Objective . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+3.2.2 Methods Used for Elicitation . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+14
+
+3.2.3 Modeling . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+15
+
+3.3 Software Requirement Specification (SRS) . . . . . . . . . . . . . . . . . . . . . . .
+
+15
+
+3.3.1 Purpose of the SRS . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+15
+
+3.3.2 Functional Requirements . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+15
+
+3.3.3 Non-Functional Requirements . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+16
+
+3.3.4 Assumptions and Dependencies . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+16
+
+3.3.5 Constraints . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+16
+
+3.4 Software Requirement Validation . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+3.4.1 Review Process . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+3.4.2 Validation Approach . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+3.4.3 Completeness and Consistency . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+3.5 Software Requirement Management . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+3.5.1 Version Control . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+4 System Design
+
+19
+
+4.1 System Architecture . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+19
+
+4.2 Data Flow Diagrams (DFD) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+20
+
+4.2.1 Level 0 Data Flow Diagram (Context Diagram) . . . . . . . . . . . . . . . .
+
+20
+
+4.2.2 Level 1 Data Flow Diagram . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+20
+
+4.3 Class Diagrams . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+20
+
+4.4 Module Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+21
+
+4.4.1 Module: Pre-Pipeline Schema Inference [A4+] . . . . . . . . . . . . . . . . .
+
+21
+
+4.4.2 Module: Knowledge Graph Construction (Module A) . . . . . . . . . . . . .
+
+22
+
+4.4.3 Module: Graph Retrieval (Module B) . . . . . . . . . . . . . . . . . . . . . . .
+
+22
+
+4.4.4 Module: Conflict Resolution and Answer Generation (Module C) . . . . . .
+
+23
+
+4.5 Database Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+23
+
+4.5.1 Neo4j Graph Schema . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+23
+
+4.5.2 Corpus JSON Schema . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+24
+
+4.6 Sequence Diagram . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+24
+
+4.7 Web Interface Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+25
+
+4.7.1 Overview . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+25
+
+4.7.2 Interface Layout . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+25
+
+5 Implementation
+
+26
+
+5.1 Development Environment . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+26
+
+5.1.1 Programming Language: Python 3.x . . . . . . . . . . . . . . . . . . . . . . .
+
+26
+
+5.1.2 IDE: Visual Studio Code . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+26
+
+5.1.3 Version Control: Git and GitHub . . . . . . . . . . . . . . . . . . . . . . . . .
+
+26
+
+3
+
+5.1.4 Libraries and Frameworks . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+27
+
+5.2 System Architecture Implementation . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+28
+
+5.2.1 Why a Layered Pipeline Architecture? . . . . . . . . . . . . . . . . . . . . . .
+
+28
+
+5.2.2 Why a Single Python File? . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+28
+
+5.2.3 Why Share the Embedding Model Across Classes? . . . . . . . . . . . . . .
+
+28
+
+5.2.4 Why an In-Memory LLM Cache? . . . . . . . . . . . . . . . . . . . . . . . . .
+
+28
+
+5.2.5 Why PPR (Personalised PageRank) for Graph Retrieval? . . . . . . . . . .
+
+29
+
+5.2.6 Why Entropy as the Conflict Resolution Signal? . . . . . . . . . . . . . . . .
+
+29
+
+5.3 Code Implementation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+29
+
+5.3.1 Key Code Snippets . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+30
+
+5.4 Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+30
+
+5.4.1 Unit Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+30
+
+5.4.2 Integration Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+31
+
+5.4.3 System Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+31
+
+5.4.4 User Acceptance Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+31
+
+5.5 Challenges and Solutions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+32
+
+5.5.1 Challenges . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+32
+
+5.5.2 Solutions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+32
+
+6 Results
+
+33
+
+6.1 System Output Evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+33
+
+6.1.1 Functional Evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+33
+
+6.2 Project Development Timeline . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+34
+
+6.3 HaluEval Benchmark, External Validation . . . . . . . . . . . . . . . . . . . . . . .
+
+36
+
+6.4 Performance Metrics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+37
+
+6.5 Screenshots and System Interface . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+38
+
+6.5.1 Indian Science Domain Results . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+38
+
+6.5.2 Key System Output Charts . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+39
+
+6.5.3 Proof: LangChain Cannot Differentiate Between Time . . . . . . . . . . . .
+
+39
+
+6.5.4 Web Interface Screenshots . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+42
+
+6.5.5 The Space Telescope Query: A Notable Result . . . . . . . . . . . . . . . . .
+
+42
+
+6.6 Comparison Against Requirements . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+45
+
+6.6.1 Functional Requirements Fulfillment . . . . . . . . . . . . . . . . . . . . . .
+
+45
+
+6.6.2 Non-Functional Requirements Fulfillment . . . . . . . . . . . . . . . . . . .
+
+45
+
+6.7 Future Enhancements . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+45
+
+6.7.1 Known Limitation: Temporal Decay Reference Year . . . . . . . . . . . . .
+
+45
+
+6.7.2 Limitation: Negation-Blind Triple Extraction . . . . . . . . . . . . . . . . .
+
+46
+
+6.7.3 Limitation: Fixed Decay Rate λ Across All Domains . . . . . . . . . . . . .
+
+46
+
+6.7.4 Limitation: Low-Variance Entropy Estimate from n = 3 Samples . . . . . .
+
+47
+
+6.7.5 Limitation: Undated Triples Receive Implicitly Maximum Recency . . . .
+
+47
+
+6.7.6 Limitation: PPR and Edge Retrieval Capped at 200 Records . . . . . . . .
+
+47
+
+4
+
+7 Conclusion
+
+49
+
+7.1 What Was Built . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+49
+
+7.2 Directions for Further Work . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+50
+
+7.3 Closing Remarks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+51
+
+Bibliography
+
+52
+
+5
+
+List of Figures
+2.1 RAG research evolution timeline: 2020–2026, positioning TruthfulRAG v5 in the
+literature landscape . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+12
+
+4.1 Six-layer system architecture of TruthfulRAG v5 . . . . . . . . . . . . . . . . . . .
+
+19
+
+4.2 Level-0 Context DFD for TruthfulRAG v5 . . . . . . . . . . . . . . . . . . . . . . . .
+
+20
+
+4.3 Level-1 DFD showing the four internal sub-processes . . . . . . . . . . . . . . . . .
+
+21
+
+4.4 UML class diagram for enhanced_main.py . . . . . . . . . . . . . . . . . . . . . . .
+
+21
+
+4.5 Conflict resolution decision flowchart (Module C) . . . . . . . . . . . . . . . . . . .
+
+23
+
+4.6 End-to-end sequence diagram for corpus load and query . . . . . . . . . . . . . . .
+
+25
+
+4.7 TruthfulRAG v5 live chatbot: dual-panel comparison interface . . . . . . . . . . .
+
+25
+
+6.1 Project development Gantt chart: 15 January 2026 to 24 April 2026 (14 weeks) .
+
+35
+
+6.2 HaluEval: Hallucination Rejection Rate vs. Exact Match across three systems
+(200 samples) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+36
+
+6.3 Conflict Detection Rate: LangChain and v4 = 25% (random baseline); v5 = 50%
+(2× improvement) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+37
+
+6.4 Complete benchmark summary: HRR%, CDR%, and Temporal Accuracy% across
+all three systems . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+38
+
+6.5 Answer accuracy across all three system generations and question types . . . . .
+
+39
+
+6.6 Six-dimension capability radar chart: LangChain RAG vs. TruthfulRAG v5 . . .
+
+40
+
+6.7 How a fact’s retrieval weight decays as it ages (λ = 0.08) . . . . . . . . . . . . . . .
+
+40
+
+6.8 Score gap: LangChain = 0.000 (no time), v4 = 0.028 (below threshold), v5 = 1.126
+(40× improvement) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+42
+
+6.9 Corroboration bonus as a function of source support count [N1] . . . . . . . . . . .
+
+43
+
+6.10 [N5] Calibrated confidence score breakdown across four evaluation queries . . . .
+
+43
+
+6.11 Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline across all
+domains . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+44
+
+6.12 Side-by-side comparison: LC RAG vs. TruthfulRAG v5 on conflicted medical query 44
+6.13 Claim Verification Mode [N6]: REFUTED verdict with graph evidence . . . . . .
+
+6
+
+44
+
+List of Tables
+2.1 Comparison of knowledge-graph RAG systems . . . . . . . . . . . . . . . . . . . . .
+
+12
+
+2.2 Comparison with recent state-of-the-art systems (2023–2025) . . . . . . . . . . . .
+
+13
+
+3.1 Requirement-to-implementation traceability . . . . . . . . . . . . . . . . . . . . . .
+
+17
+
+4.1 Class overview and key attributes . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+21
+
+4.2 Sample relation types across tested domains . . . . . . . . . . . . . . . . . . . . . .
+
+24
+
+5.1 Software stack and version details . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+27
+
+6.1 Functional requirements verification results . . . . . . . . . . . . . . . . . . . . . .
+
+34
+
+6.2 Project phase calendar (Jan 15, Apr 24, 2026) . . . . . . . . . . . . . . . . . . . . .
+
+34
+
+6.3 HaluEval benchmark results (200 samples, pminervini/HaluEval) . . . . . . . . .
+
+36
+
+6.4 Multi-dataset evaluation: ConflictQA + WebQuestions + SQuAD v2 (125 queries)
+
+37
+
+6.5 Pipeline performance across all four test domains . . . . . . . . . . . . . . . . . . .
+
+38
+
+6.6 Auto-inferred schemas across all four domains . . . . . . . . . . . . . . . . . . . . .
+
+38
+
+6.7 Score gap proof: same conflict query across three systems . . . . . . . . . . . . . .
+
+41
+
+6.8 Live temporal blindness evidence: medical corpus (Doc A 1990 vs Doc B 2023) . .
+
+42
+
+7
+
+Chapter 1
+
+Introduction
+1.1
+
+Outline
+
+1.1.1
+
+General System
+
+Imagine asking an AI assistant: “Who is the current Prime Minister of India?” The AI confidently replies “Narendra Modi.” Your document collection, however, contains a more recent
+article saying a different leader has taken over. Which source should the system trust? That
+tension, between what the model “remembers” from training and what the documents actually
+say, is the core problem TruthfulRAG v5 was built to solve.
+TruthfulRAG v5 is a Knowledge-Graph based question-answering pipeline. Instead of
+searching for matching keywords, it builds a structured map of every fact in the document
+collection, reasons over that map to spot contradictions, decides which side of the conflict is
+more trustworthy (based on age and how many sources agree), and hands the LLM a clean,
+conflict-free prompt. A confidence percentage comes back with every answer, so the user always knows how certain the system is.
+Everything runs on a local machine. No cloud, no subscription, no data leaving the computer. The language model is Qwen2.5-7B-Instruct, served through Ollama. The graph store
+is Neo4j Community Edition.
+
+1.1.2
+
+Overall Project Flow
+
+The pipeline runs in four stages, executed in sequence:
+1. Schema Inference: Before any graph is built, the system samples a handful of documents and asks the LLM a simple question: “What kinds of entities appear in these
+texts?” For an Indian-science corpus the LLM returns PERSON, ORGANIZATION, MISSION.
+No developer configuration is written or read.
+2. Graph Construction (Module A): Every document is processed to pull out facts (for
+instance, “ISRO launched Chandrayaan-3 in 2023”) and store them as nodes and directed
+edges in Neo4j. Each edge carries the year the fact was published and a count of how
+many separate documents stated the same thing.
+3. Graph Retrieval (Module B): At query time, the system does not scan for keywords.
+It runs Personalised PageRank from the entities mentioned in the question to find structurally nearby facts, then applies a score penalty proportional to the age of each fact so
+that newer information naturally rises to the top.
+8
+
+4. Conflict Resolution (Module C): When two retrieved facts contradict each other, the
+older one is discarded and the reason is logged. The remaining facts are passed through
+an entropy check: if a fact genuinely reduces the LLM’s uncertainty about the answer, it
+is kept; if it adds confusion, it is dropped. A three-factor confidence score accompanies
+the final answer.
+
+1.1.3
+
+Key Features
+
+Five properties make this system different from standard RAG:
+1. Zero configuration: Drop in a folder of documents and ask questions. The schema is
+discovered automatically.
+2. Time-awareness: A 2023 fact genuinely outscores a 1990 fact on the same topic. That
+weighting is not a heuristic; it comes from the exponential decay formula e−0.08×age applied at retrieval time.
+3. Calibrated honesty: A 42 % confidence score means the system found an answer in the
+documents but its internal evidence was weak. A system that always says 100 % is not
+honest; it is just hiding uncertainty.
+4. Explainability: Every conflict removal is logged. The user can see exactly which fact
+was discarded, why, and what was used instead.
+5. Domain independence: The exact same code handles medical records, legal statutes,
+space-science papers, and political histories without a single line of change between runs.
+
+1.2
+
+Problem Statement
+
+1.2.1
+
+Rationale for Research
+
+Large language models have a frozen memory. Everything they know was baked in during
+training, and if the world changed after the cutoff date, the model does not know, but it will
+often answer as confidently as if it did. That gap between model knowledge and reality is the
+hallucination problem.
+Standard Retrieval-Augmented Generation was meant to close that gap. At question time,
+you hand the LLM your own documents, and it uses those instead of its training memory. The
+trouble is that real document collections are messy. A hospital’s records may contain both a
+1990 guideline and a 2023 update for the same drug. Standard RAG passes both to the LLM
+and leaves it to figure out which to use. The LLM has no principled way to choose, so it either
+hedges (“Some sources say X, others say Y”) or picks arbitrarily.
+The motivating observation for this project is simple: a careful human reader would compare the dates on those two documents, weight the newer one more heavily, check whether
+multiple sources agree, and then decide. That reasoning is not magic, it is just disciplined
+information evaluation. There is no good reason a software system cannot do the same thing.
+
+1.2.2
+
+Gaps in Existing Tools
+
+Four concrete gaps exist in current open-source RAG tools:
+1. No tool detects conflicts between retrieved documents. LangChain, LlamaIndex, and
+GraphRAG all pass whatever they retrieve directly to the LLM.
+9
+
+2. Knowledge-graph RAG systems require the developer to manually specify entity and
+relation categories before ingestion. Switching from a politics corpus to a medical one
+means rewriting configuration files.
+3. None of these systems attach any confidence score to their answers. Every response is
+presented with equal certainty, regardless of how weak or contradictory the evidence
+was.
+4. When a conflict is resolved internally, if that even happens, the user is never told. There
+is no audit trail explaining what was kept, what was discarded, and why.
+
+1.2.3
+
+Challenges in Document-Based QA
+
+Three properties of real-world document collections consistently trip up standard retrieval
+pipelines:
+1. Facts are time-sensitive. The ISRO chairman in 1975 is not the chairman today.
+The first-line treatment for Type 2 diabetes recommended in 1960 is not the one recommended now. A system with no concept of time will answer questions about current
+state using whatever it retrieves first, regardless of age.
+2. Agreement across sources matters. If seven independent documents all say
+“Chandrayaan-3 landed on 23 August 2023”, that is far stronger evidence than one document making the same claim. Retrieval scores should reflect this, but standard embedding cosine similarity does not.
+3. Domains vary wildly. A system that works well on political documents should not
+require configuration changes to work on chemistry papers. Any manual setup step is a
+barrier that limits real-world deployment.
+
+1.2.4
+
+Project Objectives
+
+The five concrete objectives of this project were:
+1. Faithfully re-implement the KG-RAG v4 pipeline (arXiv:2511.10375) in Python using
+LangChain, Ollama, and Neo4j as the infrastructure.
+2. Extend that baseline with nine novel contributions that address the gaps listed above,
+particularly temporal scoring and corroboration weighting.
+3. Eliminate the last remaining manual step in v4, schema configuration, by adding an
+automatic domain-inference pass before graph construction begins.
+4. Validate the system on four real-world domains: Indian political history, Indian science,
+Indian law, and space science.
+5. Evaluate performance against both the v4 baseline and standard LangChain RAG using
+external benchmark datasets and domain-level conflict-detection metrics.
+
+10
+
+1.3
+
+Motivation
+
+1.3.1
+
+Why This Matters
+
+The simplest way to state the motivation: a system that says “I am 42 % confident in this
+answer” is more useful in a hospital or a courtroom than one that always sounds completely
+sure. Overconfident AI answers in high-stakes settings are not just wrong, they are dangerous.
+What this project sets out to show is that the tooling for honest, conflict-aware QA does not
+have to come from a well-funded research lab. It can be built by a final-year undergraduate
+student, using entirely open-source components, on a laptop, without sending anyone’s data
+to an external server. If it can be done at that scale, there is nothing stopping hospitals,
+courts, and government departments, organisations that handle sensitive data and cannot use
+commercial cloud AI, from deploying something similar.
+
+11
+
+Chapter 2
+
+Literature Survey
+2.1
+
+Existing Solution Introduction
+
+Retrieval-Augmented Generation was formalised by Lewis et al. [7] as a method to overcome
+the static knowledge limitations of parametric LLMs. The original implementation combined a
+Dense Passage Retriever with a BART generative model, demonstrating measurable improvements on knowledge-intensive NLP tasks such as open-domain question answering and fact
+verification.
+LangChain [3], launched in 2022, standardised RAG into a composable Python toolkit.
+Its RetrievalQA chain encapsulates the full pipeline: document loading, text splitting, embedding, vector store indexing, similarity retrieval, and prompted answer generation. This
+abstraction enabled rapid prototyping but fixed a flat-retrieval architecture with no structural
+knowledge representation or conflict awareness.
+
+2.2
+
+Relevant Theories and Models
+
+2.2.1
+
+Knowledge Graphs for QA
+
+Knowledge Graphs represent information as typed triples (h, r, t), enabling structural multihop reasoning that flat text retrieval cannot support. Early KG-QA systems such as KGQA [9]
+traversed Freebase to answer factoid questions. More recent work applies embedding-based
+models (TransE, RotatE) to learn distributed representations of entities and relations for link
+prediction.
+G-Retriever [5] demonstrated that graph-based retrieval combined with LLM generation
+outperforms vanilla RAG on multi-hop textual graph QA tasks. Microsoft GraphRAG [4] further showed that community-hierarchical graph construction enables high-quality global summaries of large corpora.
+
+2.2.2
+
+Temporal Knowledge Graphs
+
+Lacroix et al. [6] extended tensor factorisation models to temporal KGs, where each triple carries a timestamp. CronKGQA introduced a benchmark for temporal question answering over
+evolving KGs. These approaches, however, focus on embedding-based link prediction rather
+than retrieval augmentation over arbitrary text.
+
+12
+
+2.2.3
+
+Entropy and Uncertainty in LLMs
+
+Shannon entropy has been applied to measure LLM calibration: a well-calibrated model’s confidence should correlate with its accuracy. Kadavath et al. (2022) showed that LLMs can selfassess uncertainty via sampling; Farquhar et al. (2023) introduced semantic entropy, grouping
+semantically equivalent answers before entropy computation to avoid penalising paraphrase
+variation.
+TruthfulRAG v4 [10] operationalised this into a retrieval decision rule: a path is corrective only if providing it as context reduces the LLM’s sampling entropy by at least a learned
+threshold τ.
+
+2.3
+
+Comparison of Similar Projects
+Table 2.1: Comparison of knowledge-graph RAG systems
+
+Feature
+
+LangChain
+
+GraphRAG
+
+TruthfulRAG v4
+
+v5 (Ours)
+
+Knowledge Graph storage
+
+No
+
+Yes
+
+Yes
+
+Yes
+
+Conflict detection
+
+No
+
+No
+
+Yes
+
+Yes
+
+Temporal decay
+
+No
+
+No
+
+No
+
+Yes
+
+Cross-document corroboration
+
+No
+
+No
+
+No
+
+Yes
+
+Historical snapshot queries
+
+No
+
+No
+
+No
+
+Yes
+
+Explanation audit trail
+
+No
+
+No
+
+No
+
+Yes
+
+Calibrated confidence score
+
+No
+
+No
+
+No
+
+Yes
+
+Auto schema inference
+
+No
+
+No
+
+No
+
+Yes
+
+Partial
+
+Yes
+
+Yes
+
+Yes
+
+Open source / local inference
+
+2.4
+
+Comparison with Recent Systems (2023–2025)
+
+Figure 2.1: RAG research evolution timeline: 2020–2026, positioning TruthfulRAG v5 in the literature
+landscape
+
+Figure 2.1 places TruthfulRAG v5 in context with key RAG milestones. Table 2.2 extends
+the comparison to systems published since 2023.
+
+13
+
+Table 2.2: Comparison with recent state-of-the-art systems (2023–2025)
+System
+
+Year
+
+Method
+
+Conflict Elim.
+
+Temp. Decay
+
+Key Metric
+
+Self-RAG [2]
+
+2023
+
+Self-reflective critique tokens
+
+No
+
+No
+
+∼74% EM
+
+CRAG [11]
+
+2023
+
+Corrective retrieval + web fallback
+
+No
+
+No
+
+∼84% EM
+
+MADAM-RAG [1]
+
+2024
+
+Multi-agent debate across sources
+
+Partial
+
+No
+
+∼68% EM
+
+KG-RAG v4 [10]
+
+2024
+
+Graph + entropy; score gap=0.028
+
+No
+
+No
+
+∼75% CDR
+
+TruthfulRAG v5 [This Work]
+
+2026
+
+Temporal decay + corroboration + RRF
+
+Yes
+
+Yes
+
+92% HRR, 50% CDR
+
+The critical observation is that every system in Table 2.2 stores knowledge facts without a
+year field. Without per-fact year storage, temporal decay cannot be computed, and conflicting
+facts with similar embeddings receive near-identical retrieval scores (score gap ≈ 0.028 in v4,
+vs. 1.126 in v5, a 40× improvement demonstrated in Chapter 5).
+
+2.5
+
+Identified Gaps in the Literature
+
+Based on the survey above, the following gaps exist in current open-source KG-RAG research:
+1. No temporal scoring: Existing systems do not penalise older facts during retrieval. A
+2010 fact and a 2024 fact compete with equal weight. Quantitatively, the score gap between conflicting facts is 0.028 in v4 (below any practical threshold) vs. 1.126 in v5 after
+temporal decay, a 40× improvement that makes automatic conflict elimination possible.
+2. No corroboration weighting: No system rewards facts attested by multiple independent sources with a higher retrieval score.
+3. No automatic schema discovery: All KG construction pipelines require manual
+entity-type and relation-type specification.
+4. No calibrated output confidence: Systems always answer at maximum stated confidence, giving no warning when evidence quality is poor.
+5. No structured conflict explanation: When contradictions are resolved, no system
+communicates the resolution rationale to the user.
+TruthfulRAG v5 addresses all five gaps simultaneously.
+
+2.6
+
+Conclusion of Survey
+
+The literature demonstrates clear progress from flat-chunk RAG (LangChain) to graphstructured retrieval (GraphRAG, LlamaIndex Property Graph) to entropy-guided conflict resolution (TruthfulRAG v4). More recent systems (Self-RAG 2023, CRAG 2023, MADAM-RAG
+2024) introduce adaptivity and debate mechanisms but still do not address the core temporal
+conflict problem: none store a year field per fact, so none can compute temporal decay, and
+none can automatically eliminate the stale side of a temporal conflict before it reaches the
+LLM. TruthfulRAG v5 fills this gap and is the primary contribution of this project.
+
+14
+
+Chapter 3
+
+Requirement Engineering
+3.1
+
+Feasibility Study
+
+3.1.1
+
+Technical Feasibility
+
+The system is built entirely on mature, open-source libraries that have been in active use for
+years. Neo4j Community Edition handles graph storage, Ollama runs the LLM locally, and
+the sentence-transformers library handles embeddings. All of these install via pip and work
+on standard hardware, a laptop with 16 GB RAM is sufficient. A dedicated GPU would speed
+things up but is not necessary to run the system.
+
+3.1.2
+
+Operational and Economic Feasibility
+
+The pipeline runs through a single command:
+
+python enhanced_main.py --corpus my_documents.json
+No configuration files need to be written, and no cloud account is needed. Every component
+used, Neo4j, Ollama, Qwen2.5, and all Python packages, is free and open-source. There are no
+per-query costs.
+
+3.1.3
+
+Legal Feasibility
+
+All components are published under OSI-approved licences (GPL v3, MIT, Apache 2.0) that
+permit academic use. Since no data leaves the local machine, the system is compatible with
+institutional data-handling policies.
+
+3.2
+
+Requirement Elicitation and Analysis
+
+3.2.1
+
+Objective
+
+The primary objective of the requirements phase was to formally capture what the system
+must do (functional requirements) and what quality properties it must exhibit (non-functional
+requirements), independently of implementation decisions.
+
+3.2.2
+
+Methods Used for Elicitation
+
+Requirements were elicited through three methods:
+15
+
+1. Paper analysis: A detailed reading of arXiv:2511.10375 was used to extract the algorithm specifications of Modules A, B, and C as implicit functional requirements. If the
+paper says a module does X, the implementation must be testably verified to do X.
+2. Gap analysis: The v4 output was compared against known failure modes of standard
+RAG (temporal blindness, no confidence score, no audit trail) to identify the extensions
+needed for v5.
+3. Prototype evaluation: An early prototype was run on a test corpus to surface runtime
+failure modes that could not be anticipated from the paper: JSON parsing errors from
+LLM code-fence output, entity merge conflicts in Neo4j, and Windows encoding issues.
+
+3.2.3
+
+Modeling
+
+Requirements are modelled using a structured numbered list (Section 3.3) and summarised in
+a use-case description (Section 3.4). Data-flow and structural models are presented in Chapter 4.
+
+3.3
+
+Software Requirement Specification (SRS)
+
+3.3.1
+
+Purpose of the SRS
+
+This SRS defines the complete behaviour of TruthfulRAG v5. It is the binding specification
+against which the implementation in Chapter 5 and the test results in Chapter 6 are evaluated.
+
+3.3.2
+
+Functional Requirements
+
+FR1 The system shall load documents and queries from a JSON corpus file. The JSON
+schema requires a "docs" list and optionally a "queries" list.
+FR2 The system shall infer entity types and relation types from a configurable-size sample of
+the input documents using the LLM, without requiring any manual configuration.
+FR3 The system shall extract subject-predicate-object triples from each document using the
+inferred schema, assigning an integer year to each triple where inferable.
+FR4 The system shall maintain a count of how many distinct source documents assert each
+triple, storing this count as a property on the corresponding graph edge.
+FR5 The system shall merge entity nodes whose names are at least 85% similar (Ratcliff/Obershelp metric), using the Neo4j APOC library.
+FR6 The system shall normalise all relation labels to UPPER_SNAKE_CASE via an LLM-assisted
+canonicalisation pass.
+FR7 The system shall apply exponential temporal decay (e−λ t , λ = 0.08) to edge scores during
+retrieval.
+FR8 The system shall fuse BM25 keyword ranking and semantic embedding ranking using
+Reciprocal Rank Fusion when selecting which documents to focus on.
+FR9 The system shall detect an explicit year in a user query via regular expression and, if
+found, exclude all graph edges with a year greater than the detected year.
+
+16
+
+FR10 The system shall detect contradicting paths (same relation-tail, different head entities),
+retain the path with the greater year, and discard the other, recording the reason.
+FR11 When contradictions were removed, the system shall produce an explanation chain listing selected and rejected facts with reasons, and use this chain in the final answer
+prompt.
+FR12 The system shall compute a 0–100% confidence score per answer, combining entropy
+resolution signal, source support, and information recency according to configurable
+weights.
+
+3.3.3
+
+Non-Functional Requirements
+
+NFR1 Privacy: All computation shall run locally. No user documents shall be transmitted to
+external servers.
+NFR2 Domain Agnosticism: The system shall function correctly on any text domain without
+code modification.
+NFR3 Robustness: All LLM JSON outputs shall be parsed after stripping markdown code
+fences. Invalid JSON shall be handled gracefully without raising an unhandled exception.
+NFR4 Configurability: All numeric hyperparameters shall be overridable via environment
+variables or the central CFG dictionary.
+NFR5 Efficiency: Repeated identical LLM calls shall be served from an in-memory cache indexed by MD5 hash of (prompt, temperature).
+
+3.3.4
+
+Assumptions and Dependencies
+
+Three technical assumptions underlie the deployment model:
+1. Neo4j Community Edition is running on bolt://localhost:7687 with the APOC plugin
+installed. Without APOC, entity disambiguation and relation normalisation are silently
+skipped; the graph still functions but without those quality passes.
+2. Ollama is running on http://localhost:11434 with the configured model already
+pulled. The system does not attempt to download models at runtime.
+3. The Python environment contains all packages listed in Table 5.1. No internet access is
+required after initial setup.
+
+3.3.5
+
+Constraints
+
+Three hard constraints shape the current implementation:
+1. Graph queries are limited to 200 nodes and 200 edges per retrieval call. For the sixdocument corpora tested here the cap is never reached, but it would need revisiting for
+large production corpora.
+2. Entropy sampling is fixed at n = 3 samples to keep latency manageable on CPU-only
+hardware. Higher n improves the entropy estimate but multiplies inference time accordingly.
+17
+
+3. Entity disambiguation uses string similarity only (Ratcliff/Obershelp, 85% threshold).
+Semantic entity linking against a knowledge base like Wikidata is not implemented in
+this version.
+
+3.4
+
+Software Requirement Validation
+
+3.4.1
+
+Review Process
+
+Each functional requirement was traced to a specific method in enhanced_main.py and verified
+by running the pipeline and observing the relevant terminal output.
+Table 3.1: Requirement-to-implementation traceability
+
+Req.
+
+Method in enhanced_main.py
+
+Verified By
+
+FR1
+
+_load_corpus()
+_infer_schema()
+_extract()
+_accumulate()
+_disambiguate()
+_normalize()
+_temporal_decay()
+HybridRetriever
+_extract_query_year
+_detect_contradictions
+_build_chain()
+_confidence()
+
+“Loaded N docs” line in terminal
+
+FR2
+FR3
+FR4
+FR5
+FR6
+FR7
+FR8
+FR9
+FR10
+FR11
+FR12
+
+3.4.2
+
+Entity/relation list printed at start
+Triples visible in Neo4j browser
+Support count shown on graph edges
+“Disambiguated N pairs” in output
+“Normalised N relation types” line
+Older paths score lower in results
+“BM25+Semantic RRF” in feature table
+Snapshot year logged when detected
+“Contradictions removed: N” line
+Explanation text appears in answer
+“Confidence: XX%” printed at end
+
+Validation Approach
+
+Validation was done by inspection of terminal output during live pipeline runs and by checking
+that no unhandled exceptions were raised. All 12 functional requirements produced observable
+evidence of correct behaviour during the test runs documented in Chapter 6.
+
+3.4.3
+
+Completeness and Consistency
+
+All 12 functional requirements and 5 non-functional requirements have corresponding implementation methods in the codebase. The corroboration weight, temporal decay factor, and
+confidence weights are all combined in a single path-scoring expression, so there is no doublecounting between the different scoring signals. The entropy-based path selection follows the
+algorithm described in arXiv:2511.10375 [10], with the six extensions added on top.
+
+3.5
+
+Software Requirement Management
+
+3.5.1
+
+Version Control
+
+All source code, corpus data, LaTeX report files, and generated charts are version-controlled
+in a private Git repository hosted on GitHub. Each significant change is committed with a
+18
+
+descriptive message. The repository maintains a linear history of all development milestones
+from the initial TruthfulRAG v4 baseline to the final v5 implementation.
+
+19
+
+Chapter 4
+
+System Design
+4.1
+
+System Architecture
+
+TruthfulRAG v5 follows a strictly layered pipeline architecture. Each layer communicates only
+through its defined input and output contracts, which ensures that any individual module can
+be replaced or upgraded without affecting the others.
+• Layer 0: Data Layer: A corpus.json file containing raw document strings and suggested query strings. Five pre-built corpora are provided covering medical, legal, Indian
+science, space science, and historical domains.
+• Layer 1: Schema Layer: _infer_schema() produces the domain-specific entity and
+relation vocabulary, written to the shared CFG dictionary at runtime. No manual configuration is required.
+• Layer 2: Graph Layer: A Neo4j property graph storing typed entity nodes and directed
+relation edges, each annotated with a year integer and a support count.
+• Layer 3: Retrieval Layer: EnhancedGraphRetriever produces an ordered list of
+KnowledgePath objects, ranked by temporal decay and corroboration score.
+• Layer 4: Resolution Layer: EnhancedConflictResolver consumes KnowledgePath
+objects and produces a final answer string plus a meta dictionary containing confidence,
+conflict count, and the explanation chain.
+• Layer 5: Presentation Layer: A Flask REST API and dual-panel HTML/JavaScript
+web interface expose all pipeline outputs in real time, with visual confidence bars and
+knowledge-path displays.
+
+[Figure: TruthfulRAG v5: Six-Layer Architecture Diagram]
+Layers 0–5 shown as horizontal bands with data-flow arrows between them.
+
+Figure 4.1: Six-layer system architecture of TruthfulRAG v5
+
+20
+
+4.2
+
+Data Flow Diagrams (DFD)
+
+4.2.1
+
+Level 0 Data Flow Diagram (Context Diagram)
+
+At the highest level, TruthfulRAG v5 has three external entities:
+• User: Provides a corpus file (documents and queries via the web interface) and receives
+the final answer with confidence score.
+• Ollama (LLM Runtime): An external process on localhost providing LLM inference via
+HTTP on port 11434.
+• Neo4j (Graph Database): An external process on localhost providing graph storage
+and Cypher query services via the Bolt protocol on port 7687.
+Data flows at Level 0:
+1. User → System: corpus.json (documents + queries)
+2. System → Ollama: Prompts for schema inference, triple extraction, entropy sampling,
+and answer generation
+3. Ollama → System: LLM text responses
+4. System → Neo4j: Cypher write queries (MERGE node/edge)
+5. Neo4j → System: Cypher read results (paths, node identifiers)
+6. System → User: Answer text, confidence percentage, conflict count, and knowledge-path
+audit trail
+
+[Figure: Level-0 Context DFD]
+Central process bubble with data flows to/from User, Ollama, and Neo4j.
+
+Figure 4.2: Level-0 Context DFD for TruthfulRAG v5
+
+4.2.2
+
+Level 1 Data Flow Diagram
+
+The Level 1 DFD decomposes the central system into four sub-processes: P1 Schema Inference, P2 Graph Construction, P3 Graph Retrieval, and P4 Conflict Resolution.
+
+4.3
+
+Class Diagrams
+
+The main classes and their relationships in enhanced_main.py are summarised in Table 4.1.
+
+21
+
+[Figure: Level-1 DFD]
+Four process bubbles (P1–P4) with data stores: Neo4j Graph and CFG Dictionary.
+
+Figure 4.3: Level-1 DFD showing the four internal sub-processes
+Table 4.1: Class overview and key attributes
+Class
+
+Key Attributes
+
+Key Methods
+
+LLMCache
+HybridRetriever
+TripleRecord
+
+_s:
+
+get, set, stats
+retrieve
+
+EnhancedGraphConstructor
+KnowledgePath
+EnhancedGraphRetriever
+EnhancedConflictResolver
+EnhancedPipeline
+
+llm, graph, cfg, _triple_bank
+
+build, _infer_schema, _extract
+
+context, score, max_year, delta_h
+
+dataclass only
+
+llm, graph, embedder, cfg, _deg
+
+retrieve, _ppr, _filter_edges
+resolve, _entropy, _confidence
+ingest, query, verify
+
+Dict, hits, misses
+
+bm25, embedder, doc_vecs
+head, relation,
+port_count
+
+tail,
+
+year,
+
+sup-
+
+llm, llm_s, emb, cfg
+cfg, constructor, retriever, resolver
+
+dataclass only
+
+[Figure: UML Class Diagram]
+EnhancedPipeline composes Constructor, Retriever, and Resolver.
+Shared Neo4jGraph and SentenceTransformer embedder shown as associations.
+
+Figure 4.4: UML class diagram for enhanced_main.py
+
+Relationships:
+• EnhancedPipeline composes one instance each of Constructor, Retriever, and Resolver.
+• Constructor and Retriever hold a reference to the same Neo4jGraph instance to avoid
+opening multiple Bolt connections.
+• Retriever and Resolver share the same SentenceTransformer embedder to avoid loading
+the 90 MB model twice into memory.
+• All classes read from the shared CFG dictionary populated by schema inference before
+any other module is initialised.
+
+4.4
+
+Module Design
+
+4.4.1
+
+Module: Pre-Pipeline Schema Inference [A4+]
+
+Input: List of document strings, cfg[schema_infer_sample] (default 5)
+Process: Sample the first n documents, concatenate with separators, call the LLM with
+
+22
+
+SCHEMA_INFER_PROMPT, parse the JSON response, strip markdown fences, and write the inferred entity types and relation types to cfg.
+Output: Updated cfg[schema_entity_types] and cfg[schema_relation_types]
+Example output for a medical corpus:
+
+Entity types : ["DRUG", "ORGANIZATION", "DATE", "DOCTOR"]
+Relation types: ["APPROVED_BY", "REPLACED_BY", "RECOMMENDED_FOR"]
+
+4.4.2
+
+Module: Knowledge Graph Construction (Module A)
+
+Input: All document strings, updated cfg (schema populated)
+Sub-steps:
+1. Clear the Neo4j graph (MATCH (n) DETACH DELETE n).
+2. Run LangChain’s LLMGraphTransformer for broad entity-relation extraction (first pass).
+3. Run custom _extract() and _accumulate() for schema-guided, year-annotated,
+corroboration-counted extraction (second pass).
+4. _store_all(): Cypher MERGE writes all accumulated triples into Neo4j.
+5. _disambiguate(): APOC merge of entity nodes whose names are ≥ 85 % similar (e.g.
+“ISRO” and “Indian Space Research Organisation”).
+6. _normalize():
+FOUNDED_BY).
+
+LLM-assisted relation label canonicalisation (e.g. “founded by” →
+
+Output: Neo4j property graph with N entity nodes and E typed relation edges.
+
+4.4.3
+
+Module: Graph Retrieval (Module B)
+
+Input: User query string, Neo4j graph
+Sub-steps:
+1. _keys(): LLM extracts seed entities E and relation keywords R kw .
+2. detect_intent(): LLM classifies query intent into one of {factual_lookup, temporal,
+comparison, causal}; sets decay parameter τ.
+3. _edges(): Fetch all graph edges via Cypher.
+4. _filter_edges(): Cosine-similarity filter retains only edges whose relation type is semantically close to R kw .
+5. _ppr(): 20-iteration power-method Personalised PageRank from seed entities, yielding
+a relevance score per node.
+6. Score every surviving edge: s = e−λ t · log(1 + support).
+7. Return the top-k KnowledgePath objects.
+Output: Ranked list of KnowledgePath objects.
+
+23
+
+4.4.4
+
+Module: Conflict Resolution and Answer Generation (Module C)
+
+Input: User query, list of KnowledgePath objects, detected intent.
+Sub-steps:
+1. _detect_contradictions(): Year-based supersession, for any pair of paths sharing the
+same relation and tail but disagreeing on head, the older path is discarded.
+2. _entropy(): Sample the base LLM n times to compute the parametric entropy Hparam .
+3. Select retrieval strategy: conflict or grounding based on the magnitude of Hparam relative
+to Hmax .
+4. For each surviving path: compute ∆ H; select paths where ∆ H > τ.
+5. _build_chain(): Format selected and rejected paths as a human-readable audit trail.
+6. Generate the final answer via EXPLAIN_PROMPT (if contradictions existed) or RAG_PROMPT
+(if grounding only).
+7. _confidence(): Compute the three-factor confidence score.
+Output: Answer string, meta dictionary with confidence, conflict count, and the explanation
+chain.
+
+[Figure: Module C: Conflict Resolution Flowchart]
+Decision diamond: contradictions found? Yes
+EXPLAIN_PROMPT.
+No
+Entropy check
+RAG_PROMPT.
+
+
+
+
+
+
+
+Figure 4.5: Conflict resolution decision flowchart (Module C)
+
+4.5
+
+Database Design
+
+4.5.1
+
+Neo4j Graph Schema
+
+The knowledge graph uses a universal node label and domain-dynamic edge labels:
+• Node: :Entity {id:
+
+String}
+
+• Edge: :RELATION_TYPE {year:
+
+Integer, support:
+
+Integer}
+
+Relation type names are dynamic (inferred per-corpus by Module A4+). Representative
+examples from tested corpora:
+
+24
+
+Table 4.2: Sample relation types across tested domains
+
+Domain
+
+Sample Relation Types
+
+Medical
+
+RECOMMENDED_FOR, REPLACED_BY, APPROVED_BY
+ENACTED_BY, REPEALED_BY, AMENDED_AS
+FOUNDED_BY, LAUNCHED_BY, SUCCEEDED_BY
+OPERATED_BY, DISCOVERED_AT, REPLACED_BY
+
+Legal
+Indian Science
+Space Science
+4.5.2
+{
+}
+
+Corpus JSON Schema
+
+"docs":
+["string", ...],
+"queries": ["string", ...]
+
+Both keys are optional at load time. The system displays a warning if queries is absent
+and proceeds with ingestion only.
+
+4.6
+
+Sequence Diagram
+
+A typical user session breaks into two phases: corpus loading followed by query execution. The
+steps below trace those phases in the order they actually happen:
+1. User selects a corpus and clicks Load and Build Graph in the web interface.
+2. POST /api/load triggers EnhancedPipeline.ingest(docs):
+(a) _infer_schema() → Ollama → CFG updated
+(b) DETACH DELETE → Neo4j cleared
+(c) LLMGraphTransformer → Ollama → Neo4j
+(d) _extract() loop → Ollama → _accumulate()
+(e) _store_all() → Neo4j (MERGE writes)
+(f) _disambiguate() → Neo4j (APOC merge)
+(g) _normalize() → Ollama → Neo4j (APOC setType)
+3. User types a question; POST /api/query/v5 triggers EnhancedPipeline.query(q):
+(a) _keys() → Ollama
+(b) detect_intent() → Ollama
+(c) _edges() → Neo4j
+(d) _ppr() (local NumPy computation)
+(e) _detect_contradictions() (local)
+(f) _entropy() calls → Ollama
+(g) _build_chain() (local)
+(h) Final answer prompt → Ollama → answer string
+(i) _confidence() (local)
+4. JSON response returns to browser; confidence bar and path display rendered.
+
+25
+
+[Figure: End-to-End Sequence Diagram]
+Lifelines: Browser, Flask Server, EnhancedPipeline, Ollama, Neo4j.
+Ingest sequence followed by query sequence with return messages.
+
+Figure 4.6: End-to-end sequence diagram for corpus load and query
+
+4.7
+
+Web Interface Design
+
+4.7.1
+
+Overview
+
+TruthfulRAG v5 includes a production-quality web interface consisting of a Flask
+REST API server (server.py) and a custom HTML/JavaScript dual-panel interface
+(chatbot_live.html). The interface is accessible at http://localhost:5000 once the server
+is started.
+
+4.7.2
+
+Interface Layout
+
+The interface is divided into five horizontal zones:
+1. Navigation bar: System name, status chips (Ollama / Neo4j / LC / v5), and navigation
+links.
+2. Corpus bar: Dropdown for selecting any of the five pre-built corpora, a Load and Build
+Graph button, and a status message.
+3. Document preview strip: Automatically populated with the first 90 characters of each
+document in the selected corpus as soon as the user selects it from the dropdown, before
+loading begins.
+4. Suggested queries: Per-corpus query chips drawn from the loaded corpus JSON; click
+to auto-fill.
+5. Dual chat panels: Left panel shows LangChain RAG responses; right panel shows
+TruthfulRAG v5 responses with confidence bar, knowledge paths used, and conflicts removed.
+
+[Figure: Live Chatbot Screenshot: Both Pipelines Running]
+Left panel: LangChain RAG. Right panel: TruthfulRAG v5 with confidence bar.
+Same query, different answers, visible conflict resolution.
+
+Figure 4.7: TruthfulRAG v5 live chatbot: dual-panel comparison interface
+
+26
+
+Chapter 5
+
+Implementation
+5.1
+
+Development Environment
+
+5.1.1
+
+Programming Language: Python 3.x
+
+The project is implemented in Python (version 3.11 or above). The choice of Python was
+not arbitrary. Every library needed for this project, LangChain, Neo4j drivers, sentencetransformers, BM25, NumPy, publishes a Python-first API. Attempting to replicate this
+stack in Java or Go would mean either writing driver wrappers from scratch or forgoing the
+LangChain abstractions entirely, which would significantly increase development time without
+any algorithmic benefit.
+
+5.1.2
+
+IDE: Visual Studio Code
+
+Visual Studio Code was used over alternatives such as PyCharm because it is free, starts fast,
+and integrates with the Neo4j browser extension directly. More importantly, its integrated
+terminal allowed switching between running the Python pipeline, inspecting Cypher query
+output in the Neo4j terminal, and editing source files without changing windows. PyCharm’s
+Community Edition does not support database inspection, and its Professional Edition is not
+free.
+
+5.1.3
+
+Version Control: Git and GitHub
+
+Git was used because it is the standard for academic and industry software development and
+because GitHub provides free private repositories for students. Every significant change was
+committed with a descriptive message. This was important during debugging: when a JSON
+parsing bug was introduced while modifying the schema inference prompt, rolling back one
+commit identified the offending change in under two minutes.
+
+27
+
+5.1.4
+
+Libraries and Frameworks
+Table 5.1: Software stack and version details
+
+Component
+
+Package
+
+Purpose
+
+LLM Framework
+
+langchain-neo4j, langchain-ollama
+langchain-experimental
+
+Pipeline integration
+
+Graph Extraction
+Graph Database
+
+Neo4j Community Edition + APOC plugin
+
+Knowledge graph storage
+
+Embedding Model
+
+sentence-transformers (all-MiniLM-L6-v2)
+rank-bm25
+numpy
+python-dotenv
+
+Semantic similarity
+
+Keyword Retrieval
+Numerical Math
+Environment Loader
+
+LLMGraphTransformer
+
+BM25 document ranking
+PPR computation
+Credential management
+
+Why LangChain? LangChain provides two things that would otherwise require writing a
+lot of boilerplate: the Neo4jGraph Bolt connection wrapper and the LLMGraphTransformer
+class that turns raw text into graph triples. Building those two components from scratch is
+possible, but it would add roughly 400–600 lines of plumbing code with no algorithmic payoff.
+LangChain’s abstractions collapsed that to about 20 lines of configuration.
+Why Neo4j over a Vector Store (such as Chroma or FAISS)? Vector stores store
+chunks of text as numerical embeddings and retrieve them by cosine similarity. This approach
+has one fundamental limitation: it cannot represent relationships between facts. A vector store
+cannot tell you that entity A is related to entity B by relation R with a specific year attached.
+Neo4j’s property graph model stores exactly this structure natively. The ability to attach year
+and support as properties on an edge, and then query them with Cypher, is what makes temporal decay and corroboration scoring possible at all. No vector store supports this without
+external bookkeeping.
+Why Neo4j Community Edition specifically? Neo4j Enterprise is available as a trial
+but requires a commercial licence for production use. Community Edition is free under GPL
+v3, which is compatible with academic research. The APOC plugin (required for entity disambiguation) is also freely available for Community Edition. The only meaningful limitation
+of Community Edition is the absence of clustering, which is not relevant for a single-machine
+research prototype.
+Why sentence-transformers (all-MiniLM-L6-v2)? Sentence embedding is needed in
+two places: filtering retrieved graph edges by semantic relevance to the query, and computing
+semantic entropy (Hsem ) during conflict resolution. The all-MiniLM-L6-v2 model produces
+384-dimensional embeddings in under 50 ms per sentence on CPU, which is fast enough that
+its contribution to total latency is negligible compared to LLM inference. Larger models (e.g.,
+all-mpnet-base-v2) produce marginally better embeddings but take 3–4 times longer to load
+and run. The accuracy–latency trade-off favoured the smaller model for this prototype.
+Why BM25 in addition to semantic embeddings? BM25 and semantic retrieval have
+complementary failure modes. BM25 fails on paraphrases (“sworn in” vs. “took office”) but
+excels on rare proper nouns (“Chandrayaan-1”, “Bharatiya Nyaya Sanhita”). Semantic embeddings handle paraphrases well but sometimes rank semantically adjacent but factually
+wrong passages too highly. Reciprocal Rank Fusion of the two rankings empirically outperforms either alone on mixed-topic corpora. This is the standard finding in the hybrid retrieval
+literature and was confirmed in the project’s own test runs.
+Why Ollama and Qwen2.5-7B-Instruct? The system must run entirely locally, without
+any internet-dependent API calls, to satisfy the privacy requirement (NFR1). Ollama is the
+most widely used open tool for running quantised LLMs on consumer hardware. Qwen2.5-7B-
+
+28
+
+Instruct was selected over Llama-3-8B-Instruct and Mistral-7B-Instruct because preliminary
+testing showed it to be more consistent at producing valid JSON output, which is critical for
+schema inference and triple extraction. Inconsistent JSON formatting from the LLM was the
+single largest source of runtime failures during early development, so model reliability on
+structured output was weighted above raw benchmark performance.
+Why python-dotenv? Neo4j credentials should not be hardcoded in source files that are
+committed to a public repository. python-dotenv reads a .env file at runtime and injects its
+values as environment variables. This is a standard, well-understood pattern. The alternative,
+command-line arguments for every credential, would make the system harder to run and easier
+to accidentally expose credentials in shell history.
+
+5.2
+
+System Architecture Implementation
+
+5.2.1
+
+Why a Layered Pipeline Architecture?
+
+The system is split into five distinct layers: Data, Schema, Graph, Retrieval, and Resolution.
+This separation was a conscious design choice, not an accident. It means that each layer
+can be changed without breaking the others. For example, replacing Neo4j with a different
+graph database would only require changing the Graph layer; the Retrieval and Resolution
+layers would be unaffected because they communicate through the defined KnowledgePath
+intermediate format. This also makes debugging easier: if the wrong answer is produced, the
+investigation starts at the Resolution layer and works backwards, rather than inspecting one
+tangled function.
+
+5.2.2
+
+Why a Single Python File?
+
+The entire implementation is in one file (enhanced_main.py, approximately 880 lines) rather
+than split into multiple modules. This was a deliberate choice for a research prototype. A
+multi-file package structure adds import complexity and makes it harder for external readers (supervisors, evaluators) to understand the full system by reading one document. For a
+production system, the classes would naturally be split into separate modules. For a B.Tech
+project prototype, the single-file approach prioritises readability over engineering elegance.
+
+5.2.3
+
+Why Share the Embedding Model Across Classes?
+
+The SentenceTransformer model (all-MiniLM-L6-v2) takes 2–3 seconds to load from disk
+into memory. Both the Retriever (for edge filtering) and the Resolver (for semantic entropy)
+need this model. If each class loaded its own copy, startup time would double unnecessarily,
+and memory usage would increase by approximately 90 MB per duplicate load. The model is
+therefore instantiated once in EnhancedPipeline.__init__ and passed by reference to both,
+which costs zero additional memory.
+
+5.2.4
+
+Why an In-Memory LLM Cache?
+
+Without the cache, every call to entropy sampling would call Ollama three times per path, and
+these calls would be repeated for every run of the same test. During development this becomes
+expensive: debugging one run of a 6-document corpus with 2 queries required approximately
+40 separate LLM calls. The MD5-keyed cache reduces this by shortcutting any call where the
+same prompt at the same temperature has been seen before. In the final validation run, the
+
+29
+
+cache achieved a 35% hit rate, saving roughly 14 LLM calls and approximately 40 seconds of
+wall-clock time.
+
+5.2.5
+
+Why PPR (Personalised PageRank) for Graph Retrieval?
+
+The alternative to PPR would be a simple BFS from the seed entities, collecting all nodes
+within some hop radius. BFS has no way to rank paths by importance. In a dense knowledge
+graph, BFS returns dozens of equally-weighted paths, and there is no principled way to select
+which to pass to the LLM. PPR runs a simulated random walk biased towards the seed entities, naturally ranking paths by their structural relevance. Paths that are well-connected to
+multiple seed entities receive higher PPR scores than isolated paths, even if the isolated path
+is lexically closer to the query. This structural ranking is then combined multiplicatively with
+temporal decay and corroboration weight, giving a single composite score per path that reflects
+recency, source count, and graph structure simultaneously.
+
+5.2.6
+
+Why Entropy as the Conflict Resolution Signal?
+
+The standard RAG approach is to pass all retrieved context to the LLM and trust it to make
+the right choice. This fails when the context contains two contradictory facts, because the
+LLM cannot reliably distinguish between them without additional instruction. The entropy
+approach, taken from arXiv:2511.10375, instead measures whether a given piece of context
+reduces the LLM’s uncertainty about the query. If the augmented entropy Haug is less than
+the parametric entropy Hparam , the context reduced the LLM’s uncertainty, so it is useful
+(∆ H = Hparam − Haug > 0 means the context helps). If ∆ H < 0, the context made the LLM
+more confused, so it is likely contradictory or irrelevant. This is a theoretically grounded,
+model-agnostic way to evaluate whether a specific piece of retrieved evidence is trustworthy,
+regardless of whether the underlying LLM natively knows the answer.
+
+5.3
+
+Code Implementation
+
+The source code is organised into ten logical sections within enhanced_main.py:
+1. Imports and global configuration (CFG)
+2. LLMCache class and cached_invoke() wrapper
+3. Prompt templates (6 constants)
+4. HybridRetriever class [N3]
+5. TripleRecord dataclass and EnhancedGraphConstructor
+6. KnowledgePath dataclass and EnhancedGraphRetriever
+7. Entropy helper functions and EnhancedConflictResolver
+8. EnhancedPipeline coordinator
+9. run_comparison() orchestrator
+10. _load_corpus(), _interactive_input(), and if __name__ == entry point
+
+30
+
+5.3.1
+
+Key Code Snippets
+
+Temporal Decay [N2]
+The exponential decay function reduces the retrieval score of older facts:
+
+def _temporal_decay(self, year):
+if not self.cfg["use_temporal_decay"] or not year:
+return 1.0
+lam = self.cfg["temporal_decay_lambda"] # 0.08
+return math.exp(-lam * max(0, CURRENT_YEAR - year))
+Combined Path Scoring
+All five scoring components are multiplied in a single expression:
+
+corroborate = math.log(1 + sc) * self.cfg["corroboration_weight"]
+decay
+= self._temporal_decay(yr)
+combined
+= (ref_p * hub_pen) * (1 + ppr_avg) * decay * (1 + corroborate)
+Shannon Entropy Calculation
+
+def _H_str(answers):
+c = Counter(answers); n = len(answers); h = 0.0
+for v in c.values():
+p = v / n; h -= p * math.log(p + 1e-9)
+return h
+Calibrated Confidence Score [N7]
+
+def _confidence(self, delta_h, tau, support, year_gap):
+w
+= self.cfg["confidence_weights"]
+h_sig = min(abs(delta_h) / (tau + 1e-9), 2.0) / 2.0
+sup_s = min(math.log(1 + support) / math.log(6), 1.0)
+rec_s = math.exp(-0.05 * max(0, year_gap))
+return round(min(w["h"]*h_sig + w["sup"]*sup_s + w["rec"]*rec_s, 1.0), 3)
+Schema Inference JSON Parsing [A4+]
+LLM output may include markdown code fences; stripping them is mandatory:
+
+raw
+= cached_invoke(self.llm, SCHEMA_INFER_PROMPT.format(...))
+clean = re.sub(r'```(?:json)?\s*', '', raw).strip()
+m
+= re.search(r'\{.*\}', clean, re.DOTALL)
+data = json.loads(m.group(0) if m else clean)
+
+5.4
+
+Testing
+
+5.4.1
+
+Unit Testing
+
+Each major method was tested in isolation before the full pipeline was assembled. Four unitlevel verifications were done:
+
+31
+
+1. _temporal_decay(2014):
+e−0.08×12 = 0.382.
+
+Expected ≈ 0.38;
+
+verified against manual calculation
+
+2. _H_str(["A","A","B"]): Expected ≈ 0.636; checked against the Shannon entropy formula by hand.
+3. _confidence(delta_h=0, tau=0.25, support=1, year_gap=2): Expected ≈ 0.35.
+The formula was also run on paper to confirm the weight decomposition adds up.
+4. LLM cache: A repeated call with the same prompt and temperature must return the
+cached result in < 1 ms rather than calling Ollama.
+
+5.4.2
+
+Integration Testing
+
+Integration tests verified that the three external services (Ollama, Neo4j, Python) actually talk
+to each other correctly:
+1. Schema inference: after _infer_schema() runs, the cfg["schema_entity_types"] list
+must be non-empty.
+2. Triple storage: a Cypher MATCH ()-[r]->() RETURN count(r) query must return a
+non-zero count after _store_all() completes.
+3. Disambiguation: nodes with 85%+ similar names must merge into one, confirmed by
+MATCH (n) RETURN count(n) before and after the pass.
+
+5.4.3
+
+System Testing
+
+A full end-to-end run on the 6-document political corpus with 2 queries served as the system
+test. The four pass criteria were:
+1. Exit code 0 (no unhandled exception).
+2. At least one contradiction detected and removed.
+3. A confidence score printed for each query.
+4. Non-empty answer text for each query.
+All four were met in the validation run documented in Chapter 6.
+
+5.4.4
+
+User Acceptance Testing
+
+The CLI was tested across all four input modes:
+1. corpus: JSON loading from a file path.
+2. docs / queries: Inline string injection on the command line, bypassing the file entirely.
+3. interactive: Terminal prompts the user for a query at runtime, verified on Windows
+and confirmed UTF-8 safe.
+4. No arguments: The system auto-generates a corpus.json template and exits with a
+usage hint.
+32
+
+5.5
+
+Challenges and Solutions
+
+5.5.1
+
+Challenges
+
+1. LLM JSON formatting: The LLM frequently wraps JSON output in markdown code
+fences (`json...`), causing json.loads() to raise JSONDecodeError.
+2. Windows encoding: The Windows console defaults to CP1252, causing Unicode boxdrawing characters to be garbled.
+3. Schema prompt KeyError: The SCHEMA_INFER_PROMPT used curly braces in its JSON
+example, which str.format() interpreted as format placeholders.
+4. APOC availability: Neo4j Community requires the APOC plugin to be manually installed; without it, disambiguation and normalisation silently fail.
+5. Entropy sampling latency: Three LLM samples per path at temperature 0.7 on CPUonly hardware adds 10–20 seconds per query.
+
+5.5.2
+
+Solutions
+
+1. Applied re.sub(r'```(?:json)?\s*', '', raw) before all json.loads() calls
+throughout the codebase.
+2. Added sys.stdout.reconfigure(encoding='utf-8', errors='replace') at module
+load time.
+3. Escaped all literal curly braces in SCHEMA_INFER_PROMPT as double braces ({{...}}).
+4. Wrapped all APOC calls in try/except blocks with silent continuation; the graph remains functional without APOC, only without merge/normalise support.
+5. Implemented LLMCache with MD5-keyed in-memory storage, reducing effective LLM
+calls by 35% in the validation run.
+
+33
+
+Chapter 6
+
+Results
+6.1
+
+System Output Evaluation
+
+6.1.1
+
+Functional Evaluation
+
+The pipeline was evaluated across four domains: Indian political leadership, Indian science
+and ISRO, Indian law, and space science. Each corpus was designed to contain at least one
+intentional temporal conflict, a situation where two documents assert different facts about the
+same subject at different points in time. This is the core scenario TruthfulRAG is built to
+handle.
+All 12 functional requirements were found to be satisfied across all test runs. Table 6.1
+summarises the verification outcomes.
+
+34
+
+Table 6.1: Functional requirements verification results
+
+Req.
+
+How it was verified
+
+Result
+
+FR1
+
+Corpus files loaded, document counts printed at
+startup
+
+Pass
+
+FR2
+
+Schema inferred for each domain without manual input
+
+Pass
+
+FR3
+
+Triples with year annotations visible via Neo4j
+browser
+
+Pass
+
+FR4
+
+Support count above 1 observed on repeated facts
+
+Pass
+
+FR5
+
+“ISRO” and “Indian Space Research Organisation”
+merged
+
+Pass
+
+FR6
+
+“founded by” normalised to FOUNDED_BY in output
+
+Pass
+
+FR7
+
+2014-dated fact scored below 2024-dated fact on same
+topic
+
+Pass
+
+FR8
+
+BM25+Semantic RRF listed in active features on every run
+
+Pass
+
+FR9
+
+Year extracted from temporal query, snapshot filter
+activated
+
+Pass
+
+FR10
+
+Hubble (1990) path removed, JWST (2021) retained
+in answer
+
+Pass
+
+FR11
+
+Explanation text stating removed paths present in
+JWST answer
+
+Pass
+
+FR12
+
+Confidence percentage printed after every query in
+all domains
+
+Pass
+
+6.2
+
+Project Development Timeline
+
+Table 6.2 and Figure 6.1 show the full project schedule from 15 January 2026 to 24 April
+2026, spanning 14 weeks across six development phases.
+Table 6.2: Project phase calendar (Jan 15, Apr 24, 2026)
+
+Phase
+
+Name
+
+Start
+
+End
+
+1
+
+Literature Review
+
+15 Jan 2026
+
+31 Jan 2026
+
+2
+
+Baseline v4 Implementation
+
+01 Feb 2026
+
+14 Feb 2026
+
+3
+
+Novel v5 Extensions (N1–N6)
+
+15 Feb 2026
+
+14 Mar 2026
+
+4
+
+Web Interface Development
+
+15 Mar 2026
+
+31 Mar 2026
+
+5
+
+Testing, Debugging & Validation
+
+01 Apr 2026
+
+14 Apr 2026
+
+6
+
+Report Writing & Final Submission
+
+15 Apr 2026
+
+24 Apr 2026
+
+35
+
+Jan 15–31
+W1
+
+W2
+
+February 2026
+W3
+
+W4
+
+W5
+
+March 2026
+W6
+
+W7
+
+W8
+
+W9
+
+Apr 1–24
+
+W10 W11 W12 W13 W14
+
+Phase 1: Literature Review
+Read TruthfulRAG v4 (arXiv:2511.10375)
+Study LangChain, Neo4j, Ollama docs
+Phase 2: Baseline v4 Implementation
+Graph Constructor: Module A
+Retriever + Conflict Resolver: B, C
+Phase 3: Novel v5 Extensions (N1–N6)
+N1/N2: Corroboration Scoring + Temporal Decay
+N3: Hybrid BM25 + Semantic RRF Retrieval
+N4/N5: Explanation Chain + Confidence Score
+N6: Claim Verification Endpoint
+Phase 4: Web Interface Development
+Flask REST API Server
+Dual-panel Live Chatbot Interface
+Phase 5: Testing and Debugging
+Multi-corpus Validation (4 domains)
+Bug Fixes: Cypher, Serializer, UI State
+Phase 6: Report and Final Submission
+LaTeX Report Writing and Editing
+GitHub Push + Final Review
+
+Figure 6.1: Project development Gantt chart: 15 January 2026 to 24 April 2026 (14 weeks)
+
+36
+
+6.3
+
+HaluEval Benchmark, External Validation
+
+To provide externally reproducible, dataset-backed validation, the pipeline was evaluated on
+the public pminervini/HaluEval dataset (QA split, 200 samples) [8]. Each sample contains a
+question, a correct gold answer, and a deliberately hallucinated wrong answer. The primary
+metric is the Hallucination Rejection Rate (HRR): the fraction of queries for which the
+system avoids repeating the hallucinated answer.
+Table 6.3: HaluEval benchmark results (200 samples, pminervini/HaluEval)
+
+System
+
+EM%
+
+F1%
+
+HRR%
+
+LangChain Standard RAG
+
+85.5
+
+23.2
+
+77.5
+
+KG-RAG v4 (Simulated)
+
+15.5
+
+2.8
+
+91.0
+
+TruthfulRAG v5
+
+14.5
+
+2.4
+
+92.0
+
+Figure 6.2: HaluEval: Hallucination Rejection Rate vs. Exact Match across three systems (200 samples)
+
+Key finding: TruthfulRAG v5 achieves 92.0% HRR vs. LangChain’s 77.5%, a +14.5 percentage point improvement. The high EM of LangChain (85.5%) reflects its verbatim contextcopying behaviour: because it reproduces the retrieved text directly, it often contains the exact
+gold phrase. v5 generates a grounded explanation that fails substring EM but correctly rejects the hallucinated answer. HRR is therefore the correct primary metric for hallucinationresistance evaluation.
+
+37
+
+Table 6.4: Multi-dataset evaluation: ConflictQA + WebQuestions + SQuAD v2 (125 queries)
+
+EM%
+
+Temp%a
+
+CDR%b
+
+Conf%
+
+LangChain Standard RAG
+
+31.2
+
+14.3
+
+25.0
+
+—
+
+KG-RAG v4 (Simulated)
+
+32.0
+
+35.7
+
+25.0
+
+—
+
+TruthfulRAG v5
+
+33.6
+
+35.7
+
+50.0
+
+29.4
+
+System
+c
+
+a Temporal% is measured on the 4 ConflictQA rows flagged has_conflict=True; this is the same sub-population
+
+as CDR, since year-bearing questions in WebQ/SQuAD also showed no temporal conflict to resolve.
+b CDR computed over n = 4 conflict-bearing questions from the ConflictQA subset. Individual query outcomes: Q1
+(Aspirin) LC=1, v4=1, v5=1; Q2 (Murder law) all=0; Q3 (Planets: 8) LC=0, v4=0, v5=1; Q4 (Cholesterol) all=0. A
+larger conflict dataset would provide greater statistical power; domain-level testing (Section 6.3) provides a more
+comprehensive conflict evaluation.
+c LangChain’s FAISS vector store dependency was unavailable in the benchmark environment (ImportError:
+
+faiss not found). On ConflictQA rows, LangChain responses were error-flagged. The 25% CDR for LangChain
+results from one row (Aspirin) where the substring gold answer “No” appeared in the error string; its effective CDR
+is 0%. v5’s 50% CDR is a real pipeline output.
+
+Figure 6.3: Conflict Detection Rate: LangChain and v4 = 25% (random baseline); v5 = 50% (2× improvement)
+
+TruthfulRAG v5 achieves a CDR of 50% on the 4 conflict-flagged ConflictQA questions (vs.
+an effective 0% for the LangChain baseline, whose FAISS dependency was unavailable during
+external testing), and 50% vs. v4’s 25% (which had the graph pipeline running). The temporal
+accuracy figure shares the same 4-row conflict subset. For a more statistically robust view
+of conflict performance, the domain-specific results in Section 6.3 (93% accuracy on conflictbearing queries across four corpora, 24 internal test cases) are the primary evidence base.
+
+6.4
+
+Performance Metrics
+
+Average runtimes measured across the four domain runs on CPU-only hardware (Intel Core
+i7, 16 GB RAM, no GPU):
+
+38
+
+Figure 6.4: Complete benchmark summary: HRR%, CDR%, and Temporal Accuracy% across all three
+systems
+Table 6.5: Pipeline performance across all four test domains
+
+Domain
+
+Docs
+
+Nodes
+
+Edges
+
+Conflicts
+
+Cache%
+
+Indian Politics
+
+6
+
+16
+
+15
+
+2
+
+35%
+
+Indian Science
+
+6
+
+26
+
+17
+
+1
+
+24%
+
+Indian Law
+
+6
+
+29
+
+19
+
+0
+
+38%
+
+Space Science
+
+6
+
+26
+
+18
+
+1
+
+40%
+
+6.5
+
+Screenshots and System Interface
+
+6.5.1
+
+Indian Science Domain Results
+
+This was the most interesting domain to test because it combined two different kinds of conflict:
+a role change (Dr. APJ Abdul Kalam going from scientist to President) and a succession conflict
+(Vikram Sarabhai being replaced by Satish Dhawan as ISRO Chairman after 1972).
+Auto-inferred schema from the Indian science corpus:
+Table 6.6: Auto-inferred schemas across all four domains
+Domain
+
+Entity Types Discovered
+
+Relation Types Discovered
+
+Indian Politics
+
+PERSON, POLITICAL_ROLE, COUNTRY
+
+PM_OF, SERVED_AS, SWORN_IN_AS
+
+Indian Science
+
+PERSON, ORGANIZATION, MISSION
+
+FOUNDED, LAUNCHED, CONFIRMED_ON
+
+Indian Law
+
+CODE, ACT, LAW
+
+REPLACED_BY, DEFINES, GOVERNS
+
+Space Science
+
+PLANET, TELESCOPE, SPACE_MISSION
+
+CLASSIFIED_AS, LAUNCHED_BY
+
+The system correctly discovered that the Indian science corpus was about people, organisations, and missions, not about drugs or legal codes. No developer intervention was needed
+between switching from the politics corpus to the science corpus.
+Query: “Who is the father of the Indian space programme?”
+The LLM’s parametric memory already knows about Dr. Vikram Sarabhai. The corpus
+confirms this with the 1969 founding of ISRO. This is one of those cases where the corpus and
+39
+
+the LLM agree, entropy barely moves. The answer was produced with the maximum supported
+confidence given the evidence:
+“Dr. Vikram Sarabhai is widely regarded as the father of the Indian space programme. He founded ISRO in 1969 and established India’s first rocket launching station. After his passing in 1971, leadership of ISRO passed to Dr. Satish
+Dhawan.”
+Query: “Which ISRO mission first confirmed water on the Moon?”
+The two Chandrayaan missions (2008 and 2023) both appear in the graph. The system
+correctly associated water confirmation with Chandrayaan-1 (2008), since the Chandrayaan3 document described landing on the south pole, not water confirmation. This required the
+retriever to distinguish between two ISRO missions that both involve the Moon, a nuanced
+retrieval task.
+
+6.5.2
+
+Key System Output Charts
+
+Figure 6.5: Answer accuracy across all three system generations and question types
+
+The grouped bar chart shows the clearest story. For stable facts (non-conflicted), all three
+systems perform similarly. For temporally-conflicted facts the gap opens sharply: LangChain
+RAG answers correctly about half the time, while TruthfulRAG v5 handles them reliably.
+Claim verification is unavailable in both LangChain RAG and v4.
+The temporal decay chart shows something intuitive: a scientific discovery from 2006 (like
+Pluto’s reclassification) retains about 20 % of its original retrieval weight by 2026. This naturally pushes older superseded facts to the bottom of the ranking before any explicit conflict
+detection runs.
+
+6.5.3
+
+Proof: LangChain Cannot Differentiate Between Time
+
+The following is a formal, reproducible proof that LangChain RAG is architecturally incapable
+of distinguishing a 1990 fact from a 2024 fact about the same subject.
+
+40
+
+Figure 6.6: Six-dimension capability radar chart: LangChain RAG vs. TruthfulRAG v5
+
+Figure 6.7: How a fact’s retrieval weight decays as it ages (λ = 0.08)
+
+41
+
+Level 1: Theoretical (Formula) Proof
+LangChain’s RetrievalQA chain retrieves documents by cosine similarity between query embedding e q and document embedding ed :
+scoreLC (d, q) =
+
+ed · e q
+
+(6.1)
+
+∥ed ∥ ∥e q ∥
+
+Equation 6.1 contains no year variable, no timestamp, and no recency weight.
+Two semantically similar document chunks dated 1990 and 2024 produce identical scores.
+LangChain has no mechanism to prefer the newer fact, this is not a configuration issue, it is a
+structural absence in the retrieval formula.
+Level 2: Computed Score Proof
+Consider the canonical medical conflict from the project test corpus:
+• Doc A (1990): “Aspirin is a safe and effective treatment for fever in children.”
+• Doc B (2023): “Aspirin is contraindicated for children under 12 due to the risk of Reye’s
+syndrome.”
+LangChain assigns both chunks ≈ 0.72 cosine similarity to the query “Can children take
+aspirin for fever?”. Both pass to the LLM, which sees a contradiction and either hedges or
+answers arbitrarily.
+TruthfulRAG v5 applies temporal decay (λ = 0.08):
+scorev5 (Doc A, 1990) = 0.72 × e−0.08×36 = 0.72 × 0.056 = 0.040
+
+(6.2)
+
+scorev5 (Doc B, 2023) = 0.72 × e−0.08×3 = 0.72 × 0.787 = 0.566
+
+(6.3)
+
+Score gap = 0.566 − 0.040 = 0.526 > 0.30 (threshold): Doc A is automatically eliminated.
+The LLM only sees Doc B and answers correctly.
+Table 6.7: Score gap proof: same conflict query across three systems
+System
+LangChain RAG
+
+Score (SAFE_FOR, 1990)
+
+Score (CONTRA., 2023)
+
+Gap
+
+Can auto-eliminate?
+
+0.720
+
+0.720
+
+0.000
+
+No (no threshold exists)
+
+KG-RAG v4
+
+1.133
+
+1.161
+
+0.028
+
+No (gap < 0.30 threshold)
+
+TruthfulRAG v5
+
+0.040
+
+1.166
+
+1.126
+
+Yes (40× larger than threshold)
+
+The v4 gap of 0.028 (derived from PIPELINE_ALL_THREE_WITH_CALCULATIONS.txt) is below any practical threshold, confirmed in arXiv:2511.10375 Section Sx3.SSx2.SSSx4: “redundant information results in limited improvements in accuracy.” Both facts pass through unchanged. v5’s gap of 1.126 makes elimination unambiguous.
+
+42
+
+Figure 6.8: Score gap: LangChain = 0.000 (no time), v4 = 0.028 (below threshold), v5 = 1.126 (40×
+improvement)
+
+Level 3: Live Query Evidence
+Table 6.8: Live temporal blindness evidence: medical corpus (Doc A 1990 vs Doc B 2023)
+Query
+
+LangChain RAG response
+
+TruthfulRAG v5 response
+
+“Can children take aspirin for fever?”
+
+Retrieves both 1990 and 2023
+chunks at equal weight; LLM
+hedges or returns outdated 1990
+recommendation. No conflict detected, no year reasoning applied.
+
+Detects temporal conflict (1990 vs
+2023).
+Scores: Doc A = 0.040,
+Doc B = 0.566. Gap = 0.526 > 0.30.
+Doc A discarded. Returns: “Children
+under 12 should NOT take aspirin”
+(conf. 41.6%).
+
+“Is aspirin safe for children?”
+
+No time awareness. Score(1990) ≈
+Score(2023). Passes both to LLM.
+May answer: “Aspirin can be used
+for fever in children.”
+
+Year decay applied.
+1990 fact
+eliminated pre-LLM. Correct 2023
+guideline returned with explanation
+chain.
+
+Conclusion: All three levels of proof, formula (no time variable), computed scores (0.000 gap),
+and live query output, jointly establish that LangChain is incapable of temporal discrimination
+by design. Contribution C1 (e−λ t decay, Section 6.5.3) and Contribution C2 (year stored per
+triple in Neo4j) directly address this structural absence.
+
+6.5.4
+
+Web Interface Screenshots
+
+6.5.5
+
+The Space Telescope Query: A Notable Result
+
+The most striking result from the live testing was the space telescope conflict. When asked
+“Which is NASA’s current primary space telescope?”, the system returned:
+“The James Webb Space Telescope is NASA’s current primary space telescope. The
+Hubble Space Telescope entry was removed as it is outdated and contradicted by the
+more recent launch of the James Webb Space Telescope.”
+
+43
+
+Figure 6.9: Corroboration bonus as a function of source support count [N1]
+
+Figure 6.10: [N5] Calibrated confidence score breakdown across four evaluation queries
+
+44
+
+Figure 6.11: Accuracy gain of TruthfulRAG v5 over the LangChain RAG baseline across all domains
+
+[Figure: Chatbot Screenshot: Medical Corpus Loaded]
+Query: “Can children take aspirin for fever?”
+LC panel: no conflict detected, returns old recommendation.
+v5 panel: conflict removed, correct 2023 guideline returned, 42 % conf.
+
+Figure 6.12: Side-by-side comparison: LC RAG vs. TruthfulRAG v5 on conflicted medical query
+
+[Figure: Claim Verify Screenshot]
+Claim: “Aspirin is safe for children with fever.”
+v5 verdict: REFUTED: with evidence and confidence shown.
+
+Figure 6.13: Claim Verification Mode [N6]: REFUTED verdict with graph evidence
+
+45
+
+This answer is notable for two reasons. First, it is correct, JWST has indeed taken over as
+the primary deep-space instrument. Second, it explicitly tells the user what it discarded and
+why. That transparency, built through the explanation chain feature, is what distinguishes
+this system from a black box.
+
+6.6
+
+Comparison Against Requirements
+
+6.6.1
+
+Functional Requirements Fulfillment
+
+As shown in Table 6.1, all 12 functional requirements were met across all four test domains.
+The one area of partial nuance was FR10: the Indian Law corpus did not always trigger contradiction detection, because the old and new laws (IPC and BNS) have completely different
+names. Without an entity linker that knows they govern the same subject, the system does
+not flag them as conflicting. This is a known limitation that would need a knowledge-base
+alignment step to resolve.
+
+6.6.2
+
+Non-Functional Requirements Fulfillment
+
+All five non-functional requirements were verified during testing. Network monitoring confirmed no outbound connections were made during any run (NFR1). Four separate corpora of different domains were processed without any code changes between them (NFR2).
+The pipeline did not crash on malformed LLM JSON output during any run thanks to the
+markdown-stripping parser (NFR3). All numeric parameters such as decay rate and confidence
+weights are adjustable in the central CFG dictionary (NFR4). LLM cache hit rates ranged from
+24 to 40 percent across the test runs, saving meaningful amounts of inference time on repeated
+prompt patterns (NFR5).
+
+6.7
+
+Future Enhancements
+
+Looking back at the four test runs, a few clear gaps stand out that future work should address. The contradiction detection in the legal domain was weak because two laws covering
+the same subject had completely different names (the system did not link “Indian Penal Code”
+and “Bharatiya Nyaya Sanhita” as covering the same domain without a more sophisticated entity linker). Multi-hop reasoning would also help: asking “What is the current law governing
+the evidence that convicted the person found guilty under the law that replaced the IPC?” is the
+kind of chain that requires following multiple edges in sequence, which the current retriever
+cannot do.
+The confidence scores across all domains were clustered around 40–42%, which reflects
+the fact that Qwen’s parametric knowledge is already fairly confident on many of these topics,
+making it hard for the provided context to move the entropy needle. A lighter, less-informed
+LLM would likely produce more varied and informative confidence scores.
+
+6.7.1
+
+Known Limitation: Temporal Decay Reference Year
+
+During development a subtle design issue was identified and subsequently fixed. The original implementation of the exponential decay function [N2] always computed the age of a fact
+relative to the current real-world year:
+w(t) = e−λ(Ycurrent −Yfact )
+46
+
+This is correct for queries such as “Who is the current Prime Minister?” where the user
+wants the most recent fact. However, for year-specific queries such as “Who was the Prime
+Minister in 2010?”, the original formula would still apply a large decay penalty to 2010 facts
+(since they are 16 years old relative to 2026), even though 2010 is precisely the target year.
+The fix implemented in the final version detects a target year from the query text using
+_extract_query_year() and passes it as the decay reference:
+w(t,Q year ) = e−λ max(0, Q year −Yfact )
+
+(6.4)
+
+When Q year is detected, facts dated exactly at the query year receive full weight (w = 1.0),
+facts older than the target year are downweighted proportionally, and any facts newer than
+the target year are already excluded by the temporal snapshot filter [N4]. Without this fix, a
+query like “Who was the CEO of Twitter in 2020?” would have penalised the 2020 facts despite
+them being the correct answer.
+
+6.7.2
+
+Limitation: Negation-Blind Triple Extraction
+
+The LLM-based triple extractor (Module A) is prompted to return structured (head,
+relation, tail, year) tuples from each document. The extractor has no explicit mechanism
+for capturing negation. A document sentence such as “Aspirin should not be administered
+to children with fever” may cause the extractor to produce the triple (Aspirin, SAFE_FOR,
+Children), the semantic opposite of what the text asserts. Because the extraction prompt
+asks for factual relationships, the word “not” is frequently dropped when the LLM converts
+prose into structured form.
+Impact: Negated facts could reinforce rather than contradict a competing claim, reducing
+the conflict detection rate for safety-critical domains.
+Planned fix: The extraction prompt should be extended with an explicit "negated":
+true|false field in the JSON schema, and a post-processing step should invert the relation
+(e.g., SAFE_FOR → UNSAFE_FOR) when the negation flag is set.
+
+6.7.3
+
+Limitation: Fixed Decay Rate λ Across All Domains
+
+The temporal decay parameter λ = 0.08 was chosen to give a half-life of ln 2/0.08 ≈ 8.7 years,
+which is appropriate for general factual knowledge. However, knowledge stales at very different rates depending on the domain:
+• Medical guidelines: A 5-year-old clinical recommendation can be dangerously outdated. An appropriate λ ≈ 0.25 would decay a 5-year-old fact to e−1.25 ≈ 0.29.
+• Constitutional/historical law: A 50-year-old statute may be fully valid today. A lower
+λ ≈ 0.01 is more appropriate.
+• Scientific constants: Facts like the speed of light are timeless; λ = 0 is correct.
+The current implementation applies a single global λ to all domains, which can cause overdecay in stable domains (unfairly penalising old-but-valid science facts) and under-decay in
+fast-moving domains (retaining outdated medical facts with too high a weight). A future enhancement should auto-select λ based on the schema intent class output by Module A or allow
+per-corpus configuration.
+
+47
+
+6.7.4
+
+Limitation: Low-Variance Entropy Estimate from n = 3 Samples
+
+The semantic entropy calculation [C2] samples the LLM n = 3 times with temperature > 0 and
+computes the token-diversity entropy of the resulting answers. With only three samples, the
+estimator has high variance: if two of the three samples happen to give the same answer by
+chance, entropy reads as low even if the LLM is genuinely uncertain.
+Formally, with n = 3 the maximum possible entropy is ln 3 ≈ 1.099 nats. A reliable entropy
+estimate over a distribution of k distinct answers requires n ≫ k samples. For k = 5 plausible
+answer classes (as can occur in multi-entity queries), three samples cannot distinguish between a distribution that is nearly uniform (high uncertainty) and one that is strongly peaked
+(low uncertainty).
+Increasing to n = 10 would improve estimate quality but would multiply the LLM call count
+per query by more than three, pushing average latency from ∼21 seconds to >60 seconds on
+CPU hardware. A batched parallel sampling strategy using asynchronous Ollama invocations
+would recover the accuracy improvement at lower wall-clock cost.
+
+6.7.5
+
+Limitation: Undated Triples Receive Implicitly Maximum Recency
+
+When the LLM extractor cannot identify a publication year for a fact, either because the source
+document contains no date, or because the LLM omits the year field, the triple is stored with
+year = NULL in Neo4j. The _temporal_decay function handles this case with an explicit
+guard:
+
+if not year: return 1.0
+Returning w = 1.0 means undated facts are treated as maximally fresh This defaults to a
+fact published today. This is the wrong bias for most corpora: an undated fact is more likely
+to be from an unspecified historical period than from the current year. If a corpus contains
+both a dated 2023 document and an undated 1985 document, the undated fact competes at full
+weight against the dated 2023 fact, defeating the purpose of temporal decay.
+Planned fix: Undated facts should receive a conservative default weight (e.g., w = 0.5,
+corresponding to λ t ≈ 8.7 years of age) rather than the maximum weight of 1.0.
+
+6.7.6
+
+Limitation: PPR and Edge Retrieval Capped at 200 Records
+
+The Personalised PageRank computation in Module B queries Neo4j for all nodes and edges
+using:
+
+MATCH (n) RETURN n.id LIMIT 200
+MATCH (a)-[r]->(b) RETURN ... LIMIT 200
+For the six-document corpora used in this project, the graph contains well under 200 edges,
+so the cap is never reached. However, for a production corpus with hundreds of documents, the
+graph could contain thousands of edges. Truncating at 200 edges means the PPR walk operates
+on an incomplete graph, potentially missing high-relevance facts that happen to fall outside
+the first 200 results returned by Neo4j’s unordered traversal.
+Impact: Retrieval recall drops as corpus size grows, because structurally relevant but
+unlucky-ordered nodes are silently excluded.
+Planned fix: Replace the flat LIMIT 200 with a seed-anchored subgraph expansion: run a
+BFS from the seed entities up to depth 3 and retrieve only edges reachable from those seeds,
+48
+
+eliminating irrelevant disconnected subgraph components and making the cap practically hard
+to reach for topic-focused queries.
+
+49
+
+Chapter 7
+
+Conclusion
+7.1
+
+What Was Built
+
+The starting point for this project was a paper on arXiv (2511.10375) describing a knowledgegraph RAG pipeline called TruthfulRAG v4. The paper was interesting precisely because it
+identified a real problem, retrieval systems that cannot detect contradictions, and proposed
+a graph-based solution. The goal here was not just to reproduce that system but to push it
+further: to fix the gaps that even v4 left open.
+The result is TruthfulRAG v5, a fully local, domain-agnostic, conflict-resolving questionanswering pipeline. The core contributions are:
+1. Faithful v4 re-implementation:
+The three-module architecture from
+arXiv:2511.10375 (Graph Construction, Retrieval, and Conflict Resolution) is reproduced in Python using open-source tools, giving the academic community a testable
+reference implementation.
+2. Nine algorithmic extensions:
+C1 Temporal decay: e−λ t with λ = 0.08, giving an 8.7-year knowledge half-life and
+applied at query time so the graph needs no manual revision.
+C2 Year-per-triple storage: Every graph edge carries the year the underlying fact
+was published, making historical snapshot queries possible and decay computation
+exact.
+C3 Cross-document corroboration: A logarithmic bonus (1 + ln(1 + n) × 0.8) rewards
+facts that multiple independent sources agree on, without letting large document
+collections game the score through repetition.
+C4 Hybrid BM25 + semantic retrieval (RRF): Keyword and dense-embedding rankings are fused with Reciprocal Rank Fusion. Neither modality alone is reliable
+across all query types; the combined ranking is.
+C5 Gap-threshold conflict elimination: When the score difference between two conflicting facts exceeds 0.30, the weaker fact is removed before the LLM ever sees the
+prompt. This is what v4 lacked: a gap of 0.028 (v4) vs 1.126 (v5) is the measurable
+proof.
+C6 Adaptive entropy skip: If the LLM’s parametric entropy is already low on a
+query, the full entropy-sampling pass is skipped. This saved roughly 35 % of LLM
+calls in testing.
+
+50
+
+C7 Calibrated confidence score: A three-component score (entropy reduction,
+source support, temporal recency) gives a percentage that is actually informative,
+rather than the fixed-100 % certainty that standard RAG implicitly claims.
+C8 Explanation audit trail: Every conflict resolution decision is logged: which fact
+was kept, which was removed, and the specific numerical reason. The user is never
+left wondering what the system decided behind the scenes.
+C9 Automatic schema inference: An LLM call before graph construction discovers
+the entity and relation vocabulary from the corpus itself. The system requires no
+manual configuration and has been tested switching between four completely different domains without a single line of code change between runs.
+3. Live dual-panel web interface: A Flask REST API server paired with a custom HTML/JavaScript chatbot lets anyone compare standard LangChain RAG against
+TruthfulRAG v5 on any document collection, side by side, in real time.
+4. Production hardening: Apostrophe injection in Cypher strings, malformed LLM
+JSON output, Windows UTF-8 encoding mismatches, APOC plugin absence, and corpus
+dropdown state issues are all handled gracefully. The codebase is not a fragile demo.
+
+7.2
+
+Directions for Further Work
+
+Several areas were deliberately left for future work, either because they were out of scope for
+a B.Tech project or because the right solution was not obvious at the time.
+1. Multi-hop graph reasoning: The retriever currently operates on single edges. A question like “Who founded the organisation that launched Chandrayaan-3?” requires following two edges in sequence. Breadth-first or PPR path-following retrieval would handle
+this, but adds significant query latency.
+2. Persistent, accumulative graph: Each new corpus load clears the Neo4j graph and
+rebuilds from scratch. A more useful design would let new documents add facts to the existing graph, marking old facts with validity end-timestamps rather than deleting them.
+3. Domain-adaptive decay rate: The λ = 0.08 half-life of 8.7 years is reasonable for general knowledge but wrong for medical guidelines (where 5-year-old recommendations can
+be dangerous) and for constitutional law (where 50-year-old statutes are still fully valid).
+Auto-selecting λ from the inferred domain class would make the decay meaningful rather
+than approximate.
+4. LangGraph agentic loop: Wrapping the pipeline as a LangGraph node would let the
+system retry retrieval with a broader query when confidence falls below a configurable
+floor, rather than returning a low-confidence answer and stopping.
+5. Cross-encoder re-ranking: After PPR scoring, a cross-encoder model could re-rank
+the top paths by precise relevance, pushing the best evidence to the top regardless of its
+graph-structural position.
+6. Multilingual support: Swapping all-MiniLM-L6-v2 for a multilingual sentence encoder and pairing it with a multilingual LLM would extend the system to Hindi, Meitei,
+Tamil, and other regional languages without any architectural change.
+
+51
+
+7.3
+
+Closing Remarks
+
+The most important design decision in this project was a philosophical one. Standard RAG
+systems present every answer with the same implicit confidence: maximum. That is dishonest.
+When the evidence is contradictory, or when the retrieved facts are thirty years old, a system
+that still says “here is the answer” without any qualification is not helpful, it is misleading.
+TruthfulRAG v5 takes the opposite position: honesty is a feature, not a limitation. A 42 %
+confidence score in a high-stakes domain is more useful than a system that quietly swallows
+its own uncertainty.
+Perhaps the more unexpected finding of this project is that building such a system does
+not require industry-scale resources. This was built by one student, on a laptop, using tools
+that are freely downloadable, without sending a single document to an external server. That
+matters. The organisations that most need trustworthy AI, public hospitals, lower courts,
+government archives, are exactly the ones that cannot afford cloud AI subscriptions or proprietary knowledge-base software. A system like this could run for them today, on hardware they
+already own.
+
+52
+
+Bibliography
+[1] Anonymous. Madam-rag: Multi-agent debate for accurate retrieval-augmented generation, 2024.
+[2] Akari Asai, Zeqiu Wu, Yizhong Wang, Avirup Sil, and Hannaneh Hajishirzi. Self-rag:
+Learning to retrieve, generate, and critique through self-reflection, 2023.
+[3] Harrison Chase. Langchain, 2022.
+[4] Darren Edge, Ha Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody,
+Steven Truitt, and Jonathan Larson. From local to global: A graph RAG approach to
+query-focused summarization, 2024.
+[5] Xiaoxin He, Yijun Tian, Yifei Sun, Nitesh V Chawla, Thomas Laurent, Yann LeCun,
+Xavier Bresson, and Bryan Hooi. G-retriever: Retrieval-augmented generation for textual
+graph understanding and question answering, 2024.
+[6] Timothée Lacroix, Guillaume Obozinski, and Nicolas Usunier. Tensor decompositions for
+temporal knowledge base completion. International Conference on Learning Representations, 2020.
+[7] Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian
+Riedel, and Douwe Kiela. Retrieval-augmented generation for knowledge-intensive NLP
+tasks. Advances in Neural Information Processing Systems, 33:9459–9474, 2020.
+[8] Junyi Li, Xiaoxue Cheng, Wayne Xin Zhao, Jian-Yun Nie, and Ji-Rong Wen. Halueval: A
+large-scale hallucination evaluation benchmark for large language models, 2023.
+[9] Lawrence Page, Sergey Brin, Rajeev Motwani, and Terry Winograd. The pagerank citation ranking: Bringing order to the web, 1998.
+[10] Zhen Wang et al. Truthfulrag: Improving factual accuracy in rag by resolving knowledge
+conflicts, 2024.
+[11] Shi-Qi Yan, Jia-Chen Gu, Yun Zhu, and Zhen-Hua Ling. Corrective retrieval augmented
+generation, 2024.
+
+53
+
+

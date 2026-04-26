@@ -1,4 +1,4 @@
-﻿\documentclass[a4paper, 11pt, oneside]{report}
+\documentclass[a4paper, 11pt, oneside]{report}
 
 \newcommand{\plogo}{\fbox{$\mathcal{PL}$}}
 \usepackage{graphicx}
@@ -10,6 +10,8 @@
 \usepackage{fouriernc}
 \usepackage{subcaption}
 \usepackage{tikz}
+\usepackage{pdflscape}
+\usetikzlibrary{shapes.geometric,positioning}
 \usepackage{pgfplots}
 \usepackage{pgfgantt}
 \usepackage{longtable}
@@ -25,7 +27,32 @@
 \pgfplotsset{compat=1.18}
 \sloppy
 
+% ── GLOBAL CONSISTENCY SETTINGS ──────────────────────────────────
+% Verbatim/code blocks: one size smaller than body so they don't overpower prose
+\usepackage{fancyvrb}
+\RecustomVerbatimEnvironment{verbatim}{Verbatim}{fontsize=\small}
+
+% Captions: small italic, consistent across all figures and tables
+\usepackage[font={small,it},labelfont={bf,small}]{caption}
+
+% Table row spacing
+\renewcommand{\arraystretch}{1.08}
+
+% Consistent paragraph spacing
+\setlength{\parskip}{0.4em}
+
+% Standardised smaller font inside ALL tables (tabular + longtable)
+\usepackage{etoolbox}
+\AtBeginEnvironment{tabular}{\footnotesize}
+\AtBeginEnvironment{longtable}{\footnotesize}
+
+% Prevent orphan/widow lines (single lines stranded on their own page)
+\widowpenalty=10000
+\clubpenalty=10000
+\displaywidowpenalty=10000
+
 \begin{document}
+\pagenumbering{roman}
 
 % ── TITLE PAGE ────────────────────────────────────────────────────
 \begin{titlepage}
@@ -83,9 +110,12 @@ violation of the above is made, I understand that the institute may take discipl
 action. Such a violation may also engender disciplinary action from the sources which were
 not properly cited or permission not taken when needed.
 
-\vspace{1cm}\hspace{8.35cm} Eesh Saxena \\
-\vspace{1cm}\hspace{9cm} 230101032 \\
-\vspace{1cm} DATE: \today
+\vspace{1.5cm}
+\begin{flushright}
+Eesh Saxena \\
+230101032
+\end{flushright}
+
 
 \newpage
 
@@ -131,36 +161,29 @@ Signature of the Examiner 4 ............................\\\\
 
 % ── ABSTRACT ──────────────────────────────────────────────────────
 \begin{abstract}
-Large Language Models (LLMs) exhibit hallucination and factual inconsistency when their
-parametric knowledge conflicts with user-provided documents --- a problem that standard
-Retrieval-Augmented Generation (RAG) pipelines do not address. This project implements
-and extends TruthfulRAG v5, a Knowledge-Graph (KG) based RAG pipeline that explicitly
-detects and resolves temporal and factual conflicts present in document corpora.
+A recurring failure mode of Retrieval-Augmented Generation systems is that they
+pass conflicting facts to the language model and let it decide which to believe.
+On medical and legal queries this produces unreliable answers: the model may
+select a decade-old guideline over a recent one because both chunks score equally
+under cosine similarity, which carries no temporal information.
 
-Building upon the three-module architecture (Module A: Graph Construction; Module B:
-Graph Retrieval; Module C: Conflict Resolution) of TruthfulRAG v4 (arXiv:2511.10375),
-version 5 introduces six novel contributions: \textbf{[N1]} cross-document corroboration
-scoring that weights facts by how many independent sources agree; \textbf{[N2]}
-exponential temporal decay ($e^{-\lambda t}$) ensuring newer facts are preferred over
-older ones; \textbf{[N3]} hybrid BM25 and semantic retrieval fused by Reciprocal Rank
-Fusion (RRF) for robust document selection; \textbf{[N4]} a human-readable explanation
-chain that makes every conflict resolution decision fully auditable; \textbf{[N5]} a
-calibrated three-factor confidence score (entropy change, corroboration, temporal
-recency); and \textbf{[N6]} a claim verification mode returning structured
-\texttt{SUPPORTED}, \texttt{REFUTED}, or \texttt{UNCERTAIN} verdicts with evidence.
+This project builds TruthfulRAG v5, a Knowledge-Graph pipeline that resolves
+this conflict before the LLM is called. Starting from the KG-RAG v4 baseline
+(arXiv:2511.10375), nine contributions are added. The core innovation is an
+exponential temporal decay ($e^{-\lambda t}$, $\lambda=0.08$) that demotes older
+facts at retrieval time and a score-gap threshold that discards the stale side
+of a conflict automatically. Complementary additions include a year-per-triple
+storage scheme in Neo4j, cross-document corroboration scoring, hybrid
+BM25+semantic retrieval with Reciprocal Rank Fusion, a three-factor confidence
+score, a human-readable audit trail, and automatic schema inference that removes
+the last manual configuration step from v4.
 
-A pre-pipeline schema inference step \textbf{[A4+]} renders the system fully
-domain-agnostic --- no manual configuration is required when switching between medical,
-legal, scientific, or historical corpora. The pipeline runs entirely on local hardware
-using the Qwen2.5-7B-Instruct language model served via Ollama and Neo4j Community
-Edition as the graph database. A production-quality dual-panel web interface enables
-real-time, side-by-side comparison of standard LangChain RAG against TruthfulRAG v5 on
-any user-supplied corpus with a single click.
-
-Experimental evaluation across four domain corpora (medical, legal, Indian science, and
-space science) demonstrates correct contradiction resolution, a 35\,\% LLM cache hit
-rate, and calibrated confidence scores accurately reflecting the degree of evidential
-conflict in each domain.
+On the \texttt{pminervini/HaluEval} benchmark (200 samples), TruthfulRAG v5
+rejects 92.0\,\% of hallucinated answers against 77.5\,\% for standard
+LangChain RAG. The Conflict Detection Rate doubles from 25\,\% to 50\,\% over
+v4. The system runs entirely
+locally on a laptop using Qwen2.5-7B-Instruct and Neo4j Community Edition,
+with no cloud dependency and no data leaving the machine.
 \end{abstract}
 
 \pagebreak
@@ -171,31 +194,39 @@ conflict in each domain.
 \end{center}
 \vspace{2cm}
 
-I would like to express my sincere gratitude to my project instructor, Dr.\ Jennil Thiyam,
-for her invaluable guidance, thorough feedback, and consistent support throughout the
-duration of this project. Her direction was instrumental in shaping the final system design
-and ensuring the academic rigour of this work.
+I would like to express my sincere gratitude to my project supervisor,
+Dr.\ Jennil Thiyam, for their invaluable guidance, thorough feedback, and
+consistent support throughout the duration of this project. Their direction was
+instrumental in shaping the final system design and ensuring the academic
+rigour of this work.
 
-I thank the Department of Computer Science and Engineering at IIIT Senapati, Manipur for
-providing the computational resources and academic environment necessary to complete this
-work. I am grateful to the open-source communities behind LangChain, Neo4j, Ollama, and
-the \texttt{sentence-transformers} library, whose tools formed the technical foundation of
-this project.
+I am grateful to the Head of the Department of Computer Science and
+Engineering, \mbox{Dr.\ Navanath Saharia}, for providing departmental oversight and
+encouraging student-led research initiatives within the programme.
 
-Finally, I acknowledge the authors of TruthfulRAG v4 (arXiv:2511.10375), whose published
-research provided the theoretical and architectural basis from which this project's
-extensions were designed.
+I thank the Department of Computer Science and Engineering at IIIT Senapati,
+Manipur for providing the computational resources and academic environment
+necessary to complete this work. I am also grateful to the open-source
+communities behind LangChain, Neo4j, Ollama, and the
+\texttt{sentence-transformers} library, whose tools formed the technical
+foundation of this project.
+
+Finally, I acknowledge the authors of TruthfulRAG v4 (arXiv:2511.10375), whose
+published research provided the theoretical and architectural basis from which
+this project's contributions were designed.
 
 \vspace{1cm}
-
-\hspace{7cm} Eesh Saxena\\
-\hspace{7cm} 230101032
+\begin{flushright}
+Eesh Saxena\\
+230101032
+\end{flushright}
 
 \tableofcontents
 \listoffigures
 \listoftables
 
 % ── CHAPTERS ──────────────────────────────────────────────────────
+\pagenumbering{arabic}
 \chapter{Introduction}
 \input{chapters/1_Introduction}
 
@@ -212,6 +243,7 @@ extensions were designed.
 \input{chapters/5_Implementation}
 
 \chapter{Results}
+\label{ch:results}
 \input{chapters/6_Results}
 
 \chapter{Conclusion}

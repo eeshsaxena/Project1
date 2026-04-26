@@ -1,4 +1,4 @@
-﻿
+
 % ================================================================
 % CHAPTER 3: REQUIREMENT ENGINEERING
 % ================================================================
@@ -10,7 +10,7 @@
 The system is built entirely on mature, open-source libraries that have been
 in active use for years. Neo4j Community Edition handles graph storage, Ollama
 runs the LLM locally, and the sentence-transformers library handles embeddings.
-All of these install via \texttt{pip} and work on standard hardware---a laptop
+All of these install via \texttt{pip} and work on standard hardware, a laptop
 with 16\,GB RAM is sufficient. A dedicated GPU would speed things up but is not
 necessary to run the system.
 
@@ -21,7 +21,7 @@ The pipeline runs through a single command:
 python enhanced_main.py --corpus my_documents.json
 \end{verbatim}
 No configuration files need to be written, and no cloud account is needed.
-Every component used---Neo4j, Ollama, Qwen2.5, and all Python packages---is
+Every component used, Neo4j, Ollama, Qwen2.5, and all Python packages, is
 free and open-source. There are no per-query costs.
 
 \subsection{Legal Feasibility}
@@ -41,24 +41,118 @@ exhibit (non-functional requirements), independently of implementation decisions
 
 \subsection{Methods Used for Elicitation}
 
-Requirements were elicited through the following methods:
+Requirements were elicited through three methods:
 
-\begin{itemize}
-    \item \textbf{Paper analysis}: Detailed reading of arXiv:2511.10375 to
-    extract the algorithm specifications of Modules A, B, and C as implicit
-    requirements.
-    \item \textbf{Gap analysis}: Comparison of TruthfulRAG v4's output against
-    known failure modes of standard RAG to identify missing features.
-    \item \textbf{Prototype evaluation}: An early prototype of the pipeline was
-    run on a test corpus to surface runtime failure modes (JSON parsing errors,
-    entity merge conflicts, encoding issues) which became hardening requirements.
-\end{itemize}
+\begin{enumerate}
+    \item \textbf{Paper analysis}: A detailed reading of arXiv:2511.10375 was
+    used to extract the algorithm specifications of Modules A, B, and C as
+    implicit functional requirements. If the paper says a module does X, the
+    implementation must be testably verified to do X.
+    \item \textbf{Gap analysis}: The v4 output was compared against known
+    failure modes of standard RAG (temporal blindness, no confidence score,
+    no audit trail) to identify the extensions needed for v5.
+    \item \textbf{Prototype evaluation}: An early prototype was run on a
+    test corpus to surface runtime failure modes that could not be anticipated
+    from the paper: JSON parsing errors from LLM code-fence output, entity
+    merge conflicts in Neo4j, and Windows encoding issues.
+\end{enumerate}
 
 \subsection{Modeling}
 
-Requirements are modelled using a structured numbered list (Section~3.3) and
-summarised in a use-case description (Section~3.4). Data-flow and structural
-models are presented in Chapter~4.
+To make the requirements concrete before writing any code, the interactions
+were mapped using a use case diagram (Figure~\ref{fig:usecase}). It answers
+a straightforward question: who uses the system, and what do they actually
+do with it? Three actors are involved --- the \emph{User}, the \emph{Ollama
+LLM}, and \emph{Neo4j} --- and the diagram makes the boundary between
+user-visible actions and internal system behaviour explicit at a glance.
+Detailed functional requirements are listed in Section~3.3; data-flow
+and structural models follow in Chapter~4.
+
+% ── USE CASE DIAGRAM ──────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+  uc/.style={ellipse, draw=black, thin, fill=white,
+             minimum width=3.8cm, minimum height=0.9cm,
+             align=center, font=\small},
+  conn/.style={-, thin},
+  incl/.style={->, >=stealth, dashed, thin},
+  lbl/.style={font=\scriptsize\itshape, fill=white, inner sep=1pt},
+]
+%% ── System boundary ─────────────────────────────────────────────
+\draw[thick] (-0.4, 0.3) rectangle (11.9, 14.0);
+\node[font=\small\bfseries] at (5.75, 13.75)
+  {\textsc{TruthfulRAG v5}\ ---\ System Boundary};
+\draw[thin,dashed,black!25] (5.75,13.4) -- (5.75,0.6);
+\node[font=\tiny\itshape,black!50] at (2.8,13.3) {User-Initiated};
+\node[font=\tiny\itshape,black!50] at (9.0,13.3) {System-Initiated};
+
+%% ── Use cases: left column ──────────────────────────────────────
+\node[uc] (sq)  at (2.8,12.4) {Submit Query};
+\node[uc] (lc)  at (2.8,10.3) {Load Corpus};
+\node[uc] (va)  at (2.8, 7.6) {View Answer};
+\node[uc] (bat) at (2.8, 6.0) {Browse Audit Trail};
+
+%% ── Use cases: right column ─────────────────────────────────────
+\node[uc] (ga)  at (9.0,12.4) {Generate Final Answer};
+\node[uc] (rrf) at (9.0,10.8) {Retrieve Ranked Facts};
+\node[uc] (is)  at (9.0, 9.2) {Infer Schema};
+\node[uc] (skg) at (9.0, 7.6) {Store Knowledge Graph};
+
+%% ── Stick figure: User ──────────────────────────────────────────
+\draw[thin] (-2.8,10.05) circle(0.27);
+\draw[thin] (-2.8,9.78)  -- (-2.8,9.32);
+\draw[thin] (-2.8,9.62)  -- (-3.05,9.42);
+\draw[thin] (-2.8,9.62)  -- (-2.55,9.42);
+\draw[thin] (-2.8,9.32)  -- (-2.98,9.00);
+\draw[thin] (-2.8,9.32)  -- (-2.62,9.00);
+\node[font=\small\bfseries] at (-2.8,8.72) {User};
+
+%% ── Stick figure: Ollama LLM ────────────────────────────────────
+\draw[thin] (13.6,11.35) circle(0.27);
+\draw[thin] (13.6,11.08) -- (13.6,10.62);
+\draw[thin] (13.6,10.92) -- (13.35,10.72);
+\draw[thin] (13.6,10.92) -- (13.85,10.72);
+\draw[thin] (13.6,10.62) -- (13.42,10.30);
+\draw[thin] (13.6,10.62) -- (13.78,10.30);
+\node[font=\small, align=center] at (13.6,10.02)
+  {\textbf{Ollama}\\LLM};
+
+%% ── Stick figure: Neo4j ─────────────────────────────────────────
+\draw[thin] (13.6, 8.55) circle(0.27);
+\draw[thin] (13.6, 8.28) -- (13.6, 7.82);
+\draw[thin] (13.6, 8.12) -- (13.35,7.92);
+\draw[thin] (13.6, 8.12) -- (13.85,7.92);
+\draw[thin] (13.6, 7.82) -- (13.42,7.50);
+\draw[thin] (13.6, 7.82) -- (13.78,7.50);
+\node[font=\small, align=center] at (13.6,7.22)
+  {\textbf{Neo4j}\\Graph DB};
+
+%% ── Actor → use-case connections ────────────────────────────────
+\draw[conn] (-2.53,10.05) -- (sq.west);
+\draw[conn] (-2.53,10.05) -- (lc.west);
+\draw[conn] (-2.53,10.05) -- (va.west);
+\draw[conn] (13.33,11.35) -- (ga.east);
+\draw[conn] (13.33,11.35) -- (is.east);
+\draw[conn] (13.33, 8.55) -- (rrf.east);
+\draw[conn] (13.33, 8.55) -- (skg.east);
+
+%% ── <<include>> / <<extend>> ────────────────────────────────────
+\draw[incl] (sq.east)  to node[lbl,above]{$\ll$include$\gg$} (ga.west);
+\draw[incl] (sq.east)  to node[lbl,below]{$\ll$include$\gg$} (rrf.north west);
+\draw[incl] (lc.east)  to node[lbl,above]{$\ll$include$\gg$} (is.west);
+\draw[incl] (lc.east)  to node[lbl,below]{$\ll$include$\gg$} (skg.north west);
+\draw[incl] (va.south) to node[lbl,right]{$\ll$extend$\gg$}  (bat.north);
+
+\end{tikzpicture}}
+\caption{Use case diagram for TruthfulRAG v5. The primary actor (\emph{User})
+initiates four interactions. \emph{Ollama LLM} (secondary actor) handles schema
+inference and answer generation; \emph{Neo4j} handles graph storage and
+retrieval. Dashed arrows show \textit{include} (mandatory sub-step) and
+\textit{extend} (optional enrichment) relationships.}
+\label{fig:usecase}
+\end{figure}
 
 % ----------------------------------------------------------------
 \section{Software Requirement Specification (SRS)}
@@ -141,25 +235,34 @@ in Chapter~6 are evaluated.
 
 \subsection{Assumptions and Dependencies}
 
-\begin{itemize}
-    \item Neo4j Community Edition is running on \texttt{bolt://localhost:7687}
-    and the APOC plugin is installed.
-    \item Ollama is running on \texttt{http://localhost:11434} with the
-    configured model already pulled.
-    \item The Python virtual environment contains all packages listed in
-    Table~\ref{tab:deps} (Chapter~3).
-\end{itemize}
+Three technical assumptions underlie the deployment model:
+
+\begin{enumerate}
+    \item Neo4j Community Edition is running locally with the APOC plugin
+    installed. Without APOC, entity disambiguation and relation normalisation
+    are silently skipped; the graph still functions but without those quality
+    passes.
+    \item Ollama is running locally with the configured model already pulled.
+    The system does not attempt to download models at runtime.
+    \item The Python environment contains all packages listed in
+    Table~\ref{tab:deps}. No internet access is required after initial setup.
+\end{enumerate}
 
 \subsection{Constraints}
 
-\begin{itemize}
+Three hard constraints shape the current implementation:
+
+\begin{enumerate}
     \item Graph queries are limited to 200 nodes and 200 edges per retrieval
-    call to avoid memory overload on large corpora.
-    \item Entropy sampling is fixed at $n=3$ samples to balance accuracy and
-    latency. Increasing $n$ improves entropy estimates but increases inference time.
-    \item Disambiguation uses string similarity only; semantic entity linking
-    (e.g., NEL against Wikidata) is not implemented in this version.
-\end{itemize}
+    call. For the six-document corpora tested here the cap is never reached,
+    but it would need revisiting for large production corpora.
+    \item Entropy sampling is fixed at $n=3$ samples to keep latency
+    manageable on CPU-only hardware. Higher $n$ improves the entropy estimate
+    but multiplies inference time accordingly.
+    \item Entity disambiguation uses string similarity only
+    (Ratcliff/Obershelp, 85\% threshold). Semantic entity linking against a
+    knowledge base like Wikidata is not implemented in this version.
+\end{enumerate}
 
 % ----------------------------------------------------------------
 \section{Software Requirement Validation}
@@ -175,6 +278,7 @@ observing the relevant terminal output.
 \caption{Requirement-to-implementation traceability}
 \label{tab:req_trace}
 \resizebox{\textwidth}{!}{%
+\small
 \begin{tabular}{|l|l|l|}
 \hline
 \textbf{Req.} & \textbf{Method in enhanced\_main.py} & \textbf{Verified By} \\
@@ -212,13 +316,4 @@ scoring signals. The entropy-based path selection follows the algorithm
 described in arXiv:2511.10375 \cite{truthfulrag2024}, with the six extensions
 added on top.
 
-% ----------------------------------------------------------------
-\section{Software Requirement Management}
 
-\subsection{Version Control}
-
-All source code, corpus data, LaTeX report files, and generated charts are
-version-controlled in a private Git repository hosted on GitHub. Each
-significant change is committed with a descriptive message. The repository
-maintains a linear history of all development milestones from the initial
-TruthfulRAG v4 baseline to the final v5 implementation.
